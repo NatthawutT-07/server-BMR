@@ -1,0 +1,199 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// npx prisma migrate dev --name init
+
+model User {
+  id        Int      @id @default(autoincrement())
+  name      String
+  password  String
+  role      String   @default("user")
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+model Station {
+  id          Int     @id @default(autoincrement())
+  codeSAP     String?
+  codeADA     String?
+  codeBMX     String?
+  nameTH      String?
+  adaStore    String?
+  nameEng     String?
+  WhCodeSAP   String?
+  storeNameTH String?
+}
+
+model Partners {
+  id                       Int     @id @default(autoincrement())
+  codeBP                   String?
+  nameBP                   String?
+  accountBalance           Float
+  interfaceADA             String?
+  interfaceEDI             String?
+  brand                    String?
+  paymentTermsCode         String?
+  noOldBP                  String?
+  taxGroup                 String?
+  remarks                  String?
+  idNoTwo                  String?
+  gp                       String?
+  dc                       String?
+  email                    String?
+  phoneOne                 String?
+  phoneTwo                 String?
+  billAddressType          String?
+  billBlock                String?
+  billBuildingFloorRoom    String?
+  billCity                 String?
+  billCountry              String?
+  billCountryNo            String? //county
+  billZipCode              String?
+  branchBP                 Int
+  billExchangeOnCollection String?
+  billDefault              String?
+  billState                String?
+  billStreet               String?
+  billStreetNo             String?
+  remarkOne                String?
+  groupCode                String?
+  federalTaxId             String?
+}
+
+model ItemMinMax {
+  id          Int    @id @default(autoincrement())
+  branchCode  String
+  codeProduct Int
+  minStore    Int //main
+  maxStore    Int //main
+}
+
+model ListOfItemHold {
+  id                  Int     @id @default(autoincrement())
+  codeProduct         Int //main
+  nameProduct         String? //main
+  groupName           String? //second
+  status              String? //main
+  barcode             String? //main
+  nameBrand           String? //main
+  consingItem         String? //second
+  purchasePriceExcVAT Float //main
+  salesPriceIncVAT    Int //main
+  preferredVandorCode String? //second
+  preferredVandorName String? //second
+  GP                  String? //second
+  shelfLife           String? //second
+  productionDate      String? //add
+  vatGroupPu          String? //second
+}
+
+model Sales {
+  id           Int    @id @default(autoincrement())
+  branchCode   String
+  channelSales String
+  codeProduct  Int
+  quantity     Int //main
+  discount     String //second
+  totalPrice   String //main
+}
+
+model Stock {
+  id          Int    @id @default(autoincrement())
+  codeProduct Int
+  branchCode  String
+  quantity    Int //main
+}
+
+model withdraw {
+  id          Int    @id @default(autoincrement())
+  codeProduct Int
+  branchCode  String //main
+  docNumber   String //second
+  date        String //second
+  docStatus   String //second
+  reason      String //main
+  quantity    Int //main
+  value       String //main
+}
+
+model Tamplate {
+  id         Int     @id @default(autoincrement())
+  branchCode String
+  shelfCode  String
+  fullName   String
+  rowQty     Int
+  type       String?
+}
+
+model ItemSearch {
+  id          Int     @id @default(autoincrement())
+  branchCode  String
+  shelfCode   String
+  rowNo       Int
+  codeProduct Int
+  index       Int
+  
+  // Relation to itemminmax (optional)
+  // itemminmaxId Int?
+  // itemminmax   ItemMinMax? @relation(fields: [itemminmaxId], references: [id])
+
+  // // Relation to sales (optional)
+  // salesId          Int?
+  // sales            Sales?          @relation(fields: [salesId], references: [id])
+  // ListOfItemHold   ListOfItemHold? @relation(fields: [listOfItemHoldId], references: [id])
+  // listOfItemHoldId Int?
+}
+
+// ไม่เก็บข้อมูลซ้ำ เก็บแต่ id ของ model อื่น แล้วไปดึงตอน query
+
+// model A {
+//   id     Int    @id @default(autoincrement())
+//   email  String @unique
+//   pass   String
+//   orders B[] // ผู้ใช้คนนี้มีหลายรายการในตะกร้า (B)
+// }
+
+// model B {
+//   id        Int @id @default(autoincrement())
+//   userId    Int
+//   productId Int
+//   quantity  Int
+
+//   user    A @relation(fields: [userId], references: [id])
+//   product C @relation(fields: [productId], references: [id])
+// }
+
+// model C {
+//   id    Int    @id @default(autoincrement())
+//   cart  String // ชื่อสินค้า
+//   price String // ราคาสินค้า
+
+//   usedInB B[] // ถูกใช้ใน cart ไหนบ้าง
+// }
+
+// const result = await prisma.b.findMany({
+//   include: {
+//     user: true,      // ข้อมูลผู้ใช้ (email)
+//     product: true    // ข้อมูลสินค้า (cart + price)
+//   }
+// });
+
+// [
+//   {
+//     "id": 1,
+//     "user": {
+//       "email": "test@example.com"
+//     },
+//     "product": {
+//       "cart": "ข้าวหอมมะลิ",
+//       "price": "150"
+//     },
+//     "quantity": 1
+//   }
+// ]
