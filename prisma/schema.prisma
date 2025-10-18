@@ -93,7 +93,7 @@ model ListOfItemHold {
   vatGroupPu          String? //second
 }
 
-model Sales {
+model SalesDay {
   id           Int    @id @default(autoincrement())
   branchCode   String
   channelSales String
@@ -101,6 +101,20 @@ model Sales {
   quantity     Int //main
   discount     String //second
   totalPrice   String //main
+  month        Int
+  year         Int
+}
+
+model SalesMonth {
+  id           Int    @id @default(autoincrement())
+  branchCode   String
+  channelSales String
+  codeProduct  Int
+  quantity     Int //main
+  discount     String //second
+  totalPrice   String //main
+  month        Int
+  year         Int
 }
 
 model Stock {
@@ -132,13 +146,13 @@ model Tamplate {
 }
 
 model ItemSearch {
-  id          Int     @id @default(autoincrement())
+  id          Int    @id @default(autoincrement())
   branchCode  String
   shelfCode   String
   rowNo       Int
   codeProduct Int
   index       Int
-  
+
   // Relation to itemminmax (optional)
   // itemminmaxId Int?
   // itemminmax   ItemMinMax? @relation(fields: [itemminmaxId], references: [id])

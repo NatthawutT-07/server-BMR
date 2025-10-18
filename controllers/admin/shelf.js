@@ -6,25 +6,26 @@ exports.itemCreate = async (req, res) => {
 
         if (!branchCode || !codeProduct || !shelfCode || !rowNo || !index) {
             return res.status(400).json({
-                error: 'someone no have data stationID, codeShelf, row, codeProduct',
+                error: '❌ Incomplete information (branchCode, codeProduct, shelfCode, rowNo, index)',
             });
         }
-        const newDetail = await prisma.itemSearch.create({
+
+        await prisma.itemSearch.create({
             data: {
                 branchCode,
-                codeProduct: parseInt(codeProduct),
+                codeProduct: Number(codeProduct),
                 shelfCode,
-                rowNo: parseInt(rowNo),
-                index: parseInt(index),
+                rowNo: Number(rowNo),
+                index: Number(index),
             },
         });
+
         return res.status(201).json({
-            message: 'create detailStation success',
-            // data: newDetail,
+            message: '✅ Information added successfully.',
         });
     } catch (error) {
-        console.error('❌ Error in detailStation.create:', error);
-        return res.status(500).json({ error: 'error server' });
+        console.error('❌ Error in itemCreate:', error);
+        return res.status(500).json({ error: '❌ Server error' });
     }
 };
 
@@ -32,7 +33,7 @@ exports.itemDelete = async (req, res) => {
     const { branchCode, shelfCode, rowNo, codeProduct, index } = req.body;
 
     if (!branchCode || !shelfCode || !rowNo || !codeProduct || !index) {
-        return res.status(400).json({ success: false, message: "! data" });
+        return res.status(400).json({ success: false, message: "❌ Incomplete information" });
     }
 
     try {
@@ -41,8 +42,8 @@ exports.itemDelete = async (req, res) => {
                 branchCode,
                 shelfCode,
                 rowNo,
-                codeProduct,
-                index,
+                codeProduct: Number(codeProduct),
+                index: Number(index),
             },
         });
 
@@ -55,24 +56,25 @@ exports.itemDelete = async (req, res) => {
             orderBy: {
                 index: 'asc',
             },
+            select: {
+                id: true,
+                index: true,
+            },
         });
 
-        for (let i = 0; i < remainingItems.length; i++) {
-            const item = remainingItems[i];
-            const newIndex = i + 1;
+        const updates = remainingItems.map((item, i) =>
+            prisma.itemSearch.update({
+                where: { id: item.id },
+                data: { index: i + 1 },
+            })
+        );
 
-            if (item.index !== newIndex) {
-                await prisma.itemSearch.update({
-                    where: { id: item.id },
-                    data: { index: newIndex },
-                });
-            }
-        }
+        await prisma.$transaction(updates);
 
-        res.json({ success: true, message: "ลบและเรียงลำดับใหม่สำเร็จ" });
+        res.json({ success: true, message: "✅ Deleted and rearranged successfully" });
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ success: false, message: "error delete item" });
+        console.error("❌ itemDelete error:", error);
+        res.status(500).json({ success: false, message: "❌ Failed to delete data" });
     }
 };
 
@@ -80,68 +82,69 @@ exports.itemUpdate = async (req, res) => {
     const items = req.body;
 
     if (!Array.isArray(items) || items.length === 0) {
-        return res.status(400).json({ success: false, message: "❌ not fount data" });
+        return res.status(400).json({ success: false, message: "❌ No information sent" });
     }
 
     try {
         const { branchCode, shelfCode } = items[0];
 
-        await prisma.itemSearch.deleteMany({
-            where: { branchCode, shelfCode },
-        });
+        await prisma.$transaction([
+            prisma.itemSearch.deleteMany({
+                where: { branchCode, shelfCode },
+            }),
+            prisma.itemSearch.createMany({
+                data: items.map(item => ({
+                    branchCode: item.branchCode,
+                    shelfCode: item.shelfCode,
+                    rowNo: Number(item.rowNo),
+                    index: Number(item.index),
+                    codeProduct: Number(item.codeProduct),
+                })),
+            }),
+        ]);
 
-        await prisma.itemSearch.createMany({
-            data: items.map(item => ({
-                branchCode: item.branchCode,
-                shelfCode: item.shelfCode,
-                rowNo: item.rowNo,
-                index: item.index,
-                codeProduct: item.codeProduct,
-            })),
-        });
-
-        res.json({ success: true, message: "✅ update shelf succes" });
+        res.json({ success: true, message: "✅ Shelf update successful" });
     } catch (error) {
-        console.error("❌ Update shelf error:", error);
-        res.status(500).json({ success: false, message: "error update shelf" });
+        console.error("❌ itemUpdate error:", error);
+        res.status(500).json({ success: false, message: "❌ Shelf update failed" });
     }
 };
 
-
-
 exports.tamplate = async (req, res) => {
     try {
-        const result = await prisma.tamplate.findMany();
+        const result = await prisma.tamplate.findMany({
+            orderBy: { id: 'asc' }, 
+        });
         res.json(result);
-    } catch (e) {
-        console.log(e);
-        res.status(500).json({ msg: "List Station(Detail) Error" });
+    } catch (error) {
+        console.error("❌ tamplate error:", error);
+        res.status(500).json({ msg: "❌ error" });
     }
 };
 
 exports.itemSearch = async (req, res) => {
     const { branchCode } = req.body;
 
-    const product = await prisma.itemSearch.findMany({
-        where: {
-            branchCode: branchCode,
-        }
-    })
-
-    const conditions = product.map(({ branchCode, codeProduct }) => ({
-        branchCode,
-        codeProduct,
-    }));
-
     try {
-        const [listOfItemHold, withdraws, stocks, sales, itemMinMaxList] = await Promise.all([
+        const product = await prisma.itemSearch.findMany({
+            where: { branchCode },
+            select: {
+                branchCode: true,
+                codeProduct: true,
+                shelfCode: true,
+                rowNo: true,
+                index: true,
+            }
+        });
 
+        if (product.length === 0) return res.json([]);
+
+        const conditions = product.map(({ branchCode, codeProduct }) => ({ branchCode, codeProduct }));
+        const codeProductList = [...new Set(product.map(p => p.codeProduct))];
+
+        const [listOfItemHold, withdraws, stocks, sales, itemMinMaxList] = await Promise.all([
             prisma.listOfItemHold.findMany({
-                where: {
-                    codeProduct: {
-                        in: conditions.map((i) => i.codeProduct),
-                    },
-                },
+                where: { codeProduct: { in: codeProductList } },
                 select: {
                     codeProduct: true,
                     nameProduct: true,
@@ -151,16 +154,8 @@ exports.itemSearch = async (req, res) => {
                     salesPriceIncVAT: true,
                 },
             }),
-
             prisma.withdraw.findMany({
-                where: {
-                    OR: conditions.map(({ branchCode, codeProduct }) => ({
-                        branchCode: {
-                            equals: branchCode,
-                        },
-                        codeProduct,
-                    })),
-                },
+                where: { OR: conditions },
                 select: {
                     branchCode: true,
                     codeProduct: true,
@@ -168,19 +163,15 @@ exports.itemSearch = async (req, res) => {
                     value: true,
                 },
             }),
-
             prisma.stock.findMany({
-                where: {
-                    OR: conditions,
-                },
+                where: { OR: conditions },
                 select: {
                     branchCode: true,
                     codeProduct: true,
                     quantity: true,
                 },
             }),
-
-            prisma.sales.findMany({
+            prisma.salesDay.findMany({
                 where: {
                     AND: [
                         { channelSales: "หน้าร้าน" },
@@ -194,11 +185,8 @@ exports.itemSearch = async (req, res) => {
                     totalPrice: true,
                 },
             }),
-
             prisma.itemMinMax.findMany({
-                where: {
-                    OR: conditions,
-                },
+                where: { OR: conditions },
                 select: {
                     branchCode: true,
                     codeProduct: true,
@@ -207,31 +195,29 @@ exports.itemSearch = async (req, res) => {
                 },
             }),
         ]);
+
+        const itemHoldMap = new Map(listOfItemHold.map(p => [p.codeProduct, p]));
+        const stockMap = new Map(stocks.map(s => [`${s.branchCode}-${s.codeProduct}`, s]));
+        const salesMap = new Map(sales.map(s => [`${s.branchCode}-${s.codeProduct}`, s]));
+        const itemMinMaxMap = new Map(itemMinMaxList.map(m => [`${m.branchCode}-${m.codeProduct}`, m]));
+
+        const withdrawMap = new Map();
+        withdraws.forEach(w => {
+            const key = `${w.branchCode}-${w.codeProduct}`;
+            if (!withdrawMap.has(key)) withdrawMap.set(key, []);
+            withdrawMap.get(key).push(w);
+        });
+
         const result = product.map(({ branchCode, codeProduct, shelfCode, rowNo, index }) => {
-
-            const productHoldInfo = listOfItemHold.find(
-                p => p.codeProduct === codeProduct
-            );
-
-            const stockInfo = stocks.find(
-                s => s.branchCode === branchCode && s.codeProduct === codeProduct
-            );
-
-            const withdrawItems = withdraws.filter(
-                w => String(w.branchCode) === String(branchCode) && Number(w.codeProduct) === Number(codeProduct)
-            );
+            const key = `${branchCode}-${codeProduct}`;
+            const productHoldInfo = itemHoldMap.get(codeProduct);
+            const stockInfo = stockMap.get(key);
+            const saleInfo = salesMap.get(key);
+            const itemMinMaxInfo = itemMinMaxMap.get(key);
+            const withdrawItems = withdrawMap.get(key) || [];
 
             const totalWithdrawQuantity = withdrawItems.reduce((sum, w) => sum + Number(w.quantity || 0), 0);
             const totalWithdrawValue = withdrawItems.reduce((sum, w) => sum + Number(w.value || 0), 0);
-
-
-            const saleInfo = sales.find(
-                s => s.branchCode === branchCode && s.codeProduct === codeProduct
-            );
-
-            const itemMinMaxInfo = itemMinMaxList.find(
-                m => m.branchCode === branchCode && m.codeProduct === codeProduct
-            );
 
             return {
                 branchCode,
@@ -239,26 +225,25 @@ exports.itemSearch = async (req, res) => {
                 shelfCode,
                 rowNo,
                 index,
-                nameProduct: productHoldInfo?.nameProduct || null,
-                shelfLife: productHoldInfo?.shelfLife || null,
-                nameBrand: productHoldInfo?.nameBrand || null,
-                purchasePriceExcVAT: productHoldInfo?.purchasePriceExcVAT || null,
-                salesPriceIncVAT: productHoldInfo?.salesPriceIncVAT || null,
-                stockQuantity: stockInfo?.quantity || null,
-                withdrawQuantity: totalWithdrawQuantity || null,
-                minStore: itemMinMaxInfo?.minStore || null,
-                maxStore: itemMinMaxInfo?.maxStore || null,
-                withdrawValue: totalWithdrawValue || null,
-                salesQuantity: saleInfo?.quantity || null,
-                salesTotalPrice: saleInfo?.totalPrice || null,
+                nameProduct: productHoldInfo?.nameProduct ?? null,
+                shelfLife: productHoldInfo?.shelfLife ?? null,
+                nameBrand: productHoldInfo?.nameBrand ?? null,
+                purchasePriceExcVAT: productHoldInfo?.purchasePriceExcVAT ?? null,
+                salesPriceIncVAT: productHoldInfo?.salesPriceIncVAT ?? null,
+                stockQuantity: stockInfo?.quantity ?? null,
+                withdrawQuantity: totalWithdrawQuantity,
+                withdrawValue: totalWithdrawValue,
+                minStore: itemMinMaxInfo?.minStore ?? null,
+                maxStore: itemMinMaxInfo?.maxStore ?? null,
+                salesQuantity: saleInfo?.quantity ?? null,
+                salesTotalPrice: saleInfo?.totalPrice ?? null,
             };
-
         });
 
         return res.json(result);
     } catch (e) {
-        console.error("❌ List Shelf Error:", e);
-        return res.status(500).json({ msg: "List Shelf Error" });
+        console.error("❌ itemSearch error:", e);
+        return res.status(500).json({ msg: "❌ Failed to retrieve data" });
     }
 };
 

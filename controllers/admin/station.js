@@ -26,46 +26,49 @@ exports.deleteStation = async (req, res) => {
     }
 };
 
-
 exports.updateStation = async (req, res) => {
     try {
-        const { stationId, station } = req.body;
-        const { id } = req.params;
-
-        if (!stationId || !station) {
-            return res.status(400).json({ message: "Missing required fields" });
-        }
+        const { id, codeSAP, codeADA, codeBMX, adaStore } = req.body;
 
         const updated = await prisma.station.update({
-            where: {
-                id: Number(id),
-            },
+            where: { id: Number(id) },
             data: {
-                stationId,
-                station,
+                codeSAP,
+                codeADA,
+                codeBMX,
+                adaStore,
             },
         });
 
         return res.status(200).json(updated);
     } catch (error) {
-        console.error('❌ Error updating Station:', error);
+        console.error("❌ Error updating Station:", error);
         res.status(500).json({ message: "Station Update Error" });
     }
 };
 
-
 exports.addStation = async (req, res) => {
     try {
-        const { station, stationId } = req.body;
+        const { id, codeSAP, codeADA, codeBMX, adaStore } = req.body;
 
-        if (!station || !stationId) {
-            return res.status(400).json({ message: "Missing station or stationId" });
-        }
+
+
+        return res.status(201).json(newStation);
+    } catch (error) {
+        console.error("❌ Error creating Station:", error);
+        res.status(500).json({ message: "Station Create Error" });
+    }
+};
+exports.addStation = async (req, res) => {
+    try {
+        const { codeSAP, codeADA, codeBMX, adaStore } = req.body;
 
         const newStation = await prisma.station.create({
             data: {
-                station,
-                stationId,
+                codeSAP,
+                codeADA,
+                codeBMX,
+                adaStore,
             },
         });
 
