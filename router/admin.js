@@ -5,7 +5,7 @@ const { listUser, changeStatus, changeRole } = require('../controllers/admin/adm
 const { listPartner } = require("../controllers/admin/partner");
 const { showItems } = require("../controllers/admin/items");
 const { deleteStation, addStation, updateStation } = require("../controllers/admin/station");
-const { tamplate, itemSearch, itemDelete, itemCreate, itemUpdate } = require("../controllers/admin/shelf");
+const { tamplate, itemSKU, itemDelete, itemCreate, itemUpdate } = require("../controllers/admin/shelf");
 
 //Manege
 router.get("/users", authCheck, adminCheck, listUser);
@@ -14,7 +14,7 @@ router.post("/change-role", authCheck, adminCheck, changeRole);
 
 // CSV
 const upload = require('../config/multerConfig');
-const { uploadStationCSV, uploadItemMinMaxCSV, uploadPartnersCSV, uploadMasterItemCSV, uploadSalesDayCSV, uploadStockCSV, uploadWithdrawCSV, uploadTamplateCSV, uploadItemSearchCSV, uploadSalesMonthCSV } = require('../controllers/admin/uploadController');
+const { uploadStationCSV, uploadItemMinMaxCSV, uploadPartnersCSV, uploadMasterItemCSV, uploadSalesDayCSV, uploadStockCSV, uploadWithdrawCSV, uploadTamplateCSV, uploadItemSKUCSV, uploadSalesMonthCSV } = require('../controllers/admin/uploadController');
 const { data } = require("../controllers/admin/dashboard");
 // Upload endpoints
 router.post('/upload-stations', authCheck, adminCheck, upload.single('file'), uploadStationCSV);
@@ -26,7 +26,7 @@ router.post('/upload-withdraw', authCheck, adminCheck, upload.single('file'), up
 router.post('/upload-salesday', authCheck, adminCheck, upload.single('file'), uploadSalesDayCSV)
 router.post('/upload-salesmonth', authCheck, adminCheck, upload.single('file'), uploadSalesMonthCSV)
 router.post('/upload-tamplate', authCheck, adminCheck, upload.single('file'), uploadTamplateCSV)
-router.post('/upload-itemsearch', authCheck, adminCheck, upload.single('file'), uploadItemSearchCSV)
+router.post('/upload-sku', authCheck, adminCheck, upload.single('file'), uploadItemSKUCSV)
 
 //partner
 router.get("/partner", authCheck, adminCheck, listPartner);
@@ -44,7 +44,7 @@ router.get("/dashboard-data", authCheck, data) //call sales,withdraw,stock
 
 //Tamplate 
 router.get("/shelf-tamplate", authCheck, tamplate); //Tamplate
-router.post("/shelf-itemsearch", authCheck, itemSearch); //Item Search
+router.post("/shelf-sku", authCheck, itemSKU); //Item Search
 router.delete("/shelf-delete", authCheck, adminCheck, itemDelete);
 router.post("/shelf-add", authCheck, adminCheck, itemCreate);
 router.put("/shelf-update", authCheck, adminCheck, itemUpdate)

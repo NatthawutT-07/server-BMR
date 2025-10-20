@@ -98,7 +98,7 @@ CREATE TABLE `ListOfItemHold` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `Sales` (
+CREATE TABLE `SalesDay` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `branchCode` VARCHAR(191) NOT NULL,
     `channelSales` VARCHAR(191) NOT NULL,
@@ -106,6 +106,22 @@ CREATE TABLE `Sales` (
     `quantity` INTEGER NOT NULL,
     `discount` VARCHAR(191) NOT NULL,
     `totalPrice` VARCHAR(191) NOT NULL,
+    `day` INTEGER NOT NULL,
+
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `SalesMonth` (
+    `id` INTEGER NOT NULL AUTO_INCREMENT,
+    `branchCode` VARCHAR(191) NOT NULL,
+    `channelSales` VARCHAR(191) NOT NULL,
+    `codeProduct` INTEGER NOT NULL,
+    `quantity` INTEGER NOT NULL,
+    `discount` VARCHAR(191) NOT NULL,
+    `totalPrice` VARCHAR(191) NOT NULL,
+    `month` INTEGER NOT NULL,
+    `year` INTEGER NOT NULL,
 
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -148,13 +164,13 @@ CREATE TABLE `Tamplate` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `ItemSearch` (
+CREATE TABLE `Sku` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `branchCode` VARCHAR(191) NOT NULL,
     `shelfCode` VARCHAR(191) NOT NULL,
     `rowNo` INTEGER NOT NULL,
     `codeProduct` INTEGER NOT NULL,
-    `index` VARCHAR(191) NULL,
+    `index` INTEGER NOT NULL,
 
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;

@@ -3,8 +3,10 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"
+  // provider = "mysql"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // npx prisma migrate dev --name init
@@ -101,8 +103,7 @@ model SalesDay {
   quantity     Int //main
   discount     String //second
   totalPrice   String //main
-  month        Int
-  year         Int
+  day          Int
 }
 
 model SalesMonth {
@@ -145,7 +146,7 @@ model Tamplate {
   type       String?
 }
 
-model ItemSearch {
+model Sku {
   id          Int    @id @default(autoincrement())
   branchCode  String
   shelfCode   String

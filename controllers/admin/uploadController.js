@@ -523,7 +523,8 @@ exports.uploadTamplateCSV = async (req, res) => {
         });
 };
 
-exports.uploadItemSearchCSV = async (req, res) => {
+//SKU
+exports.uploadItemSKUCSV = async (req, res) => {
     if (!req.file) return res.status(400).send('No file uploaded');
 
     const results = [];
@@ -544,9 +545,9 @@ exports.uploadItemSearchCSV = async (req, res) => {
         })
         .on('end', async () => {
             try {
-                await prisma.itemSearch.deleteMany();
+                await prisma.sku.deleteMany();
 
-                const itemSearch = results.map(row => {
+                const sku = results.map(row => {
                     let branchCode = row.StoreCode?.trim() || null;
                     if (branchCode) {
                         const match = branchCode.match(/^ST0*(\d{1,})$/);
@@ -565,8 +566,8 @@ exports.uploadItemSearchCSV = async (req, res) => {
                     };
                 });
 
-                await prisma.itemSearch.createMany({
-                    data: itemSearch,
+                await prisma.sku.createMany({
+                    data: sku,
                     skipDuplicates: true,
                 });
 

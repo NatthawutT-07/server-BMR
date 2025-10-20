@@ -10,7 +10,7 @@ exports.itemCreate = async (req, res) => {
             });
         }
 
-        await prisma.itemSearch.create({
+        await prisma.sku.create({
             data: {
                 branchCode,
                 codeProduct: Number(codeProduct),
@@ -37,7 +37,7 @@ exports.itemDelete = async (req, res) => {
     }
 
     try {
-        await prisma.itemSearch.deleteMany({
+        await prisma.sku.deleteMany({
             where: {
                 branchCode,
                 shelfCode,
@@ -47,7 +47,7 @@ exports.itemDelete = async (req, res) => {
             },
         });
 
-        const remainingItems = await prisma.itemSearch.findMany({
+        const remainingItems = await prisma.sku.findMany({
             where: {
                 branchCode,
                 shelfCode,
@@ -63,7 +63,7 @@ exports.itemDelete = async (req, res) => {
         });
 
         const updates = remainingItems.map((item, i) =>
-            prisma.itemSearch.update({
+            prisma.sku.update({
                 where: { id: item.id },
                 data: { index: i + 1 },
             })
@@ -89,10 +89,10 @@ exports.itemUpdate = async (req, res) => {
         const { branchCode, shelfCode } = items[0];
 
         await prisma.$transaction([
-            prisma.itemSearch.deleteMany({
+            prisma.sku.deleteMany({
                 where: { branchCode, shelfCode },
             }),
-            prisma.itemSearch.createMany({
+            prisma.sku.createMany({
                 data: items.map(item => ({
                     branchCode: item.branchCode,
                     shelfCode: item.shelfCode,
@@ -113,7 +113,7 @@ exports.itemUpdate = async (req, res) => {
 exports.tamplate = async (req, res) => {
     try {
         const result = await prisma.tamplate.findMany({
-            orderBy: { id: 'asc' }, 
+            orderBy: { id: 'asc' },
         });
         res.json(result);
     } catch (error) {
@@ -122,11 +122,11 @@ exports.tamplate = async (req, res) => {
     }
 };
 
-exports.itemSearch = async (req, res) => {
+exports.itemSKU = async (req, res) => {
     const { branchCode } = req.body;
 
     try {
-        const product = await prisma.itemSearch.findMany({
+        const product = await prisma.sku.findMany({
             where: { branchCode },
             select: {
                 branchCode: true,
@@ -142,6 +142,7 @@ exports.itemSearch = async (req, res) => {
         const conditions = product.map(({ branchCode, codeProduct }) => ({ branchCode, codeProduct }));
         const codeProductList = [...new Set(product.map(p => p.codeProduct))];
 
+        // เรียกข้อมูลจากหลายๆ ตารางในคราวเดียว
         const [listOfItemHold, withdraws, stocks, sales, itemMinMaxList] = await Promise.all([
             prisma.listOfItemHold.findMany({
                 where: { codeProduct: { in: codeProductList } },
@@ -196,6 +197,7 @@ exports.itemSearch = async (req, res) => {
             }),
         ]);
 
+        // แปลงข้อมูลจากแต่ละ response เป็น Map เพื่อให้เข้าถึงข้อมูลได้เร็วขึ้น
         const itemHoldMap = new Map(listOfItemHold.map(p => [p.codeProduct, p]));
         const stockMap = new Map(stocks.map(s => [`${s.branchCode}-${s.codeProduct}`, s]));
         const salesMap = new Map(sales.map(s => [`${s.branchCode}-${s.codeProduct}`, s]));
@@ -208,6 +210,7 @@ exports.itemSearch = async (req, res) => {
             withdrawMap.get(key).push(w);
         });
 
+        // จัดเตรียมผลลัพธ์ที่จะส่งออกมา
         const result = product.map(({ branchCode, codeProduct, shelfCode, rowNo, index }) => {
             const key = `${branchCode}-${codeProduct}`;
             const productHoldInfo = itemHoldMap.get(codeProduct);
@@ -242,8 +245,9 @@ exports.itemSearch = async (req, res) => {
 
         return res.json(result);
     } catch (e) {
-        console.error("❌ itemSearch error:", e);
+        console.error("❌ sku error:", e);
         return res.status(500).json({ msg: "❌ Failed to retrieve data" });
     }
 };
+
 
