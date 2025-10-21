@@ -48,60 +48,6 @@ exports.uploadStationCSV = async (req, res) => {
     });
 };
 
-
-exports.uploadItemMinMaxCSV = async (req, res) => {
-    if (!req.file) return res.status(400).send('No file uploaded');
-
-    const results = [];
-    const filePath = req.file.path;
-
-    fs.createReadStream(filePath, { encoding: 'utf8' })
-        .on('error', (err) => {
-            console.error('File read error:', err);
-            fs.unlink(filePath, (unlinkErr) => {
-                if (unlinkErr) console.error('Error deleting file:', unlinkErr);
-            });
-            return res.status(500).send('Failed to read uploaded file.');
-        })
-        .pipe(csv())
-        .on('data', (data) => {
-            console.log('CSV Row:', data);
-            results.push(data);
-        })
-        .on('end', async () => {
-            try {
-                await prisma.itemMinMax.deleteMany();
-
-                const items = results.map(row => ({
-                    branchCode: row.BranchCode
-                        ? row.BranchCode.trim().slice(0, 2) + parseInt(row.BranchCode.trim().slice(2), 10).toString().padStart(3, '0')
-                        : null,
-                    codeProduct: parseInt(row.ItemCode?.trim(), 10) || 0,
-                    minStore: row.MinStock ? parseInt(row.MinStock?.trim(), 10) : null,
-                    maxStore: row.MaxStock ? parseInt(row.MaxStock?.trim(), 10) : null,
-                }));
-
-
-                await prisma.itemMinMax.createMany({
-                    data: items,
-                    skipDuplicates: true,
-                });
-
-                fs.unlink(filePath, (err) => {
-                    if (err) console.error('Error deleting file:', err);
-                });
-
-                res.status(200).send('CSV uploaded and data saved to DB');
-            } catch (err) {
-                console.error('Database error:', err);
-                fs.unlink(filePath, (unlinkErr) => {
-                    if (unlinkErr) console.error('Error deleting file:', unlinkErr);
-                });
-                res.status(500).json({ error: err.message });
-            }
-        });
-};
-
 exports.uploadItemMinMaxCSV = async (req, res) => {
     if (!req.file) return res.status(400).send('No file uploaded');
 
