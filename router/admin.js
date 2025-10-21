@@ -7,10 +7,10 @@ const { showItems } = require("../controllers/admin/items");
 const { deleteStation, addStation, updateStation } = require("../controllers/admin/station");
 const { tamplate, sku, itemDelete, itemCreate, itemUpdate } = require("../controllers/admin/shelf");
 
-//Manege
-router.get("/users", authCheck, adminCheck, listUser);
-router.post("/change-status", authCheck, adminCheck, changeStatus);
-router.post("/change-role", authCheck, adminCheck, changeRole);
+// //Manege
+// router.get("/users", authCheck, adminCheck, listUser);
+// router.post("/change-status", authCheck, adminCheck, changeStatus);
+// router.post("/change-role", authCheck, adminCheck, changeRole);
 
 // CSV
 const upload = require('../config/multerConfig');

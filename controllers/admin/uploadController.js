@@ -48,6 +48,80 @@ exports.uploadStationCSV = async (req, res) => {
     });
 };
 
+exports.uploadPartnersCSV = async (req, res) => {
+    if (!req.file) return res.status(400).send('No file uploaded');
+
+    const results = [];
+
+    // ✅ ใช้ buffer จาก memory แทนการอ่านไฟล์จากดิสก์
+    const bufferStream = new Readable();
+    bufferStream.push(req.file.buffer);
+    bufferStream.push(null);
+
+    bufferStream
+        .pipe(csv())
+        .on('data', (data) => {
+            console.log('CSV Row:', data);
+            results.push(data);
+        })
+        .on('error', (err) => {
+            console.error('CSV parse error:', err);
+            return res.status(500).send('Failed to parse CSV file.');
+        })
+        .on('end', async () => {
+            try {
+                // ลบข้อมูลเก่า
+                await prisma.partners.deleteMany();
+
+                // Mapping ข้อมูลจาก CSV
+                const partners = results.map(row => ({
+                    codeBP: row.BPCode || null,
+                    nameBP: row.BPName || null,
+                    accountBalance: row.AccountBalance ? parseFloat(row.AccountBalance.replace(/[^0-9.-]+/g, '')) : null,
+                    interfaceADA: row.InterfaceStatusforADASoft || null,
+                    interfaceEDI: row.InterfaceStatusforEDI || null,
+                    brand: row.Brand || null,
+                    paymentTermsCode: row.PaymentTermsCode || null,
+                    noOldBP: row.BPOldNo || null,
+                    taxGroup: row.TaxGroup || null,
+                    remarks: row.Remarks || null,
+                    idNoTwo: row.IDNo2 || null,
+                    gp: row.GP || null,
+                    dc: row.DC || null,
+                    email: row.EMail || null,
+                    phoneOne: row.Telephone1 || null,
+                    phoneTwo: row.Telephone2 || null,
+                    billAddressType: row.BilltoAddressType || null,
+                    billBlock: row.BilltoBlock || null,
+                    billBuildingFloorRoom: row.BilltoBuilding || null,
+                    billCity: row.BilltoCity || null,
+                    billCountry: row.BilltoCountry || null,
+                    billCountryNo: row.BilltoCounty || null,
+                    billZipCode: row.BilltoZipCode || null,
+                    branchBP: row.BPBranch ? parseInt(row.BPBranch.trim(), 10) : null,
+                    billExchangeOnCollection: row.BillofExchangeonCollection || null,
+                    billDefault: row.BilltoDefault || null,
+                    billState: row.BilltoState || null,
+                    billStreet: row.BilltoStreet || null,
+                    billStreetNo: row.BilltoStreetNo || null,
+                    remarkOne: row.Remark || null,
+                    groupCode: row.GroupCode || null,
+                    federalTaxId: row.FederalTaxID || null,
+                }));
+
+                await prisma.partners.createMany({
+                    data: partners,
+                    skipDuplicates: true,
+                });
+
+                res.status(200).send('CSV uploaded and data saved to DB ✅');
+            } catch (err) {
+                console.error('Database error:', err);
+                res.status(500).json({ error: err.message });
+            }
+        });
+};
+
 exports.uploadItemMinMaxCSV = async (req, res) => {
     if (!req.file) return res.status(400).send('No file uploaded');
 
