@@ -1,60 +1,53 @@
 const fs = require('fs');
+const { Readable } = require('stream');
 const csv = require('csv-parser');
 const prisma = require('../../config/prisma');
 
 exports.uploadStationCSV = async (req, res) => {
-    if (!req.file) return res.status(400).send('No file uploaded');
+  if (!req.file) return res.status(400).send('No file uploaded');
 
-    const results = [];
-    const filePath = req.file.path;
+  const results = [];
+  const bufferStream = new Readable();
+  bufferStream.push(req.file.buffer);
+  bufferStream.push(null); // จบ stream
 
-    fs.createReadStream(filePath, { encoding: 'utf8' })
-        .on('error', (err) => {
-            console.error('File read error:', err);
-            fs.unlink(filePath, (unlinkErr) => {
-                if (unlinkErr) console.error('Error deleting file:', unlinkErr);
-            });
-            return res.status(500).send('Failed to read uploaded file.');
-        })
-        .pipe(csv())
-        .on('data', (data) => {
-            console.log('CSV Row:', data);
-            results.push(data);
-        })
-        .on('end', async () => {
-            try {
-                await prisma.station.deleteMany();
+  bufferStream
+    .pipe(csv())
+    .on('data', (data) => {
+      results.push(data);
+    })
+    .on('error', (err) => {
+      console.error('CSV parse error:', err);
+      return res.status(500).send('Failed to parse CSV file.');
+    })
+    .on('end', async () => {
+      try {
+        await prisma.station.deleteMany();
 
-                const stations = results.map(row => ({
-                    codeSAP: row.codeSAP?.trim() || null,
-                    codeADA: row.codeADA?.trim() || null,
-                    codeBMX: row.codeBMX?.trim() || null,
-                    nameTH: row.nameTH?.trim() || null,
-                    adaStore: row.adaStore?.trim() || null,
-                    nameEng: row.nameEng?.trim() || null,
-                    WhCodeSAP: row.WhCodeSAP?.trim() || null,
-                    storeNameTH: row.storeNameTH?.trim() || null,
-                }));
+        const stations = results.map(row => ({
+          codeSAP: row.codeSAP?.trim() || null,
+          codeADA: row.codeADA?.trim() || null,
+          codeBMX: row.codeBMX?.trim() || null,
+          nameTH: row.nameTH?.trim() || null,
+          adaStore: row.adaStore?.trim() || null,
+          nameEng: row.nameEng?.trim() || null,
+          WhCodeSAP: row.WhCodeSAP?.trim() || null,
+          storeNameTH: row.storeNameTH?.trim() || null,
+        }));
 
-                await prisma.station.createMany({
-                    data: stations,
-                    skipDuplicates: true,
-                });
-
-                fs.unlink(filePath, (err) => {
-                    if (err) console.error('Error deleting file:', err);
-                });
-
-                res.status(200).send('CSV uploaded and data saved to DB');
-            } catch (err) {
-                console.error('Database error:', err);
-                fs.unlink(filePath, (unlinkErr) => {
-                    if (unlinkErr) console.error('Error deleting file:', unlinkErr);
-                });
-                res.status(500).json({ error: err.message });
-            }
+        await prisma.station.createMany({
+          data: stations,
+          skipDuplicates: true,
         });
+
+        res.status(200).send('CSV uploaded and data saved to DB');
+      } catch (err) {
+        console.error('Database error:', err);
+        res.status(500).json({ error: err.message });
+      }
+    });
 };
+
 
 exports.uploadItemMinMaxCSV = async (req, res) => {
     if (!req.file) return res.status(400).send('No file uploaded');
@@ -109,79 +102,49 @@ exports.uploadItemMinMaxCSV = async (req, res) => {
         });
 };
 
-exports.uploadPartnersCSV = async (req, res) => {
+exports.uploadItemMinMaxCSV = async (req, res) => {
     if (!req.file) return res.status(400).send('No file uploaded');
 
     const results = [];
-    const filePath = req.file.path;
 
-    fs.createReadStream(filePath, { encoding: 'utf8' })
-        .on('error', (err) => {
-            console.error('File read error:', err);
-            fs.unlink(filePath, (unlinkErr) => {
-                if (unlinkErr) console.error('Error deleting file:', unlinkErr);
-            });
-            return res.status(500).send('Failed to read uploaded file.');
-        })
+    // ✅ แทนที่การอ่านจากไฟล์ ด้วยการอ่านจาก buffer
+    const bufferStream = new Readable();
+    bufferStream.push(req.file.buffer);
+    bufferStream.push(null);
+
+    bufferStream
         .pipe(csv())
         .on('data', (data) => {
-            console.log('CSV Row:', data);
             results.push(data);
+        })
+        .on('error', (err) => {
+            console.error('CSV parse error:', err);
+            return res.status(500).send('Failed to parse CSV file.');
         })
         .on('end', async () => {
             try {
-                await prisma.partners.deleteMany();
-                const partners = results.map(row => ({
-                    codeBP: row.BPCode || null,
-                    nameBP: row.BPName || null,
-                    accountBalance: row.AccountBalance ? parseFloat(row.AccountBalance.replace(/[^0-9.-]+/g, '')) : null,
-                    interfaceADA: row.InterfaceStatusforADASoft || null,
-                    interfaceEDI: row.InterfaceStatusforEDI || null,
-                    brand: row.Brand || null,
-                    paymentTermsCode: row.PaymentTermsCode || null,
-                    noOldBP: row.BPOldNo || null,
-                    taxGroup: row.TaxGroup || null,
-                    remarks: row.Remarks || null,
-                    idNoTwo: row.IDNo2 || null,
-                    gp: row.GP || null,
-                    dc: row.DC || null,
-                    email: row.EMail || null,
-                    phoneOne: row.Telephone1 || null,
-                    phoneTwo: row.Telephone2 || null,
-                    billAddressType: row.BilltoAddressType || null,
-                    billBlock: row.BilltoBlock || null,
-                    billBuildingFloorRoom: row.BilltoBuilding || null,
-                    billCity: row.BilltoCity || null,
-                    billCountry: row.BilltoCountry || null,
-                    billCountryNo: row.BilltoCounty || null,
-                    billZipCode: row.BilltoZipCode || null,
-                    branchBP: row.BPBranch ? parseInt(row.BPBranch?.trim(), 10) : null,
-                    billExchangeOnCollection: row.BillofExchangeonCollection || null,
-                    billDefault: row.BilltoDefault || null,
-                    billState: row.BilltoState || null,
-                    billStreet: row.BilltoStreet || null,
-                    billStreetNo: row.BilltoStreetNo || null,
-                    remarkOne: row.Remark || null,
-                    groupCode: row.GroupCode || null,
-                    federalTaxId: row.FederalTaxID || null,
+                // ลบข้อมูลเก่าก่อน insert ใหม่
+                await prisma.itemMinMax.deleteMany();
+
+                // ✅ Map ข้อมูลจาก CSV
+                const items = results.map(row => ({
+                    branchCode: row.BranchCode
+                        ? row.BranchCode.trim().slice(0, 2) + parseInt(row.BranchCode.trim().slice(2), 10).toString().padStart(3, '0')
+                        : null,
+                    codeProduct: parseInt(row.ItemCode?.trim(), 10) || 0,
+                    minStore: row.MinStock ? parseInt(row.MinStock?.trim(), 10) : null,
+                    maxStore: row.MaxStock ? parseInt(row.MaxStock?.trim(), 10) : null,
                 }));
 
-
-                await prisma.partners.createMany({
-                    data: partners,
+                // ✅ บันทึกลงฐานข้อมูล
+                await prisma.itemMinMax.createMany({
+                    data: items,
                     skipDuplicates: true,
                 });
 
-                fs.unlink(filePath, (err) => {
-                    if (err) console.error('Error deleting file:', err);
-                });
-
-                res.status(200).send('CSV uploaded and data saved to DB');
+                res.status(200).send('CSV uploaded and data saved to DB ✅');
             } catch (err) {
                 console.error('Database error:', err);
-                fs.unlink(filePath, (unlinkErr) => {
-                    if (unlinkErr) console.error('Error deleting file:', unlinkErr);
-                });
                 res.status(500).json({ error: err.message });
             }
         });
@@ -191,20 +154,19 @@ exports.uploadMasterItemCSV = async (req, res) => {
     if (!req.file) return res.status(400).send('No file uploaded');
 
     const results = [];
-    const filePath = req.file.path;
 
-    fs.createReadStream(filePath, { encoding: 'utf8' })
-        .on('error', (err) => {
-            console.error('File read error:', err);
-            fs.unlink(filePath, (unlinkErr) => {
-                if (unlinkErr) console.error('Error deleting file:', unlinkErr);
-            });
-            return res.status(500).send('Failed to read uploaded file.');
-        })
+    // สร้าง stream จาก buffer ของไฟล์ที่อัพโหลดมา
+    const stream = Readable.from(req.file.buffer);
+
+    stream
         .pipe(csv())
         .on('data', (data) => {
             console.log('CSV Row:', data);
             results.push(data);
+        })
+        .on('error', (err) => {
+            console.error('CSV parse error:', err);
+            return res.status(500).send('Failed to parse CSV file.');
         })
         .on('end', async () => {
             try {
@@ -219,7 +181,7 @@ exports.uploadMasterItemCSV = async (req, res) => {
                     nameBrand: row.Name || null,
                     consingItem: row.ConsignItem || null,
                     purchasePriceExcVAT: row.PurchasePriceExcVAT ? parseFloat(row.PurchasePriceExcVAT) : 0,
-                    salesPriceIncVAT: row.PurchasePriceExcVAT ? parseInt(row.SalesPriceIncVAT) : 0,
+                    salesPriceIncVAT: row.SalesPriceIncVAT ? parseFloat(row.SalesPriceIncVAT) : 0,
                     preferredVandorCode: row.PreferredVendor || null,
                     preferredVandorName: row.PreferredVendorName || null,
                     GP: row.GP || null,
@@ -233,19 +195,9 @@ exports.uploadMasterItemCSV = async (req, res) => {
                     skipDuplicates: true,
                 });
 
-                try {
-                    await fs.promises.unlink(filePath); //Promise-based unlink
-                    console.log('File deleted successfully');
-                } catch (err) {
-                    console.error('Error deleting file:', err);
-                }
-
                 res.status(200).send('CSV uploaded and data saved to DB');
             } catch (err) {
                 console.error('Database error:', err);
-                fs.unlink(filePath, (unlinkErr) => {
-                    if (unlinkErr) console.error('Error deleting file:', unlinkErr);
-                });
                 res.status(500).json({ error: err.message });
             }
         });
@@ -255,31 +207,31 @@ exports.uploadSalesDayCSV = async (req, res) => {
     if (!req.file) return res.status(400).send('No file uploaded');
 
     const results = [];
-    const filePath = req.file.path;
 
-    fs.createReadStream(filePath, { encoding: 'utf8' })
-        .on('error', (err) => {
-            console.error('File read error:', err);
-            fs.unlink(filePath, (unlinkErr) => {
-                if (unlinkErr) console.error('Error deleting file:', unlinkErr);
-            });
-            return res.status(500).send('Failed to read uploaded file.');
-        })
+    // สร้าง stream จาก buffer ของไฟล์ที่อัพโหลดมา
+    const stream = Readable.from(req.file.buffer);
+
+    stream
         .pipe(csv())
         .on('data', (data) => {
             console.log('CSV Row:', data);
             results.push(data);
         })
+        .on('error', (err) => {
+            console.error('CSV parse error:', err);
+            return res.status(500).send('Failed to parse CSV file.');
+        })
         .on('end', async () => {
             try {
                 await prisma.salesDay.deleteMany();
+
                 const sales = results.map(row => ({
                     branchCode: row.branchCode || null,
                     channelSales: row.channelSales || null,
                     codeProduct: row.codeProduct ? parseInt(row.codeProduct?.trim(), 10) : 0,
                     quantity: row.quantity ? parseInt(row.quantity?.trim(), 10) : 0,
-                    discount: row.discount,
-                    totalPrice: row.totalPrice,
+                    discount: row.discount || null,
+                    totalPrice: row.totalPrice || null,
                     month: row.month ? parseInt(row.month?.trim(), 10) : 0,
                     year: row.year ? parseInt(row.year?.trim(), 10) : 0,
                 }));
@@ -289,39 +241,31 @@ exports.uploadSalesDayCSV = async (req, res) => {
                     skipDuplicates: true,
                 });
 
-                fs.unlink(filePath, (err) => {
-                    if (err) console.error('Error deleting file:', err);
-                });
-
                 res.status(200).send('CSV uploaded and data saved to DB');
             } catch (err) {
                 console.error('Database error:', err);
-                fs.unlink(filePath, (unlinkErr) => {
-                    if (unlinkErr) console.error('Error deleting file:', unlinkErr);
-                });
                 res.status(500).json({ error: err.message });
             }
         });
 };
 
-exports.uploadSalesMonthCSV = async (req, res) => {
+exports.uploadSalesMonthCSV = async (req, res) => { 
     if (!req.file) return res.status(400).send('No file uploaded');
 
     const results = [];
-    const filePath = req.file.path;
 
-    fs.createReadStream(filePath, { encoding: 'utf8' })
-        .on('error', (err) => {
-            console.error('File read error:', err);
-            fs.unlink(filePath, (unlinkErr) => {
-                if (unlinkErr) console.error('Error deleting file:', unlinkErr);
-            });
-            return res.status(500).send('Failed to read uploaded file.');
-        })
+    // สร้าง stream จาก buffer ของไฟล์ที่อัพโหลดมา
+    const stream = Readable.from(req.file.buffer);
+
+    stream
         .pipe(csv())
         .on('data', (data) => {
             console.log('CSV Row:', data);
             results.push(data);
+        })
+        .on('error', (err) => {
+            console.error('CSV parse error:', err);
+            return res.status(500).send('Failed to parse CSV file.');
         })
         .on('end', async () => {
             try {
@@ -330,8 +274,8 @@ exports.uploadSalesMonthCSV = async (req, res) => {
                     channelSales: row.channelSales || null,
                     codeProduct: row.codeProduct ? parseInt(row.codeProduct?.trim(), 10) : 0,
                     quantity: row.quantity ? parseInt(row.quantity?.trim(), 10) : 0,
-                    discount: row.discount,
-                    totalPrice: row.totalPrice,
+                    discount: row.discount || null,
+                    totalPrice: row.totalPrice || null,
                     month: row.month ? parseInt(row.month?.trim(), 10) : 0,
                     year: row.year ? parseInt(row.year?.trim(), 10) : 0,
                 }));
@@ -341,18 +285,9 @@ exports.uploadSalesMonthCSV = async (req, res) => {
                     skipDuplicates: true,
                 });
 
-                // ลบไฟล์หลังจากการบันทึกสำเร็จ
-                fs.unlink(filePath, (err) => {
-                    if (err) console.error('Error deleting file:', err);
-                });
-
                 res.status(200).send('CSV uploaded and data saved to DB');
             } catch (err) {
                 console.error('Database error:', err);
-                // ลบไฟล์หากเกิดข้อผิดพลาดที่เกิดจากฐานข้อมูล
-                fs.unlink(filePath, (unlinkErr) => {
-                    if (unlinkErr) console.error('Error deleting file:', unlinkErr);
-                });
                 res.status(500).json({ error: err.message });
             }
         });
@@ -362,24 +297,22 @@ exports.uploadStockCSV = async (req, res) => {
     if (!req.file) return res.status(400).send('No file uploaded');
 
     const results = [];
-    const filePath = req.file.path;
+    const stream = Readable.from(req.file.buffer);
 
-    fs.createReadStream(filePath, { encoding: 'utf8' })
-        .on('error', (err) => {
-            console.error('File read error:', err);
-            fs.unlink(filePath, (unlinkErr) => {
-                if (unlinkErr) console.error('Error deleting file:', unlinkErr);
-            });
-            return res.status(500).send('Failed to read uploaded file.');
-        })
+    stream
         .pipe(csv())
         .on('data', (data) => {
             console.log('CSV Row:', data);
             results.push(data);
         })
+        .on('error', (err) => {
+            console.error('CSV parse error:', err);
+            return res.status(500).send('Failed to parse CSV file.');
+        })
         .on('end', async () => {
             try {
                 await prisma.stock.deleteMany();
+
                 const stocks = results.map(row => ({
                     codeProduct: row.codeProduct ? parseInt(row.codeProduct?.trim(), 10) : 0,
                     branchCode: row.branchCode ? row.branchCode.trim() : 'Unknown',
@@ -391,53 +324,45 @@ exports.uploadStockCSV = async (req, res) => {
                     skipDuplicates: true,
                 });
 
-                fs.unlink(filePath, (err) => {
-                    if (err) console.error('Error deleting file:', err);
-                });
-
                 res.status(200).send('CSV uploaded and data saved to DB');
             } catch (err) {
                 console.error('Database error:', err);
-                fs.unlink(filePath, (unlinkErr) => {
-                    if (unlinkErr) console.error('Error deleting file:', unlinkErr);
-                });
                 res.status(500).json({ error: err.message });
             }
         });
 };
-
 exports.uploadWithdrawCSV = async (req, res) => {
     if (!req.file) return res.status(400).send('No file uploaded');
 
     const results = [];
-    const filePath = req.file.path;
+    const stream = Readable.from(req.file.buffer);
 
-    fs.createReadStream(filePath, { encoding: 'utf8' })
-        .on('error', (err) => {
-            console.error('File read error:', err);
-            fs.unlink(filePath, (unlinkErr) => {
-                if (unlinkErr) console.error('Error deleting file:', unlinkErr);
-            });
-            return res.status(500).send('Failed to read uploaded file.');
-        })
+    stream
         .pipe(csv())
         .on('data', (data) => {
             console.log('CSV Row:', data);
             results.push(data);
         })
+        .on('error', (err) => {
+            console.error('CSV parse error:', err);
+            return res.status(500).send('Failed to parse CSV file.');
+        })
         .on('end', async () => {
             try {
                 await prisma.withdraw.deleteMany();
+
                 const withdraw = results.map(row => ({
                     codeProduct: row.codeProduct ? parseInt(row.codeProduct?.trim(), 10) : 0,
-                    branchCode: row.branchCode ? row.branchCode.split(' ')[0].split('/')[0].replace(/[()]/g, '').trim() : 'Unknown',
+                    branchCode: row.branchCode
+                        ? row.branchCode.split(' ')[0].split('/')[0].replace(/[()]/g, '').trim()
+                        : 'Unknown',
                     docNumber: row.docNumber || null,
                     date: row.date || null,
                     docStatus: row.docStatus || null,
                     reason: row.reason || null,
                     quantity: row.quantity ? parseInt(row.quantity?.trim(), 10) : 0,
                     value: row.value || null,
-                    // ? parseFloat(row.value?.trim()) : 0,
+                    // ถ้าต้องการแปลง value เป็นตัวเลขใช้ parseFloat(row.value?.trim()) : 0
                 }));
 
                 await prisma.withdraw.createMany({
@@ -445,16 +370,9 @@ exports.uploadWithdrawCSV = async (req, res) => {
                     skipDuplicates: true,
                 });
 
-                fs.unlink(filePath, (err) => {
-                    if (err) console.error('Error deleting file:', err);
-                });
-
                 res.status(200).send('CSV uploaded and data saved to DB');
             } catch (err) {
                 console.error('Database error:', err);
-                fs.unlink(filePath, (unlinkErr) => {
-                    if (unlinkErr) console.error('Error deleting file:', unlinkErr);
-                });
                 res.status(500).json({ error: err.message });
             }
         });
@@ -464,20 +382,17 @@ exports.uploadTamplateCSV = async (req, res) => {
     if (!req.file) return res.status(400).send('No file uploaded');
 
     const results = [];
-    const filePath = req.file.path;
+    const stream = Readable.from(req.file.buffer);
 
-    fs.createReadStream(filePath, { encoding: 'utf8' })
-        .on('error', (err) => {
-            console.error('File read error:', err);
-            fs.unlink(filePath, (unlinkErr) => {
-                if (unlinkErr) console.error('Error deleting file:', unlinkErr);
-            });
-            return res.status(500).send('Failed to read uploaded file.');
-        })
+    stream
         .pipe(csv())
         .on('data', (data) => {
             console.log('CSV Row:', data);
             results.push(data);
+        })
+        .on('error', (err) => {
+            console.error('CSV parse error:', err);
+            return res.status(500).send('Failed to parse CSV file.');
         })
         .on('end', async () => {
             try {
@@ -508,16 +423,9 @@ exports.uploadTamplateCSV = async (req, res) => {
                     skipDuplicates: true,
                 });
 
-                fs.unlink(filePath, (err) => {
-                    if (err) console.error('Error deleting file:', err);
-                });
-
                 res.status(200).send('CSV uploaded and data saved to DB');
             } catch (err) {
                 console.error('Database error:', err);
-                fs.unlink(filePath, (unlinkErr) => {
-                    if (unlinkErr) console.error('Error deleting file:', unlinkErr);
-                });
                 res.status(500).json({ error: err.message });
             }
         });
@@ -527,20 +435,17 @@ exports.uploadskuCSV = async (req, res) => {
     if (!req.file) return res.status(400).send('No file uploaded');
 
     const results = [];
-    const filePath = req.file.path;
+    const stream = Readable.from(req.file.buffer);
 
-    fs.createReadStream(filePath, { encoding: 'utf8' })
-        .on('error', (err) => {
-            console.error('File read error:', err);
-            fs.unlink(filePath, (unlinkErr) => {
-                if (unlinkErr) console.error('Error deleting file:', unlinkErr);
-            });
-            return res.status(500).send('Failed to read uploaded file.');
-        })
+    stream
         .pipe(csv())
         .on('data', (data) => {
             console.log('CSV Row:', data);
             results.push(data);
+        })
+        .on('error', (err) => {
+            console.error('CSV parse error:', err);
+            return res.status(500).send('Failed to parse CSV file.');
         })
         .on('end', async () => {
             try {
@@ -570,17 +475,11 @@ exports.uploadskuCSV = async (req, res) => {
                     skipDuplicates: true,
                 });
 
-                fs.unlink(filePath, (err) => {
-                    if (err) console.error('Error deleting file:', err);
-                });
-
                 res.status(200).send('CSV uploaded and data saved to DB');
             } catch (err) {
                 console.error('Database error:', err);
-                fs.unlink(filePath, (unlinkErr) => {
-                    if (unlinkErr) console.error('Error deleting file:', unlinkErr);
-                });
                 res.status(500).json({ error: err.message });
             }
         });
 };
+
