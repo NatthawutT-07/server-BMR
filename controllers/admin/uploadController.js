@@ -523,8 +523,7 @@ exports.uploadTamplateCSV = async (req, res) => {
         });
 };
 
-//SKU
-exports.uploadItemSKUCSV = async (req, res) => {
+exports.uploadskuCSV = async (req, res) => {
     if (!req.file) return res.status(400).send('No file uploaded');
 
     const results = [];

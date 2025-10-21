@@ -113,7 +113,7 @@ exports.itemUpdate = async (req, res) => {
 exports.tamplate = async (req, res) => {
     try {
         const result = await prisma.tamplate.findMany({
-            orderBy: { id: 'asc' },
+            orderBy: { id: 'asc' }, 
         });
         res.json(result);
     } catch (error) {
@@ -122,7 +122,7 @@ exports.tamplate = async (req, res) => {
     }
 };
 
-exports.itemSKU = async (req, res) => {
+exports.sku = async (req, res) => {
     const { branchCode } = req.body;
 
     try {
@@ -142,7 +142,6 @@ exports.itemSKU = async (req, res) => {
         const conditions = product.map(({ branchCode, codeProduct }) => ({ branchCode, codeProduct }));
         const codeProductList = [...new Set(product.map(p => p.codeProduct))];
 
-        // เรียกข้อมูลจากหลายๆ ตารางในคราวเดียว
         const [listOfItemHold, withdraws, stocks, sales, itemMinMaxList] = await Promise.all([
             prisma.listOfItemHold.findMany({
                 where: { codeProduct: { in: codeProductList } },
@@ -197,7 +196,6 @@ exports.itemSKU = async (req, res) => {
             }),
         ]);
 
-        // แปลงข้อมูลจากแต่ละ response เป็น Map เพื่อให้เข้าถึงข้อมูลได้เร็วขึ้น
         const itemHoldMap = new Map(listOfItemHold.map(p => [p.codeProduct, p]));
         const stockMap = new Map(stocks.map(s => [`${s.branchCode}-${s.codeProduct}`, s]));
         const salesMap = new Map(sales.map(s => [`${s.branchCode}-${s.codeProduct}`, s]));
@@ -210,7 +208,6 @@ exports.itemSKU = async (req, res) => {
             withdrawMap.get(key).push(w);
         });
 
-        // จัดเตรียมผลลัพธ์ที่จะส่งออกมา
         const result = product.map(({ branchCode, codeProduct, shelfCode, rowNo, index }) => {
             const key = `${branchCode}-${codeProduct}`;
             const productHoldInfo = itemHoldMap.get(codeProduct);
@@ -249,5 +246,4 @@ exports.itemSKU = async (req, res) => {
         return res.status(500).json({ msg: "❌ Failed to retrieve data" });
     }
 };
-
 
