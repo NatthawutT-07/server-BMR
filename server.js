@@ -8,6 +8,12 @@ app.use(morgan("dev"));
 app.use(express.json({ limit: "20mb" }));
 app.use(cors())
 
+// app.use(cors({
+//     origin: ["https://web-bmr.ngrok.app"],
+//     credentials: true,
+// }));
+
+
 // app.use((req, res, next) => {
 //     setTimeout(() => {
 //         next();

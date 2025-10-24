@@ -2,22 +2,25 @@ const prisma = require("../../config/prisma");
 
 exports.itemCreate = async (req, res) => {
     try {
-        const { branchCode, codeProduct, shelfCode, rowNo, index } = req.body;
+        const { items } = req.body;
 
-        if (!branchCode || !codeProduct || !shelfCode || !rowNo || !index) {
+        if (!items || items.length === 0) {
             return res.status(400).json({
-                error: '❌ Incomplete information (branchCode, codeProduct, shelfCode, rowNo, index)',
+                error: '❌ No items provided.',
             });
         }
 
-        await prisma.sku.create({
-            data: {
-                branchCode,
-                codeProduct: Number(codeProduct),
-                shelfCode,
-                rowNo: Number(rowNo),
-                index: Number(index),
-            },
+        const itemsToInsert = items.map(item => ({
+            branchCode: item.branchCode,
+            codeProduct: Number(item.codeProduct),
+            shelfCode: item.shelfCode,
+            rowNo: Number(item.rowNo),
+            index: Number(item.index),
+        }));
+
+        await prisma.sku.createMany({
+            data: itemsToInsert,
+            skipDuplicates: true,  // ข้ามค่าที่ซ้ำ
         });
 
         return res.status(201).json({
@@ -28,6 +31,7 @@ exports.itemCreate = async (req, res) => {
         return res.status(500).json({ error: '❌ Server error' });
     }
 };
+
 
 exports.itemDelete = async (req, res) => {
     const { branchCode, shelfCode, rowNo, codeProduct, index } = req.body;
@@ -113,7 +117,7 @@ exports.itemUpdate = async (req, res) => {
 exports.tamplate = async (req, res) => {
     try {
         const result = await prisma.tamplate.findMany({
-            orderBy: { id: 'asc' }, 
+            orderBy: { id: 'asc' },
         });
         res.json(result);
     } catch (error) {
