@@ -4,48 +4,48 @@ const csv = require('csv-parser');
 const prisma = require('../../config/prisma');
 
 exports.uploadStationCSV = async (req, res) => {
-  if (!req.file) return res.status(400).send('No file uploaded');
+    if (!req.file) return res.status(400).send('No file uploaded');
 
-  const results = [];
-  const bufferStream = new Readable();
-  bufferStream.push(req.file.buffer);
-  bufferStream.push(null); // จบ stream
+    const results = [];
+    const bufferStream = new Readable();
+    bufferStream.push(req.file.buffer);
+    bufferStream.push(null); // จบ stream
 
-  bufferStream
-    .pipe(csv())
-    .on('data', (data) => {
-      results.push(data);
-    })
-    .on('error', (err) => {
-      console.error('CSV parse error:', err);
-      return res.status(500).send('Failed to parse CSV file.');
-    })
-    .on('end', async () => {
-      try {
-        await prisma.station.deleteMany();
+    bufferStream
+        .pipe(csv())
+        .on('data', (data) => {
+            results.push(data);
+        })
+        .on('error', (err) => {
+            console.error('CSV parse error:', err);
+            return res.status(500).send('Failed to parse CSV file.');
+        })
+        .on('end', async () => {
+            try {
+                await prisma.station.deleteMany();
 
-        const stations = results.map(row => ({
-          codeSAP: row.codeSAP?.trim() || null,
-          codeADA: row.codeADA?.trim() || null,
-          codeBMX: row.codeBMX?.trim() || null,
-          nameTH: row.nameTH?.trim() || null,
-          adaStore: row.adaStore?.trim() || null,
-          nameEng: row.nameEng?.trim() || null,
-          WhCodeSAP: row.WhCodeSAP?.trim() || null,
-          storeNameTH: row.storeNameTH?.trim() || null,
-        }));
+                const stations = results.map(row => ({
+                    codeSAP: row.codeSAP?.trim() || null,
+                    codeADA: row.codeADA?.trim() || null,
+                    codeBMX: row.codeBMX?.trim() || null,
+                    nameTH: row.nameTH?.trim() || null,
+                    adaStore: row.adaStore?.trim() || null,
+                    nameEng: row.nameEng?.trim() || null,
+                    WhCodeSAP: row.WhCodeSAP?.trim() || null,
+                    storeNameTH: row.storeNameTH?.trim() || null,
+                }));
 
-        await prisma.station.createMany({
-          data: stations,
-          skipDuplicates: true,
+                await prisma.station.createMany({
+                    data: stations,
+                    skipDuplicates: true,
+                });
+
+                res.status(200).send('CSV uploaded and data saved to DB');
+            } catch (err) {
+                console.error('Database error:', err);
+                res.status(500).json({ error: err.message });
+            }
         });
-
-        res.status(200).send('CSV uploaded and data saved to DB');
-      } catch (err) {
-        console.error('Database error:', err);
-        res.status(500).json({ error: err.message });
-      }
-    });
 };
 
 exports.uploadPartnersCSV = async (req, res) => {
@@ -61,7 +61,7 @@ exports.uploadPartnersCSV = async (req, res) => {
     bufferStream
         .pipe(csv())
         .on('data', (data) => {
-            console.log('CSV Row:', data);
+            // console.log('CSV Row:', data);
             results.push(data);
         })
         .on('error', (err) => {
@@ -122,8 +122,6 @@ exports.uploadPartnersCSV = async (req, res) => {
         });
 };
 
-
-
 exports.uploadItemMinMaxCSV = async (req, res) => {
     if (!req.file) return res.status(400).send('No file uploaded');
 
@@ -183,7 +181,7 @@ exports.uploadMasterItemCSV = async (req, res) => {
     stream
         .pipe(csv())
         .on('data', (data) => {
-            console.log('CSV Row:', data);
+            // console.log('CSV Row:', data);
             results.push(data);
         })
         .on('error', (err) => {
@@ -236,7 +234,7 @@ exports.uploadSalesDayCSV = async (req, res) => {
     stream
         .pipe(csv())
         .on('data', (data) => {
-            console.log('CSV Row:', data);
+            // console.log('CSV Row:', data);
             results.push(data);
         })
         .on('error', (err) => {
@@ -254,8 +252,8 @@ exports.uploadSalesDayCSV = async (req, res) => {
                     quantity: row.quantity ? parseInt(row.quantity?.trim(), 10) : 0,
                     discount: row.discount || null,
                     totalPrice: row.totalPrice || null,
-                    month: row.month ? parseInt(row.month?.trim(), 10) : 0,
-                    year: row.year ? parseInt(row.year?.trim(), 10) : 0,
+                    // month: row.month ? parseInt(row.month?.trim(), 10) : 0,
+                    // year: row.year ? parseInt(row.year?.trim(), 10) : 0,
                 }));
 
                 await prisma.salesDay.createMany({
@@ -271,7 +269,7 @@ exports.uploadSalesDayCSV = async (req, res) => {
         });
 };
 
-exports.uploadSalesMonthCSV = async (req, res) => { 
+exports.uploadSalesMonthCSV = async (req, res) => {
     if (!req.file) return res.status(400).send('No file uploaded');
 
     const results = [];
@@ -282,7 +280,7 @@ exports.uploadSalesMonthCSV = async (req, res) => {
     stream
         .pipe(csv())
         .on('data', (data) => {
-            console.log('CSV Row:', data);
+            // console.log('CSV Row:', data);
             results.push(data);
         })
         .on('error', (err) => {
@@ -324,7 +322,7 @@ exports.uploadStockCSV = async (req, res) => {
     stream
         .pipe(csv())
         .on('data', (data) => {
-            console.log('CSV Row:', data);
+            // console.log('CSV Row:', data);
             results.push(data);
         })
         .on('error', (err) => {
@@ -362,7 +360,7 @@ exports.uploadWithdrawCSV = async (req, res) => {
     stream
         .pipe(csv())
         .on('data', (data) => {
-            console.log('CSV Row:', data);
+            // console.log('CSV Row:', data);
             results.push(data);
         })
         .on('error', (err) => {
@@ -409,7 +407,7 @@ exports.uploadTamplateCSV = async (req, res) => {
     stream
         .pipe(csv())
         .on('data', (data) => {
-            console.log('CSV Row:', data);
+            // console.log('CSV Row:', data);
             results.push(data);
         })
         .on('error', (err) => {
@@ -462,7 +460,7 @@ exports.uploadskuCSV = async (req, res) => {
     stream
         .pipe(csv())
         .on('data', (data) => {
-            console.log('CSV Row:', data);
+            // console.log('CSV Row:', data);
             results.push(data);
         })
         .on('error', (err) => {

@@ -3,8 +3,8 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"
-  // provider = "postgresql"
+  // provider = "mysql"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
   // directUrl = env("DIRECT_URL")
 }
@@ -74,6 +74,8 @@ model ItemMinMax {
   codeProduct Int
   minStore    Int //main
   maxStore    Int //main
+
+  @@index([branchCode, codeProduct])
 }
 
 model ListOfItemHold {
@@ -93,6 +95,8 @@ model ListOfItemHold {
   shelfLife           String? //second
   productionDate      String? //add
   vatGroupPu          String? //second
+
+  @@index([codeProduct])
 }
 
 model SalesDay {
@@ -103,7 +107,9 @@ model SalesDay {
   quantity     Int //main
   discount     String //second
   totalPrice   String //main
-  day          Int
+
+  // day          Int
+  @@index([branchCode, codeProduct, channelSales]) // filter + groupBy
 }
 
 model SalesMonth {
@@ -116,6 +122,8 @@ model SalesMonth {
   totalPrice   String //main
   month        Int
   year         Int
+
+  @@index([branchCode, codeProduct, channelSales])
 }
 
 model Stock {
@@ -123,6 +131,8 @@ model Stock {
   codeProduct Int
   branchCode  String
   quantity    Int //main
+
+  @@index([branchCode, codeProduct]) // ใช้ filter / join
 }
 
 model withdraw {
@@ -135,6 +145,8 @@ model withdraw {
   reason      String //main
   quantity    Int //main
   value       String //main
+
+  @@index([branchCode, codeProduct]) // filter / groupBy
 }
 
 model Tamplate {
@@ -154,15 +166,7 @@ model Sku {
   codeProduct Int
   index       Int
 
-  // Relation to itemminmax (optional)
-  // itemminmaxId Int?
-  // itemminmax   ItemMinMax? @relation(fields: [itemminmaxId], references: [id])
-
-  // // Relation to sales (optional)
-  // salesId          Int?
-  // sales            Sales?          @relation(fields: [salesId], references: [id])
-  // ListOfItemHold   ListOfItemHold? @relation(fields: [listOfItemHoldId], references: [id])
-  // listOfItemHoldId Int?
+  @@index([branchCode, shelfCode, index]) // สำหรับเรียงลำดับบน shelf
 }
 
 // ไม่เก็บข้อมูลซ้ำ เก็บแต่ id ของ model อื่น แล้วไปดึงตอน query

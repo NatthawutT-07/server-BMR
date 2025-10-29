@@ -34,51 +34,53 @@ exports.itemCreate = async (req, res) => {
 
 
 exports.itemDelete = async (req, res) => {
-    const { branchCode, shelfCode, rowNo, codeProduct, index } = req.body;
-
-    if (!branchCode || !shelfCode || !rowNo || !codeProduct || !index) {
-        return res.status(400).json({ success: false, message: "❌ Incomplete information" });
-    }
-
     try {
+        const { branchCode, shelfCode, rowNo, codeProduct, index } = req.body;
+
+        if (!branchCode || !shelfCode || rowNo == null || codeProduct == null || index == null) {
+            return res.status(400).json({ success: false, message: "❌ Incomplete information" });
+        }
+
+        const rowNoNum = Number(rowNo);
+        const codeProductNum = Number(codeProduct);
+        const indexNum = Number(index);
+
+        // ลบ record
         await prisma.sku.deleteMany({
             where: {
                 branchCode,
                 shelfCode,
-                rowNo,
-                codeProduct: Number(codeProduct),
-                index: Number(index),
+                rowNo: rowNoNum,
+                codeProduct: codeProductNum,
+                index: indexNum,
             },
         });
 
+        // ดึงรายการที่เหลือเพื่อจัดลำดับ index ใหม่
         const remainingItems = await prisma.sku.findMany({
             where: {
                 branchCode,
                 shelfCode,
-                rowNo,
+                rowNo: rowNoNum,
             },
-            orderBy: {
-                index: 'asc',
-            },
-            select: {
-                id: true,
-                index: true,
-            },
+            orderBy: { index: 'asc' },
+            select: { id: true, index: true },
         });
 
-        const updates = remainingItems.map((item, i) =>
-            prisma.sku.update({
-                where: { id: item.id },
-                data: { index: i + 1 },
-            })
-        );
-
-        await prisma.$transaction(updates);
+        if (remainingItems.length > 0) {
+            const updates = remainingItems.map((item, i) =>
+                prisma.sku.update({
+                    where: { id: item.id },
+                    data: { index: i + 1 },
+                })
+            );
+            await prisma.$transaction(updates);
+        }
 
         res.json({ success: true, message: "✅ Deleted and rearranged successfully" });
     } catch (error) {
-        console.error("❌ itemDelete error:", error);
-        res.status(500).json({ success: false, message: "❌ Failed to delete data" });
+        console.error("❌ itemDelete error:", error.message);
+        res.status(500).json({ success: false, message: "❌ Failed to delete data", detail: error.message });
     }
 };
 
@@ -90,29 +92,43 @@ exports.itemUpdate = async (req, res) => {
     }
 
     try {
-        const { branchCode, shelfCode } = items[0];
+        // ตรวจสอบ branchCode และ shelfCode ของทุก item ต้องเหมือนกัน
+        const branchCode = items[0].branchCode;
+        const shelfCode = items[0].shelfCode;
 
+        const isValid = items.every(
+            item => item.branchCode === branchCode && item.shelfCode === shelfCode
+        );
+
+        if (!isValid) {
+            return res.status(400).json({
+                success: false,
+                message: "❌ All items must have the same branchCode and shelfCode",
+            });
+        }
+
+        // แปลงค่าเป็นตัวเลขชัดเจน
+        const itemsToInsert = items.map(item => ({
+            branchCode: item.branchCode,
+            shelfCode: item.shelfCode,
+            rowNo: Number(item.rowNo),
+            index: Number(item.index),
+            codeProduct: Number(item.codeProduct),
+        }));
+
+        // ทำ transaction: ลบทั้งหมด + insert ใหม่
         await prisma.$transaction([
-            prisma.sku.deleteMany({
-                where: { branchCode, shelfCode },
-            }),
-            prisma.sku.createMany({
-                data: items.map(item => ({
-                    branchCode: item.branchCode,
-                    shelfCode: item.shelfCode,
-                    rowNo: Number(item.rowNo),
-                    index: Number(item.index),
-                    codeProduct: Number(item.codeProduct),
-                })),
-            }),
+            prisma.sku.deleteMany({ where: { branchCode, shelfCode } }),
+            prisma.sku.createMany({ data: itemsToInsert }),
         ]);
 
         res.json({ success: true, message: "✅ Shelf update successful" });
     } catch (error) {
         console.error("❌ itemUpdate error:", error);
-        res.status(500).json({ success: false, message: "❌ Shelf update failed" });
+        res.status(500).json({ success: false, message: "❌ Shelf update failed", detail: error.message });
     }
 };
+
 
 exports.tamplate = async (req, res) => {
     try {
@@ -130,7 +146,7 @@ exports.sku = async (req, res) => {
     const { branchCode } = req.body;
 
     try {
-        const product = await prisma.sku.findMany({
+        const skuData = await prisma.sku.findMany({
             where: { branchCode },
             select: {
                 branchCode: true,
@@ -138,113 +154,63 @@ exports.sku = async (req, res) => {
                 shelfCode: true,
                 rowNo: true,
                 index: true,
-            }
+            },
         });
 
-        if (product.length === 0) return res.json([]);
+        // ดึง withdraw ทั้งหมด
+        const withdrawList = await prisma.withdraw.findMany({
+            where: { branchCode },
+        });
 
-        const conditions = product.map(({ branchCode, codeProduct }) => ({ branchCode, codeProduct }));
-        const codeProductList = [...new Set(product.map(p => p.codeProduct))];
-
-        const [listOfItemHold, withdraws, stocks, sales, itemMinMaxList] = await Promise.all([
-            prisma.listOfItemHold.findMany({
-                where: { codeProduct: { in: codeProductList } },
-                select: {
-                    codeProduct: true,
-                    nameProduct: true,
-                    shelfLife: true,
-                    nameBrand: true,
-                    purchasePriceExcVAT: true,
-                    salesPriceIncVAT: true,
-                },
-            }),
-            prisma.withdraw.findMany({
-                where: { OR: conditions },
-                select: {
-                    branchCode: true,
-                    codeProduct: true,
-                    quantity: true,
-                    value: true,
-                },
-            }),
-            prisma.stock.findMany({
-                where: { OR: conditions },
-                select: {
-                    branchCode: true,
-                    codeProduct: true,
-                    quantity: true,
-                },
-            }),
-            prisma.salesDay.findMany({
-                where: {
-                    AND: [
-                        { channelSales: "หน้าร้าน" },
-                        { OR: conditions },
-                    ],
-                },
-                select: {
-                    branchCode: true,
-                    codeProduct: true,
-                    quantity: true,
-                    totalPrice: true,
-                },
-            }),
-            prisma.itemMinMax.findMany({
-                where: { OR: conditions },
-                select: {
-                    branchCode: true,
-                    codeProduct: true,
-                    minStore: true,
-                    maxStore: true,
-                },
-            }),
-        ]);
-
-        const itemHoldMap = new Map(listOfItemHold.map(p => [p.codeProduct, p]));
-        const stockMap = new Map(stocks.map(s => [`${s.branchCode}-${s.codeProduct}`, s]));
-        const salesMap = new Map(sales.map(s => [`${s.branchCode}-${s.codeProduct}`, s]));
-        const itemMinMaxMap = new Map(itemMinMaxList.map(m => [`${m.branchCode}-${m.codeProduct}`, m]));
-
+        // Aggregate withdraw per product + branch manually
         const withdrawMap = new Map();
-        withdraws.forEach(w => {
+        withdrawList.forEach(w => {
             const key = `${w.branchCode}-${w.codeProduct}`;
-            if (!withdrawMap.has(key)) withdrawMap.set(key, []);
-            withdrawMap.get(key).push(w);
+            const qty = Number(w.quantity || 0);
+            const val = Number(w.value || 0); // แปลง String เป็น Number
+
+            if (!withdrawMap.has(key)) withdrawMap.set(key, { quantity: 0, value: 0 });
+            const existing = withdrawMap.get(key);
+            existing.quantity += qty;
+            existing.value += val;
         });
 
-        const result = product.map(({ branchCode, codeProduct, shelfCode, rowNo, index }) => {
-            const key = `${branchCode}-${codeProduct}`;
-            const productHoldInfo = itemHoldMap.get(codeProduct);
-            const stockInfo = stockMap.get(key);
-            const saleInfo = salesMap.get(key);
-            const itemMinMaxInfo = itemMinMaxMap.get(key);
-            const withdrawItems = withdrawMap.get(key) || [];
+        // Aggregate stock per product + branch
+        const stockTotals = await prisma.stock.groupBy({
+            by: ['branchCode', 'codeProduct'],
+            _sum: { quantity: true },
+            where: { branchCode },
+        });
+        const stockMap = new Map(stockTotals.map(s => [`${s.branchCode}-${s.codeProduct}`, s]));
 
-            const totalWithdrawQuantity = withdrawItems.reduce((sum, w) => sum + Number(w.quantity || 0), 0);
-            const totalWithdrawValue = withdrawItems.reduce((sum, w) => sum + Number(w.value || 0), 0);
+        // Fetch product info
+        const listOfItemHold = await prisma.listOfItemHold.findMany({
+            where: { codeProduct: { in: skuData.map(s => s.codeProduct) } },
+        });
+        const productMap = new Map(listOfItemHold.map(p => [p.codeProduct, p]));
+
+        // Build final result
+        const result = skuData.map(sku => {
+            const key = `${sku.branchCode}-${sku.codeProduct}`;
+            const withdrawInfo = withdrawMap.get(key);
+            const stockInfo = stockMap.get(key);
+            const productInfo = productMap.get(sku.codeProduct);
 
             return {
-                branchCode,
-                codeProduct,
-                shelfCode,
-                rowNo,
-                index,
-                nameProduct: productHoldInfo?.nameProduct ?? null,
-                shelfLife: productHoldInfo?.shelfLife ?? null,
-                nameBrand: productHoldInfo?.nameBrand ?? null,
-                purchasePriceExcVAT: productHoldInfo?.purchasePriceExcVAT ?? null,
-                salesPriceIncVAT: productHoldInfo?.salesPriceIncVAT ?? null,
-                stockQuantity: stockInfo?.quantity ?? null,
-                withdrawQuantity: totalWithdrawQuantity,
-                withdrawValue: totalWithdrawValue,
-                minStore: itemMinMaxInfo?.minStore ?? null,
-                maxStore: itemMinMaxInfo?.maxStore ?? null,
-                salesQuantity: saleInfo?.quantity ?? null,
-                salesTotalPrice: saleInfo?.totalPrice ?? null,
+                ...sku,
+                nameProduct: productInfo?.nameProduct || null,
+                nameBrand: productInfo?.nameBrand || null,
+                purchasePriceExcVAT: productInfo?.purchasePriceExcVAT || null,
+                salesPriceIncVAT: productInfo?.salesPriceIncVAT || null,
+                shelfLife: productInfo?.shelfLife || null,
+                stockQuantity: stockInfo?._sum.quantity || 0,
+                withdrawQuantity: withdrawInfo?.quantity || 0,
+                withdrawValue: withdrawInfo?.value || 0,
             };
         });
 
-        return res.json(result);
+        res.json(result);
+
     } catch (e) {
         console.error("❌ sku error:", e);
         return res.status(500).json({ msg: "❌ Failed to retrieve data" });

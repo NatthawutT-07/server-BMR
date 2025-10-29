@@ -4,6 +4,7 @@ const morgan = require("morgan");
 const { readdirSync } = require("fs");
 const cors = require('cors')
 
+// app.use(morgan('combined'));  // ใช้ log ที่ละเอียดขึ้น
 app.use(morgan("dev"));
 app.use(express.json({ limit: "20mb" }));
 app.use(cors())
