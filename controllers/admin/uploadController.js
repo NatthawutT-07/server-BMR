@@ -216,6 +216,10 @@ exports.uploadItemMinMaxXLSX = async (req, res) => {
     }
 };
 
+exports.uploadStationXLSX = async (req, res) => {
+    return res.status(501).json({ message: "Station upload not implemented yet" });
+};
+
 exports.uploadMasterItemXLSX = async (req, res) => {
     if (!req.file) return res.status(400).send("No file uploaded");
 

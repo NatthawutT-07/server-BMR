@@ -1,4 +1,3 @@
-// C:\BMR\bmr_data\edit\server-BMR\controllers\mobile\shelfBlocks.js
 const prisma = require("../../config/prisma");
 
 const getShelfBlocks = async (req, res) => {

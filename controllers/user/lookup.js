@@ -1,4 +1,3 @@
-// C:\BMR\bmr_data\edit\server-BMR\controllers\mobile\locations.js
 const prisma = require("../../config/prisma");
 
 // GET /api/lookup?branchCode=ST002&barcode=8859566512531

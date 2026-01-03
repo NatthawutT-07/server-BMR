@@ -11,13 +11,23 @@ const { tamplate, sku, itemDelete, itemCreate, itemUpdate, getMasterItem } = req
 
 // CSV
 const upload = require('../config/multerConfig');
-const { uploadItemMinMaxXLSX, uploadMasterItemXLSX, uploadSalesDayXLSX,
-    uploadStockXLSX, uploadWithdrawXLSX, uploadTemplateXLSX, uploadSKU_XLSX, uploadBillXLSX } = require('../controllers/admin/uploadController');
+const {
+    uploadItemMinMaxXLSX,
+    uploadMasterItemXLSX,
+    uploadSalesDayXLSX,
+    uploadStockXLSX,
+    uploadWithdrawXLSX,
+    uploadTemplateXLSX,
+    uploadSKU_XLSX,
+    uploadBillXLSX,
+    uploadStationXLSX,
+    uploadGourmetXLSX,
+} = require('../controllers/admin/uploadController');
 // Upload endpoints
-// router.post('/upload-stations', authCheck, adminCheck, upload.single('file'), uploadStationCSV);
-router.post('/upload-itemminmax', authCheck, adminCheck, upload.single('file'), uploadItemMinMaxXLSX);
+router.post('/upload-station', authCheck, adminCheck, upload.single('file'), uploadStationXLSX);
+router.post('/upload-minmax', authCheck, adminCheck, upload.single('file'), uploadItemMinMaxXLSX);
 // router.post('/upload-partners', authCheck, adminCheck, upload.single('file'), uploadPartnersCSV)
-router.post('/upload-masteritem', authCheck, adminCheck, upload.single('file'), uploadMasterItemXLSX)
+router.post('/upload-masterItem', authCheck, adminCheck, upload.single('file'), uploadMasterItemXLSX)
 router.post('/upload-stock', authCheck, adminCheck, upload.single('file'), uploadStockXLSX,)
 router.post('/upload-withdraw', authCheck, adminCheck, upload.single('file'), uploadWithdrawXLSX)
 router.post('/upload-sales', authCheck, adminCheck, upload.single('file'), uploadSalesDayXLSX)
@@ -25,7 +35,7 @@ router.post('/upload-sales', authCheck, adminCheck, upload.single('file'), uploa
 router.post('/upload-template', authCheck, adminCheck, upload.single('file'), uploadTemplateXLSX)
 router.post('/upload-sku', authCheck, adminCheck, upload.single('file'), uploadSKU_XLSX)
 router.post('/upload-bill', authCheck, adminCheck, upload.single('file'), uploadBillXLSX)
-// router.post('/upload-gourmet', authCheck, adminCheck, upload.single('file'), uploadGourmetXLSX)
+router.post('/upload-gourmets', authCheck, adminCheck, upload.single('file'), uploadGourmetXLSX)
 
 const { downloadTemplate, downloadSKU } = require('../controllers/admin/download');
 //download

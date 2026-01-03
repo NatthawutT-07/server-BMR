@@ -1,6 +1,6 @@
 const express = require('express');
 const { authCheck } = require('../middlewares/authCheck');
-const { UserTemplateItem, getStockLastUpdate } = require('../controllers/user/shelf-user');
+const { UserTemplateItem, getStockLastUpdate } = require('../controllers/user/template');
 const router = express.Router()
 
 

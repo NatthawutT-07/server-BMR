@@ -169,7 +169,7 @@ app.use(
 app.use("/api", require("./router/auth"));
 app.use("/api", require("./router/admin"));
 app.use("/api", require("./router/user"));
-app.use("/api", require("./router/mobile"));
+app.use("/api", require("./router/userMobile"));
 
 const port = process.env.PORT || 5001;
 app.listen(port, () => console.log(`Server running on port ${port}`));
