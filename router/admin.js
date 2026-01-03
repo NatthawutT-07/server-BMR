@@ -22,6 +22,7 @@ const {
     uploadBillXLSX,
     uploadStationXLSX,
     uploadGourmetXLSX,
+    getUploadStatus,
 } = require('../controllers/admin/uploadController');
 // Upload endpoints
 router.post('/upload-station', authCheck, adminCheck, upload.single('file'), uploadStationXLSX);
@@ -36,6 +37,7 @@ router.post('/upload-template', authCheck, adminCheck, upload.single('file'), up
 router.post('/upload-sku', authCheck, adminCheck, upload.single('file'), uploadSKU_XLSX)
 router.post('/upload-bill', authCheck, adminCheck, upload.single('file'), uploadBillXLSX)
 router.post('/upload-gourmets', authCheck, adminCheck, upload.single('file'), uploadGourmetXLSX)
+router.get('/upload-status', authCheck, adminCheck, getUploadStatus)
 
 const { downloadTemplate, downloadSKU } = require('../controllers/admin/download');
 //download

@@ -1,6 +1,86 @@
 const prisma = require('../../config/prisma');
 const XLSX = require("xlsx");
 
+const uploadJobs = new Map();
+const MAX_JOB_AGE_MS = 6 * 60 * 60 * 1000;
+
+const cleanupOldJobs = () => {
+    const now = Date.now();
+    for (const [jobId, job] of uploadJobs.entries()) {
+        if (now - (job.updatedAt || 0) > MAX_JOB_AGE_MS) {
+            uploadJobs.delete(jobId);
+        }
+    }
+};
+
+const initUploadJob = (req, label) => {
+    const rawId = req.headers["x-upload-job-id"];
+    const jobId = Array.isArray(rawId) ? rawId[0] : rawId;
+    if (!jobId) return null;
+    uploadJobs.set(jobId, {
+        status: "processing",
+        progress: 0,
+        label: label || "upload",
+        message: "starting",
+        updatedAt: Date.now(),
+    });
+    return jobId;
+};
+
+const setUploadJob = (jobId, progress, message) => {
+    if (!jobId) return;
+    const job = uploadJobs.get(jobId);
+    uploadJobs.set(jobId, {
+        ...(job || {}),
+        status: "processing",
+        progress: Math.max(0, Math.min(100, Number(progress) || 0)),
+        message: message || job?.message || "",
+        updatedAt: Date.now(),
+    });
+};
+
+const finishUploadJob = (jobId, message) => {
+    if (!jobId) return;
+    const job = uploadJobs.get(jobId);
+    uploadJobs.set(jobId, {
+        ...(job || {}),
+        status: "done",
+        progress: 100,
+        message: message || "done",
+        updatedAt: Date.now(),
+    });
+};
+
+const failUploadJob = (jobId, message) => {
+    if (!jobId) return;
+    const job = uploadJobs.get(jobId);
+    uploadJobs.set(jobId, {
+        ...(job || {}),
+        status: "error",
+        progress: Math.max(0, Math.min(100, Number(job?.progress) || 0)),
+        message: message || "error",
+        updatedAt: Date.now(),
+    });
+};
+
+exports.getUploadStatus = async (req, res) => {
+    try {
+        cleanupOldJobs();
+        const { jobId } = req.query;
+        if (!jobId) {
+            return res.status(400).json({ message: "jobId is required" });
+        }
+        const job = uploadJobs.get(String(jobId));
+        if (!job) {
+            return res.status(404).json({ message: "job not found" });
+        }
+        return res.json(job);
+    } catch (err) {
+        console.error("getUploadStatus error:", err);
+        return res.status(500).json({ message: "status error" });
+    }
+};
+
 const touchDataSync = async (key, rowCount) => {
     try {
         await prisma.dataSync.upsert({
@@ -92,9 +172,13 @@ const touchDataSync = async (key, rowCount) => {
 exports.uploadItemMinMaxXLSX = async (req, res) => {
     if (!req.file) return res.status(400).send("No file uploaded");
 
+    const jobId = initUploadJob(req, "upload-minmax");
+    setUploadJob(jobId, 5, "reading file");
+
     try {
         const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        setUploadJob(jobId, 20, "parsing rows");
 
         // อ่านทุกแถว
         const raw = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
@@ -215,6 +299,9 @@ exports.uploadItemMinMaxXLSX = async (req, res) => {
             await prisma.$executeRawUnsafe(sql);
         }
 
+        setUploadJob(jobId, 90, "saving data");
+
+        finishUploadJob(jobId, "completed");
         return res.status(200).json({
             message: "Item MinMax imported successfully",
             inserted: toInsert.length,
@@ -224,6 +311,7 @@ exports.uploadItemMinMaxXLSX = async (req, res) => {
 
     } catch (err) {
         console.error("XLSX Error:", err);
+        failUploadJob(jobId, err?.message || "failed");
         res.status(500).json({ error: err.message });
     }
 };
@@ -235,10 +323,14 @@ exports.uploadStationXLSX = async (req, res) => {
 exports.uploadMasterItemXLSX = async (req, res) => {
     if (!req.file) return res.status(400).send("No file uploaded");
 
+    const jobId = initUploadJob(req, "upload-masterItem");
+    setUploadJob(jobId, 5, "reading file");
+
     try {
         const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
         const raw = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+        setUploadJob(jobId, 20, "parsing rows");
 
         //------------------------------------------
         // 1) หา header
@@ -405,6 +497,8 @@ exports.uploadMasterItemXLSX = async (req, res) => {
         //------------------------------------------
         // Done
         //------------------------------------------
+        setUploadJob(jobId, 90, "saving data");
+        finishUploadJob(jobId, "completed");
         res.status(200).json({
             message: "Master Item XLSX processed successfully (Ultra-Fast)",
             inserted: toInsert.length,
@@ -414,6 +508,7 @@ exports.uploadMasterItemXLSX = async (req, res) => {
 
     } catch (err) {
         console.error("XLSX Error:", err);
+        failUploadJob(jobId, err?.message || "failed");
         res.status(500).json({ error: err.message });
     }
 };
@@ -421,10 +516,14 @@ exports.uploadMasterItemXLSX = async (req, res) => {
 exports.uploadSalesDayXLSX = async (req, res) => {
     if (!req.file) return res.status(400).send("No file uploaded");
 
+    const jobId = initUploadJob(req, "upload-sales");
+    setUploadJob(jobId, 5, "reading file");
+
     try {
         const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
         const raw = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+        setUploadJob(jobId, 20, "parsing rows");
 
         // หา header
         const headerRowIndex = raw.findIndex(row =>
@@ -486,6 +585,7 @@ exports.uploadSalesDayXLSX = async (req, res) => {
         // --------------------------------------------------------
         // STEP 2: ลบข้อมูลเก่าทั้งหมด
         // --------------------------------------------------------
+        setUploadJob(jobId, 60, "clearing old data");
         await prisma.$executeRawUnsafe(`DELETE FROM "SalesDay"`);
 
         // --------------------------------------------------------
@@ -509,10 +609,12 @@ exports.uploadSalesDayXLSX = async (req, res) => {
             VALUES ${valuesSql}
         `;
 
+        setUploadJob(jobId, 85, "saving data");
         await prisma.$executeRawUnsafe(sql);
 
         await touchDataSync("sales-day", finalData.length);
 
+        finishUploadJob(jobId, "completed");
         return res.status(200).json({
             message: "SalesDay imported successfully",
             inserted: finalData.length
@@ -520,6 +622,7 @@ exports.uploadSalesDayXLSX = async (req, res) => {
 
     } catch (err) {
         console.error("XLSX Error:", err);
+        failUploadJob(jobId, err?.message || "failed");
         res.status(500).json({ error: err.message });
     }
 };
@@ -527,10 +630,14 @@ exports.uploadSalesDayXLSX = async (req, res) => {
 exports.uploadStockXLSX = async (req, res) => {
     if (!req.file) return res.status(400).send("No file uploaded");
 
+    const jobId = initUploadJob(req, "upload-stock");
+    setUploadJob(jobId, 5, "reading file");
+
     try {
         const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
         const raw = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+        setUploadJob(jobId, 20, "parsing rows");
 
         const headerRowIndex = raw.findIndex(
             (row) =>
@@ -584,6 +691,7 @@ exports.uploadStockXLSX = async (req, res) => {
             return res.status(200).send("No valid stock rows found (all qty = 0 or invalid).");
         }
 
+        setUploadJob(jobId, 60, "saving data");
         await prisma.$transaction(async (tx) => {
             // ล้างข้อมูลเดิม
             await tx.$executeRawUnsafe(`TRUNCATE TABLE "Stock"`);
@@ -606,12 +714,14 @@ exports.uploadStockXLSX = async (req, res) => {
             await tx.$executeRawUnsafe(syncSql);
         });
 
+        finishUploadJob(jobId, "completed");
         return res.status(200).json({
             message: "Stock XLSX imported successfully (Ultra-Fast)",
             inserted: mapped.length,
         });
     } catch (err) {
         console.error("XLSX Error:", err);
+        failUploadJob(jobId, err?.message || "failed");
         res.status(500).json({ error: err.message });
     }
 };
@@ -729,10 +839,14 @@ exports.uploadStockXLSX = async (req, res) => {
 exports.uploadWithdrawXLSX = async (req, res) => {
     if (!req.file) return res.status(400).send("No file uploaded");
 
+    const jobId = initUploadJob(req, "upload-withdraw");
+    setUploadJob(jobId, 5, "reading file");
+
     try {
         const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
         const raw = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+        setUploadJob(jobId, 20, "parsing rows");
 
         // ------------------------------------------------------------
         // 1) หาแถว Header
@@ -810,6 +924,7 @@ exports.uploadWithdrawXLSX = async (req, res) => {
         // ------------------------------------------------------------
         // 4) Clear Table (ต้องล้างก่อน insert)
         // ------------------------------------------------------------
+        setUploadJob(jobId, 60, "clearing old data");
         await prisma.$executeRawUnsafe(`DELETE FROM "withdraw"`);
 
         // ------------------------------------------------------------
@@ -821,8 +936,10 @@ exports.uploadWithdrawXLSX = async (req, res) => {
             VALUES ${mapped.join(",")}
         `;
 
+        setUploadJob(jobId, 85, "saving data");
         await prisma.$executeRawUnsafe(sql);
 
+        finishUploadJob(jobId, "completed");
         return res.status(200).json({
             message: "withdraw XLSX imported (Ultra-Fast)",
             inserted: mapped.length
@@ -830,12 +947,16 @@ exports.uploadWithdrawXLSX = async (req, res) => {
 
     } catch (err) {
         console.error("XLSX Error:", err);
+        failUploadJob(jobId, err?.message || "failed");
         res.status(500).json({ error: err.message });
     }
 };
 
 exports.uploadTemplateXLSX = async (req, res) => {
     if (!req.file) return res.status(400).send("No file uploaded");
+
+    const jobId = initUploadJob(req, "upload-template");
+    setUploadJob(jobId, 5, "reading file");
 
     try {
         // ===============================
@@ -962,10 +1083,13 @@ exports.uploadTemplateXLSX = async (req, res) => {
         // ===============================
         // 9) SUCCESS
         // ===============================
+        setUploadJob(jobId, 90, "saving data");
+        finishUploadJob(jobId, "completed");
         res.status(200).send("Template XLSX uploaded & synced successfully!");
 
     } catch (err) {
         console.error("Template XLSX Error:", err);
+        failUploadJob(jobId, err?.message || "failed");
         res.status(500).json({ error: err.message });
     }
 };
@@ -973,10 +1097,14 @@ exports.uploadTemplateXLSX = async (req, res) => {
 exports.uploadGourmetXLSX = async (req, res) => {
     if (!req.file) return res.status(400).send("No file uploaded");
 
+    const jobId = initUploadJob(req, "upload-gourmets");
+    setUploadJob(jobId, 5, "reading file");
+
     try {
         const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
         const raw = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+        setUploadJob(jobId, 20, "parsing rows");
 
         const requiredFields = ["date", "branch_code", "product_code", "quantity", "sales"];
         const aliases = {
@@ -1069,17 +1197,20 @@ exports.uploadGourmetXLSX = async (req, res) => {
             return res.status(200).send("No valid gourmet rows found.");
         }
 
+        setUploadJob(jobId, 70, "saving data");
         await prisma.$transaction([
             prisma.gourmet.deleteMany(),
             prisma.gourmet.createMany({ data: mapped }),
         ]);
 
+        finishUploadJob(jobId, "completed");
         return res.status(200).json({
             message: "Gourmet XLSX imported successfully",
             inserted: mapped.length,
         });
     } catch (err) {
         console.error("Gourmet XLSX Error:", err);
+        failUploadJob(jobId, err?.message || "failed");
         res.status(500).json({ error: err.message });
     }
 };
@@ -1088,9 +1219,13 @@ exports.uploadGourmetXLSX = async (req, res) => {
 exports.uploadSKU_XLSX = async (req, res) => {
     if (!req.file) return res.status(400).send("No file uploaded");
 
+    const jobId = initUploadJob(req, "upload-sku");
+    setUploadJob(jobId, 5, "reading file");
+
     try {
         const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        setUploadJob(jobId, 20, "parsing rows");
 
         // อ่าน JSON จาก header
         const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
@@ -1188,10 +1323,13 @@ exports.uploadSKU_XLSX = async (req, res) => {
             await Promise.all(updatePromises);
         }
 
+        setUploadJob(jobId, 90, "saving data");
+        finishUploadJob(jobId, "completed");
         res.status(200).send("SKU XLSX uploaded & synced successfully!");
 
     } catch (err) {
         console.error("SKU XLSX Error:", err);
+        failUploadJob(jobId, err?.message || "failed");
         res.status(500).json({ error: err.message });
     }
 };
@@ -1505,11 +1643,15 @@ function mergeBillHeaderFooter(rows) {
 exports.uploadBillXLSX = async (req, res) => {
     if (!req.file) return res.status(400).json({ error: "No file uploaded" });
 
+    const jobId = initUploadJob(req, "upload-bill");
+    setUploadJob(jobId, 5, "reading file");
+
     try {
         // 1) อ่าน XLSX
         const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
         let rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+        setUploadJob(jobId, 15, "parsing rows");
 
         console.log("📘 Raw rows =", rows.length);
 
@@ -1537,6 +1679,7 @@ exports.uploadBillXLSX = async (req, res) => {
 
         // 5) remove matched (+qty ↔ -qty)
         results = removeMatchedSalesPairs(results);
+        setUploadJob(jobId, 35, "cleaning data");
 
         // 6) merge header/footer (ไม่ทิ้ง payment rows)
         results = mergeBillHeaderFooter(results);
@@ -1819,6 +1962,7 @@ exports.uploadBillXLSX = async (req, res) => {
             }
         }
 
+        setUploadJob(jobId, 70, "saving bills");
         // 14) Insert Bills
         if (newBills.length > 0) {
             await prisma.bill.createMany({
@@ -1835,6 +1979,7 @@ exports.uploadBillXLSX = async (req, res) => {
             billsAll.map((b) => [b.bill_number, b.id])
         );
 
+        setUploadJob(jobId, 80, "saving bill items");
         // 16) Insert BillItems
         const billItemsToInsert = pendingBillItems
             .filter((i) => billIdMapAll[i.bill_number] && productIdMapAll[i.product_key])
@@ -1855,6 +2000,7 @@ exports.uploadBillXLSX = async (req, res) => {
             });
         }
 
+        setUploadJob(jobId, 90, "saving bill payments");
         // 17) ✅ Insert BillPayments (normalize NULL -> string กันซ้ำหลุด unique)
         const billPaymentsToInsert = pendingBillPayments
             .filter((p) => billIdMapAll[p.bill_number])
@@ -1877,6 +2023,7 @@ exports.uploadBillXLSX = async (req, res) => {
 
         await touchDataSync("dashboard", newBills.length);
 
+        finishUploadJob(jobId, "completed");
         return res.json({
             message:
                 "✅ Import สำเร็จ (FIX: payment ไม่บันทึกซ้ำ 2 เท่า + normalize payment fields กัน NULL หลุด unique)",
@@ -1891,6 +2038,7 @@ exports.uploadBillXLSX = async (req, res) => {
         });
     } catch (err) {
         console.error("❌ Error:", err);
+        failUploadJob(jobId, err?.message || "failed");
         return res.status(500).json({ error: err.message });
     }
 };
