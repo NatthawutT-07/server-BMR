@@ -1,6 +1,18 @@
 const prisma = require('../../config/prisma');
 const XLSX = require("xlsx");
 
+const touchDataSync = async (key, rowCount) => {
+    try {
+        await prisma.dataSync.upsert({
+            where: { key },
+            update: { updatedAt: new Date(), rowCount: rowCount ?? undefined },
+            create: { key, updatedAt: new Date(), rowCount: rowCount ?? 0 },
+        });
+    } catch (err) {
+        console.error(`DataSync update failed (${key}):`, err);
+    }
+};
+
 
 
 // exports.uploadPartnersCSV = async (req, res) => {
@@ -498,6 +510,8 @@ exports.uploadSalesDayXLSX = async (req, res) => {
         `;
 
         await prisma.$executeRawUnsafe(sql);
+
+        await touchDataSync("sales-day", finalData.length);
 
         return res.status(200).json({
             message: "SalesDay imported successfully",
@@ -1860,6 +1874,8 @@ exports.uploadBillXLSX = async (req, res) => {
             });
             bill_payments_created = created?.count ?? 0;
         }
+
+        await touchDataSync("dashboard", newBills.length);
 
         return res.json({
             message:

@@ -17,6 +17,16 @@ const cache = new NodeCache();
 const convertBigInt = (data) =>
   JSON.parse(JSON.stringify(data, (_, value) => (typeof value === "bigint" ? Number(value) : value)));
 
+const getDashboardCacheVersion = async () => {
+  try {
+    const row = await prisma.dataSync.findUnique({ where: { key: "dashboard" } });
+    return row?.updatedAt ? row.updatedAt.toISOString() : "none";
+  } catch (err) {
+    console.error("Dashboard cache version error:", err);
+    return "none";
+  }
+};
+
 // ✅ normalize query date ให้เหลือ YYYY-MM-DD กันเคสส่ง ISO มาแล้วเพี้ยน -1 วัน
 const onlyISODate = (v) => String(v || "").slice(0, 10);
 const isISODate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ""));
@@ -196,7 +206,8 @@ exports.getDashboardData = async (req, res) => {
       });
     }
 
-    const cacheKey = `dashboard:${start}:${end}`;
+    const version = await getDashboardCacheVersion();
+    const cacheKey = `dashboard:${start}:${end}:${version}`;
     const cached = cache.get(cacheKey);
     if (cached) return res.json(cached);
 
@@ -312,7 +323,8 @@ exports.getDashboardProductList = async (req, res) => {
       });
     }
 
-    const cacheKey = `dashboard:product:${start}:${end}`;
+    const version = await getDashboardCacheVersion();
+    const cacheKey = `dashboard:product:${start}:${end}:${version}`;
     const cached = cache.get(cacheKey);
     if (cached) return res.json(cached);
 
