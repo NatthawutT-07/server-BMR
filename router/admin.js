@@ -2,10 +2,7 @@ const express = require("express");
 const router = express.Router();
 const { authCheck, adminCheck } = require('../middlewares/authCheck')
 const { listUser, changeStatus, changeRole } = require('../controllers/admin/admin');
-const { listPartner } = require("../controllers/admin/partner");
-const { showItems } = require("../controllers/admin/items");
-const { deleteStation, addStation, updateStation } = require("../controllers/admin/station");
-const { tamplate, sku, itemDelete, itemCreate, itemUpdate } = require("../controllers/admin/shelf");
+const { tamplate, sku, itemDelete, itemCreate, itemUpdate, getMasterItem } = require("../controllers/admin/shelf");
 
 // //Manege
 // router.get("/users", authCheck, adminCheck, listUser);
@@ -14,39 +11,66 @@ const { tamplate, sku, itemDelete, itemCreate, itemUpdate } = require("../contro
 
 // CSV
 const upload = require('../config/multerConfig');
-const { uploadStationCSV, uploadItemMinMaxCSV, uploadPartnersCSV, uploadMasterItemCSV, uploadSalesDayCSV, uploadStockCSV, uploadWithdrawCSV, uploadTamplateCSV, uploadskuCSV, uploadSalesMonthCSV } = require('../controllers/admin/uploadController');
-const { data } = require("../controllers/admin/dashboard");
+const { uploadItemMinMaxXLSX, uploadMasterItemXLSX, uploadSalesDayXLSX,
+    uploadStockXLSX, uploadWithdrawXLSX, uploadTemplateXLSX, uploadSKU_XLSX, uploadBillXLSX } = require('../controllers/admin/uploadController');
 // Upload endpoints
-router.post('/upload-stations', authCheck, adminCheck, upload.single('file'), uploadStationCSV);
-router.post('/upload-itemminmax', authCheck, adminCheck, upload.single('file'), uploadItemMinMaxCSV);
-router.post('/upload-partners', authCheck, adminCheck, upload.single('file'), uploadPartnersCSV)
-router.post('/upload-masteritem', authCheck, adminCheck, upload.single('file'), uploadMasterItemCSV)
-router.post('/upload-stock', authCheck, adminCheck, upload.single('file'), uploadStockCSV,)
-router.post('/upload-withdraw', authCheck, adminCheck, upload.single('file'), uploadWithdrawCSV)
-router.post('/upload-salesday', authCheck, adminCheck, upload.single('file'), uploadSalesDayCSV)
-router.post('/upload-salesmonth', authCheck, adminCheck, upload.single('file'), uploadSalesMonthCSV)
-router.post('/upload-template', authCheck, adminCheck, upload.single('file'), uploadTamplateCSV)
-router.post('/upload-sku', authCheck, adminCheck, upload.single('file'), uploadskuCSV)
+// router.post('/upload-stations', authCheck, adminCheck, upload.single('file'), uploadStationCSV);
+router.post('/upload-itemminmax', authCheck, adminCheck, upload.single('file'), uploadItemMinMaxXLSX);
+// router.post('/upload-partners', authCheck, adminCheck, upload.single('file'), uploadPartnersCSV)
+router.post('/upload-masteritem', authCheck, adminCheck, upload.single('file'), uploadMasterItemXLSX)
+router.post('/upload-stock', authCheck, adminCheck, upload.single('file'), uploadStockXLSX,)
+router.post('/upload-withdraw', authCheck, adminCheck, upload.single('file'), uploadWithdrawXLSX)
+router.post('/upload-sales', authCheck, adminCheck, upload.single('file'), uploadSalesDayXLSX)
+// router.post('/upload-salesmonth', authCheck, adminCheck, upload.single('file'), uploadSalesMonthCSV)
+router.post('/upload-template', authCheck, adminCheck, upload.single('file'), uploadTemplateXLSX)
+router.post('/upload-sku', authCheck, adminCheck, upload.single('file'), uploadSKU_XLSX)
+router.post('/upload-bill', authCheck, adminCheck, upload.single('file'), uploadBillXLSX)
+// router.post('/upload-gourmet', authCheck, adminCheck, upload.single('file'), uploadGourmetXLSX)
 
-//partner
-router.get("/partner", authCheck, adminCheck, listPartner);
+const { downloadTemplate, downloadSKU } = require('../controllers/admin/download');
+//download
+router.get("/download-template", authCheck, downloadTemplate); //user
+router.get("/download-sku", authCheck, downloadSKU); //user
 
-//list of item hold <===
-router.get("/items", authCheck, adminCheck, showItems);
+const { getSearchBranchSales, getBranchListSales, getSearchBranchSalesDay
+    , getSearchBranchSalesProductMonth, getSearchBranchSalesProductDay,
+    searchProductSales,
+    getProductSalesDetail,
+    getCustomers } = require("../controllers/admin/sales");
+//sales
+router.get('/sales-list-branch', authCheck, getBranchListSales); //user
+router.post('/sales-search-branch', authCheck, getSearchBranchSales);
+router.post('/sales-search-branch-day', authCheck, getSearchBranchSalesDay);
+router.post('/sales-search-branch-monthproduct', authCheck, getSearchBranchSalesProductMonth);
+router.post('/sales-search-branch-dayproduct', authCheck, getSearchBranchSalesProductDay);
 
-// station
-router.delete("/station-delete/:id", authCheck, adminCheck, deleteStation)
-router.post("/station-add", authCheck, adminCheck, addStation)
-router.put("/station-update/:id", authCheck, adminCheck, updateStation)
+// member
+router.post('/sales-member', getCustomers,);
+
+
+// product search + sales detail
+router.get("/sales-product", authCheck, searchProductSales); // user
+router.post("/sales-product-detail", authCheck, getProductSalesDetail);
 
 // Dashboard
-router.get("/dashboard-data", authCheck, data) //call sales,withdraw,stock
+const { getDashboardData, getDashboardProductList } = require("../controllers/admin/dashboard");
+router.get("/dashboard-data", authCheck, getDashboardData)
+router.get("/dashboard-product-list", authCheck, getDashboardProductList)
+
+// stock
+const { getStock } = require("../controllers/admin/stock");
+router.get("/stock-data", authCheck, getStock)
+
+
 
 //Tamplate 
-router.get("/shelf-template", authCheck, tamplate); //Tamplate
-router.post("/shelf-sku", authCheck, sku); //Item Search
-router.delete("/shelf-delete", authCheck, adminCheck, itemDelete);
-router.post("/shelf-add", authCheck, adminCheck, itemCreate);
-router.put("/shelf-update", authCheck, adminCheck, itemUpdate)
+router.get("/shelf-template", authCheck, tamplate); //Tamplate //user
+router.get("/shelf-getMasterItem", authCheck, getMasterItem);
+router.post("/shelf-sku", authCheck, sku); //Item Search //user // date , withdraw , sales
+router.delete("/shelf-delete", authCheck, itemDelete);
+router.post("/shelf-add", authCheck, itemCreate);
+router.put("/shelf-update", authCheck, itemUpdate)
+// router.get("/shelf-summary",  summary)
+
 
 module.exports = router;

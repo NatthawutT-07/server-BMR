@@ -3,33 +3,31 @@ generator client {
 }
 
 datasource db {
-  // provider = "mysql"
   provider = "postgresql"
   url      = env("DATABASE_URL")
-  // directUrl = env("DIRECT_URL")
 }
-
-// npx prisma migrate dev --name init
 
 model User {
-  id        Int      @id @default(autoincrement())
-  name      String
-  password  String
-  role      String   @default("user")
-  enabled   Boolean  @default(true)
-  createdAt DateTime @default(now())
+  id                  Int      @id @default(autoincrement())
+  name                String   @unique
+  password            String
+  role                String   @default("user")
+  enabled             Boolean  @default(true)
+  lastPasswordChange  DateTime @default(now())
+  refreshTokenVersion Int      @default(0)
+
+  loginLogs LoginLog[]
 }
 
-model Station {
-  id          Int     @id @default(autoincrement())
-  codeSAP     String?
-  codeADA     String?
-  codeBMX     String?
-  nameTH      String?
-  adaStore    String?
-  nameEng     String?
-  WhCodeSAP   String?
-  storeNameTH String?
+model LoginLog {
+  id        Int      @id @default(autoincrement())
+  user      User?    @relation(fields: [userId], references: [id])
+  userId    Int?
+  ip        String?
+  userAgent String?
+  status    String // "success" | "failed"
+  message   String?
+  createdAt DateTime @default(now())
 }
 
 model Partners {
@@ -55,7 +53,7 @@ model Partners {
   billBuildingFloorRoom    String?
   billCity                 String?
   billCountry              String?
-  billCountryNo            String? //county
+  billCountryNo            String?
   billZipCode              String?
   branchBP                 Int
   billExchangeOnCollection String?
@@ -72,90 +70,75 @@ model ItemMinMax {
   id          Int    @id @default(autoincrement())
   branchCode  String
   codeProduct Int
-  minStore    Int //main
-  maxStore    Int //main
+  minStore    Int
+  maxStore    Int
 
+  @@unique([branchCode, codeProduct])
   @@index([branchCode, codeProduct])
-}
-
-model ListOfItemHold {
-  id                  Int     @id @default(autoincrement())
-  codeProduct         Int //main
-  nameProduct         String? //main
-  groupName           String? //second
-  status              String? //main
-  barcode             String? //main
-  nameBrand           String? //main
-  consingItem         String? //second
-  purchasePriceExcVAT Float //main
-  salesPriceIncVAT    Int //main
-  preferredVandorCode String? //second
-  preferredVandorName String? //second
-  GP                  String? //second
-  shelfLife           String? //second
-  productionDate      String? //add
-  vatGroupPu          String? //second
-
-  @@index([codeProduct])
-}
-
-model SalesDay {
-  id           Int    @id @default(autoincrement())
-  branchCode   String
-  channelSales String
-  codeProduct  Int
-  quantity     Int //main
-  discount     String //second
-  totalPrice   String //main
-
-  // day          Int
-  @@index([branchCode, codeProduct, channelSales]) // filter + groupBy
-}
-
-model SalesMonth {
-  id           Int    @id @default(autoincrement())
-  branchCode   String
-  channelSales String
-  codeProduct  Int
-  quantity     Int //main
-  discount     String //second
-  totalPrice   String //main
-  month        Int
-  year         Int
-
-  @@index([branchCode, codeProduct, channelSales])
 }
 
 model Stock {
   id          Int    @id @default(autoincrement())
   codeProduct Int
   branchCode  String
-  quantity    Int //main
+  quantity    Int
 
-  @@index([branchCode, codeProduct]) // ใช้ filter / join
+  @@unique([branchCode, codeProduct])
+  @@index([branchCode, codeProduct])
+}
+
+model DataSync {
+  key       String   @id // เช่น "stock"
+  updatedAt DateTime @default(now())
+  rowCount  Int?
 }
 
 model withdraw {
   id          Int    @id @default(autoincrement())
   codeProduct Int
-  branchCode  String //main
-  docNumber   String //second
-  date        String //second
-  docStatus   String //second
-  reason      String //main
-  quantity    Int //main
-  value       String //main
+  branchCode  String
+  docNumber   String
+  date        String
+  docStatus   String
+  reason      String
+  quantity    Int
+  value       Float
 
-  @@index([branchCode, codeProduct]) // filter / groupBy
+  @@index([branchCode, codeProduct])
+}
+
+model ListOfItemHold {
+  id                  Int     @id @default(autoincrement())
+  codeProduct         Int     @unique
+  nameProduct         String?
+  groupName           String?
+  status              String?
+  barcode             String? 
+  nameBrand           String?
+  consingItem         String?
+  purchasePriceExcVAT Float
+  salesPriceIncVAT    Int
+  preferredVandorCode String?
+  preferredVandorName String?
+  GP                  String?
+  shelfLife           String?
+  productionDate      String?
+  vatGroupPu          String?
+
+  @@unique([barcode])
+  @@index([codeProduct])
 }
 
 model Tamplate {
   id         Int     @id @default(autoincrement())
   branchCode String
   shelfCode  String
-  fullName   String
+  fullName   String?
   rowQty     Int
   type       String?
+
+  @@unique([branchCode, shelfCode])
+  @@index([branchCode, shelfCode, fullName])
 }
 
 model Sku {
@@ -166,53 +149,118 @@ model Sku {
   codeProduct Int
   index       Int
 
-  @@index([branchCode, shelfCode, index]) // สำหรับเรียงลำดับบน shelf
+  @@unique([branchCode, shelfCode, rowNo, codeProduct])
+  @@index([branchCode, shelfCode, rowNo, index])
+  @@index([branchCode, shelfCode, index])
+  @@index([branchCode, codeProduct]) // ✅  UserTemplateItem ไวขึ้น
 }
 
-// ไม่เก็บข้อมูลซ้ำ เก็บแต่ id ของ model อื่น แล้วไปดึงตอน query
+model Gourmet {
+  id           Int      @id @default(autoincrement())
+  date         DateTime
+  branch_code  String
+  product_code String
+  quantity     Int
+  sales        Float
+}
 
-// model A {
-//   id     Int    @id @default(autoincrement())
-//   email  String @unique
-//   pass   String
-//   orders B[] // ผู้ใช้คนนี้มีหลายรายการในตะกร้า (B)
-// }
+model Branch {
+  id          Int    @id @default(autoincrement())
+  branch_code String @unique
+  branch_name String
+  bills       Bill[]
+}
 
-// model B {
-//   id        Int @id @default(autoincrement())
-//   userId    Int
-//   productId Int
-//   quantity  Int
+model SalesChannel {
+  id           Int    @id @default(autoincrement())
+  channel_code String @unique
+  channel_name String
+  bills        Bill[]
+}
 
-//   user    A @relation(fields: [userId], references: [id])
-//   product C @relation(fields: [productId], references: [id])
-// }
+model Customer {
+  id            Int     @id @default(autoincrement())
+  customer_code String  @unique
+  customer_name String?
+  bills         Bill[]
+}
 
-// model C {
-//   id    Int    @id @default(autoincrement())
-//   cart  String // ชื่อสินค้า
-//   price String // ราคาสินค้า
+model Product {
+  id            Int        @id @default(autoincrement())
+  product_code  String
+  product_name  String
+  product_brand String
+  billItems     BillItem[]
 
-//   usedInB B[] // ถูกใช้ใน cart ไหนบ้าง
-// }
+  @@unique([product_code])
+}
 
-// const result = await prisma.b.findMany({
-//   include: {
-//     user: true,      // ข้อมูลผู้ใช้ (email)
-//     product: true    // ข้อมูลสินค้า (cart + price)
-//   }
-// });
+model Bill {
+  id                   Int      @id @default(autoincrement())
+  branchId             Int
+  salesChannelId       Int
+  customerId           Int?
+  date                 DateTime
+  bill_number          String   @unique
+  doc_type             String
+  pos_type             String
+  reference_doc        String?
+  value_excl_tax       Float
+  vat                  Float
+  end_bill_discount    Float
+  total_after_discount Float
+  rounding             Float
+  total_sales          Float
+  total_payment        Float
 
-// [
-//   {
-//     "id": 1,
-//     "user": {
-//       "email": "test@example.com"
-//     },
-//     "product": {
-//       "cart": "ข้าวหอมมะลิ",
-//       "price": "150"
-//     },
-//     "quantity": 1
-//   }
-// ]
+  payments BillPayment[]
+
+  branch       Branch       @relation(fields: [branchId], references: [id])
+  customer     Customer?    @relation(fields: [customerId], references: [id])
+  salesChannel SalesChannel @relation(fields: [salesChannelId], references: [id])
+  billItems    BillItem[]
+
+  @@index([branchId, doc_type, date])
+  @@index([date])
+  @@index([branchId, date])
+  @@index([salesChannelId, date])
+  @@index([customerId, date])
+  @@index([doc_type, date])
+  @@index([date, id])
+}
+
+model BillPayment {
+  id               Int     @id @default(autoincrement())
+  billId           Int
+  amount           Float
+  payment_method   String?
+  bank             String?
+  reference_number String?
+
+  bill Bill @relation(fields: [billId], references: [id], onDelete: Cascade)
+
+  // กันซ้ำแบบ “พอประมาณ” (ถ้ากลัวชนกันค่อยปรับเพิ่ม)
+  @@unique([billId, amount, payment_method, bank, reference_number])
+  @@index([billId])
+  @@index([payment_method])
+  @@index([bank])
+}
+
+model BillItem {
+  id             Int     @id @default(autoincrement())
+  billId         Int
+  productId      Int
+  quantity       Float
+  unit           String?
+  price_per_unit Float
+  sales_amount   Float
+  discount       Float
+  net_sales      Float
+  bill           Bill    @relation(fields: [billId], references: [id])
+  product        Product @relation(fields: [productId], references: [id])
+
+  @@index([productId])
+  @@index([billId])
+  // Index เสริมสำหรับ dashboard product (JOIN Bill + GROUP BY product)
+  @@index([billId, productId])
+}

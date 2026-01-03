@@ -1,0 +1,250 @@
+// generator client {
+//   provider = "prisma-client-js"
+// }
+
+
+// datasource db {
+//   // provider = "mysql"
+//   provider = "postgresql"
+//   url      = env("DATABASE_URL")
+//   // directUrl = env("DIRECT_URL")
+// }
+
+// // npx prisma migrate dev --name init
+
+// model User {
+//   id        Int      @id @default(autoincrement())
+//   name      String
+//   password  String
+//   role      String   @default("user")
+//   enabled   Boolean  @default(true)
+//   createdAt DateTime @default(now())
+// }
+
+// model Station {
+//   id          Int     @id @default(autoincrement())
+//   codeSAP     String?
+//   codeADA     String?
+//   codeBMX     String?
+//   nameTH      String?
+//   adaStore    String?
+//   nameEng     String?
+//   WhCodeSAP   String?
+//   storeNameTH String?
+// }
+
+// model Partners {
+//   id                       Int     @id @default(autoincrement())
+//   codeBP                   String?
+//   nameBP                   String?
+//   accountBalance           Float
+//   interfaceADA             String?
+//   interfaceEDI             String?
+//   brand                    String?
+//   paymentTermsCode         String?
+//   noOldBP                  String?
+//   taxGroup                 String?
+//   remarks                  String?
+//   idNoTwo                  String?
+//   gp                       String?
+//   dc                       String?
+//   email                    String?
+//   phoneOne                 String?
+//   phoneTwo                 String?
+//   billAddressType          String?
+//   billBlock                String?
+//   billBuildingFloorRoom    String?
+//   billCity                 String?
+//   billCountry              String?
+//   billCountryNo            String? //county
+//   billZipCode              String?
+//   branchBP                 Int
+//   billExchangeOnCollection String?
+//   billDefault              String?
+//   billState                String?
+//   billStreet               String?
+//   billStreetNo             String?
+//   remarkOne                String?
+//   groupCode                String?
+//   federalTaxId             String?
+// }
+
+// model ItemMinMax {
+//   id          Int    @id @default(autoincrement())
+//   branchCode  String
+//   codeProduct Int
+//   minStore    Int //main
+//   maxStore    Int //main
+
+//   @@index([branchCode, codeProduct])
+// }
+
+// model ListOfItemHold {
+//   id                  Int     @id @default(autoincrement())
+//   codeProduct         Int //main
+//   nameProduct         String? //main
+//   groupName           String? //second
+//   status              String? //main
+//   barcode             String? //main
+//   nameBrand           String? //main
+//   consingItem         String? //second
+//   purchasePriceExcVAT Float //main
+//   salesPriceIncVAT    Int //main
+//   preferredVandorCode String? //second
+//   preferredVandorName String? //second
+//   GP                  String? //second
+//   shelfLife           String? //second
+//   productionDate      String? //add
+//   vatGroupPu          String? //second
+
+//   @@index([codeProduct])
+// }
+
+// model SalesDay {
+//   id           Int    @id @default(autoincrement())
+//   branchCode   String
+//   channelSales String
+//   codeProduct  Int
+//   quantity     Int //main
+//   discount     String //second
+//   totalPrice   String //main
+
+//   // day          Int
+//   @@index([branchCode, codeProduct]) // filter + groupBy
+// }
+
+// model Stock {
+//   id          Int    @id @default(autoincrement())
+//   codeProduct Int
+//   branchCode  String
+//   quantity    Int //main
+
+//   @@index([branchCode, codeProduct]) // ใช้ filter / join
+// }
+
+// model withdraw {
+//   id          Int    @id @default(autoincrement())
+//   codeProduct Int
+//   branchCode  String //main
+//   docNumber   String //second
+//   date        String //second
+//   docStatus   String //second
+//   reason      String //main
+//   quantity    Int //main
+//   value       String //main
+
+//   @@index([branchCode, codeProduct]) // filter / groupBy
+// }
+
+// model Tamplate {
+//   id         Int     @id @default(autoincrement())
+//   branchCode String
+//   shelfCode  String
+//   fullName   String
+//   rowQty     Int
+//   type       String?
+
+//   @@unique([branchCode, shelfCode]) // upload csv
+//   @@index([branchCode, shelfCode, fullName])
+// }
+
+// model Sku {
+//   id          Int    @id @default(autoincrement())
+//   branchCode  String
+//   shelfCode   String
+//   rowNo       Int
+//   codeProduct Int
+//   index       Int
+
+//   @@unique([branchCode, shelfCode, rowNo, codeProduct]) //upload csv
+//   @@index([branchCode, shelfCode, index]) // สำหรับเรียงลำดับบน shelf
+// }
+
+// model Branch {
+//   id          Int    @id @default(autoincrement())
+//   branch_code String @unique
+//   branch_name String
+
+//   bills Bill[]
+// }
+
+// model SalesChannel {
+//   id           Int    @id @default(autoincrement())
+//   channel_code String @unique
+//   channel_name String
+
+//   bills Bill[]
+// }
+
+// model Customer {
+//   id            Int     @id @default(autoincrement())
+//   customer_code String? @unique
+//   customer_name String?
+
+//   bills Bill[]
+// }
+
+// model Product {
+//   id            Int    @id @default(autoincrement())
+//   product_code  String
+//   product_name  String
+//   product_brand String
+
+//   billItems BillItem[]
+
+//   @@unique([product_code, product_brand])
+// }
+
+// model Bill {
+//   id       Int    @id @default(autoincrement())
+//   branchId Int
+//   branch   Branch @relation(fields: [branchId], references: [id])
+
+//   salesChannelId Int
+//   salesChannel   SalesChannel @relation(fields: [salesChannelId], references: [id])
+
+//   customerId Int? // <-- ไว้เป็น foreign key
+//   customer   Customer? @relation(fields: [customerId], references: [id]) // <-- relation ต้องอยู่กับ object type
+
+//   date                 DateTime
+//   bill_number          String   @unique
+//   doc_type             String
+//   pos_type             String
+//   reference_doc        String?
+//   value_excl_tax       Float
+//   vat                  Float
+//   end_bill_discount    Float
+//   total_after_discount Float
+//   rounding             Float
+//   net_sales            Float
+//   total_sales          Float
+//   total_payment        Float
+//   payment_method       String?
+//   bank                 String?
+//   reference_number     String?
+
+//   billItems BillItem[]
+
+//   @@index([date])
+//   @@index([branchId, date])
+//   @@index([salesChannelId, date])
+//   @@index([customerId, date])
+//   @@index([doc_type, date])
+// }
+
+// model BillItem {
+//   id             Int     @id @default(autoincrement())
+//   billId         Int
+//   bill           Bill    @relation(fields: [billId], references: [id])
+//   productId      Int
+//   product        Product @relation(fields: [productId], references: [id])
+//   quantity       Float
+//   unit           String?
+//   price_per_unit Float
+//   sales_amount   Float
+//   discount       Float
+//   net_sales      Float
+
+//   @@index([productId])
+//   @@index([billId])
+// }
