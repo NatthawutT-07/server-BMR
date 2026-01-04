@@ -1,5 +1,6 @@
 const NodeCache = require("node-cache");
 const cache = new NodeCache({ stdTTL: 1 });
+const summaryCache = new NodeCache({ stdTTL: 60 });
 
 const prisma = require("../../config/prisma");
 const { lockKey, releaseLock, acquireLock } = require("../../utils/lock");
@@ -9,6 +10,14 @@ const { lockKey, releaseLock, acquireLock } = require("../../utils/lock");
 
 const safeStr = (v) => (v == null ? "" : String(v));
 const digitsOnly = (s) => safeStr(s).replace(/\D/g, ""); // เหลือแต่ตัวเลข
+
+const toBkkDateStr = (dateObj) =>
+  new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Bangkok",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(dateObj);
 
 exports.getMasterItem = async (req, res) => {
   try {
@@ -604,5 +613,195 @@ exports.sku = async (req, res) => {
     } catch (error) {
         console.error("❌ sku error:", error);
         return res.status(500).json({ msg: "❌ Failed to retrieve data" });
+    }
+};
+
+exports.getShelfDashboardSummary = async (req, res) => {
+    const { startUtc, endUtc } = getBangkok90DaysRangeUtc();
+    console.log( startUtc,":::", endUtc );
+    const cacheKey = `shelf-dashboard:${startUtc.toISOString()}:${endUtc.toISOString()}`;
+
+    const cached = summaryCache.get(cacheKey);
+    if (cached) return res.json(cached);
+
+    try {
+        const rows = await prisma.$queryRaw`
+        WITH sku_rows AS (
+            SELECT "branchCode", "shelfCode", "codeProduct"
+            FROM "Sku"
+        ),
+        stock_map AS (
+            SELECT "branchCode", "codeProduct", SUM("quantity")::float8 AS stock_qty
+            FROM "Stock"
+            GROUP BY "branchCode", "codeProduct"
+        ),
+        withdraw_map AS (
+            SELECT "branchCode", "codeProduct", SUM("value")::float8 AS withdraw_value
+            FROM "withdraw"
+            WHERE "docStatus" = 'อนุมัติแล้ว'
+            GROUP BY "branchCode", "codeProduct"
+        ),
+        sales_map AS (
+            SELECT
+                br."branch_code" AS "branchCode",
+                (pr."product_code")::int AS "codeProduct",
+                SUM(bi."net_sales")::float8 AS sales_total
+            FROM "BillItem" bi
+            JOIN "Bill" b ON bi."billId" = b."id"
+            JOIN "Branch" br ON b."branchId" = br."id"
+            JOIN "Product" pr ON bi."productId" = pr."id"
+            WHERE b."date" >= ${startUtc}
+              AND b."date" <= ${endUtc}
+            GROUP BY br."branch_code", (pr."product_code")::int
+        ),
+        branch_sums AS (
+            SELECT
+                sr."branchCode" AS branch_code,
+                COUNT(DISTINCT sr."shelfCode")::int AS shelf_count,
+                COUNT(*)::int AS product_count,
+                SUM(
+                    CASE
+                        WHEN COALESCE(sm.stock_qty, 0) > 0
+                            THEN COALESCE(sm.stock_qty, 0) * COALESCE(p."purchasePriceExcVAT", 0)
+                        ELSE 0
+                    END
+                )::float8 AS stock_cost,
+                SUM(COALESCE(wm.withdraw_value, 0))::float8 AS withdraw_value,
+                SUM(COALESCE(sa.sales_total, 0))::float8 AS sales_total
+            FROM sku_rows sr
+            LEFT JOIN stock_map sm
+                ON sm."branchCode" = sr."branchCode"
+               AND sm."codeProduct" = sr."codeProduct"
+            LEFT JOIN "ListOfItemHold" p
+                ON p."codeProduct" = sr."codeProduct"
+            LEFT JOIN withdraw_map wm
+                ON wm."branchCode" = sr."branchCode"
+               AND wm."codeProduct" = sr."codeProduct"
+            LEFT JOIN sales_map sa
+                ON sa."branchCode" = sr."branchCode"
+               AND sa."codeProduct" = sr."codeProduct"
+            GROUP BY sr."branchCode"
+        )
+        SELECT
+            b."branch_code" AS "branchCode",
+            b."branch_name" AS "branchName",
+            COALESCE(bs.shelf_count, 0)::int AS "shelfCount",
+            COALESCE(bs.product_count, 0)::int AS "productCount",
+            COALESCE(bs.stock_cost, 0)::float8 AS "stockCost",
+            COALESCE(bs.withdraw_value, 0)::float8 AS "withdrawValue",
+            COALESCE(bs.sales_total, 0)::float8 AS "salesTotal"
+        FROM "Branch" b
+        LEFT JOIN branch_sums bs
+            ON bs.branch_code = b."branch_code"
+        ORDER BY b."branch_code" ASC
+        `;
+
+        const shelfSalesRows = await prisma.$queryRaw`
+        WITH sku_rows AS (
+            SELECT "branchCode", "shelfCode", "codeProduct"
+            FROM "Sku"
+        ),
+        shelf_names AS (
+            SELECT "branchCode", "shelfCode", "fullName"
+            FROM "Tamplate"
+        ),
+        stock_map AS (
+            SELECT "branchCode", "codeProduct", SUM("quantity")::float8 AS stock_qty
+            FROM "Stock"
+            GROUP BY "branchCode", "codeProduct"
+        ),
+        sales_map AS (
+            SELECT
+                br."branch_code" AS "branchCode",
+                (pr."product_code")::int AS "codeProduct",
+                SUM(bi."net_sales")::float8 AS sales_total
+            FROM "BillItem" bi
+            JOIN "Bill" b ON bi."billId" = b."id"
+            JOIN "Branch" br ON b."branchId" = br."id"
+            JOIN "Product" pr ON bi."productId" = pr."id"
+            WHERE b."date" >= ${startUtc}
+              AND b."date" <= ${endUtc}
+            GROUP BY br."branch_code", (pr."product_code")::int
+        ),
+        shelf_sums AS (
+            SELECT
+                sr."branchCode" AS branch_code,
+                sr."shelfCode" AS shelf_code,
+                COUNT(*)::int AS sku_count,
+                SUM(
+                    CASE
+                        WHEN COALESCE(sm.stock_qty, 0) > 0
+                            THEN COALESCE(sm.stock_qty, 0) * COALESCE(p."purchasePriceExcVAT", 0)
+                        ELSE 0
+                    END
+                )::float8 AS stock_cost,
+                SUM(COALESCE(sa.sales_total, 0))::float8 AS sales_total
+            FROM sku_rows sr
+            LEFT JOIN stock_map sm
+                ON sm."branchCode" = sr."branchCode"
+               AND sm."codeProduct" = sr."codeProduct"
+            LEFT JOIN "ListOfItemHold" p
+                ON p."codeProduct" = sr."codeProduct"
+            LEFT JOIN sales_map sa
+                ON sa."branchCode" = sr."branchCode"
+               AND sa."codeProduct" = sr."codeProduct"
+            GROUP BY sr."branchCode", sr."shelfCode"
+        )
+        SELECT
+            ss.branch_code AS "branchCode",
+            ss.shelf_code AS "shelfCode",
+            sn."fullName" AS "shelfName",
+            COALESCE(ss.sales_total, 0)::float8 AS "salesTotal",
+            COALESCE(ss.sku_count, 0)::int AS "skuCount",
+            COALESCE(ss.stock_cost, 0)::float8 AS "stockCost"
+        FROM shelf_sums ss
+        LEFT JOIN shelf_names sn
+            ON sn."branchCode" = ss.branch_code
+           AND sn."shelfCode" = ss.shelf_code
+        ORDER BY ss.branch_code, ss.shelf_code
+        `;
+
+        const shelfSalesMap = new Map();
+        for (const row of shelfSalesRows) {
+            const key = String(row.branchCode || "");
+            if (!shelfSalesMap.has(key)) shelfSalesMap.set(key, []);
+            shelfSalesMap.get(key).push({
+                shelfCode: row.shelfCode,
+                shelfName: row.shelfName || null,
+                salesTotal: Number(row.salesTotal || 0),
+                skuCount: Number(row.skuCount || 0),
+                stockCost: Number(row.stockCost || 0),
+            });
+        }
+
+        const mapped = rows.map((r) => {
+            const shelves = shelfSalesMap.get(String(r.branchCode || "")) || [];
+            shelves.sort((a, b) => String(a.shelfCode).localeCompare(String(b.shelfCode)));
+
+            return {
+                branchCode: r.branchCode,
+                branchName: r.branchName,
+                shelfCount: Number(r.shelfCount || 0),
+                productCount: Number(r.productCount || 0),
+                stockCost: Number(r.stockCost || 0),
+                withdrawValue: Number(r.withdrawValue || 0),
+                salesTotal: Number(r.salesTotal || 0),
+                shelfSales: shelves,
+            };
+        });
+
+        const payload = {
+            range: {
+                start: toBkkDateStr(startUtc),
+                end: toBkkDateStr(endUtc),
+            },
+            rows: mapped,
+        };
+
+        summaryCache.set(cacheKey, payload);
+        return res.json(payload);
+    } catch (error) {
+        console.error("❌ getShelfDashboardSummary error:", error);
+        return res.status(500).json({ error: "shelf dashboard summary error" });
     }
 };
