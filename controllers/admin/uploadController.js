@@ -1,4 +1,5 @@
 const prisma = require('../../config/prisma');
+const { Prisma } = require("@prisma/client");
 const XLSX = require("xlsx");
 
 const uploadJobs = new Map();
@@ -281,22 +282,22 @@ exports.uploadItemMinMaxXLSX = async (req, res) => {
         // Prisma ไม่มี updateMany แบบหลายเงื่อนไข → ใช้ raw SQL
         // ---------------------------
         if (toUpdate.length > 0) {
-            const values = toUpdate.map(r =>
-                `('${r.branchCode}', ${r.codeProduct}, ${r.minStore === null ? "NULL" : r.minStore}, ${r.maxStore === null ? "NULL" : r.maxStore})`
-            ).join(",");
+            const values = toUpdate.map((r) =>
+                Prisma.sql`(${r.branchCode}, ${r.codeProduct}, ${r.minStore}, ${r.maxStore})`
+            );
 
-            const sql = `
+            const sql = Prisma.sql`
                 UPDATE "ItemMinMax" AS t SET
-                    "minStore" = v.minStore,
-                    "maxStore" = v.maxStore
-                FROM (VALUES ${values})
-                AS v(branchCode, codeProduct, minStore, maxStore)
-                WHERE 
-                    t."branchCode" = v.branchCode
-                    AND t."codeProduct" = v.codeProduct
+                    "minStore" = v."minStore",
+                    "maxStore" = v."maxStore"
+                FROM (VALUES ${Prisma.join(values)})
+                AS v("branchCode", "codeProduct", "minStore", "maxStore")
+                WHERE
+                    t."branchCode" = v."branchCode"
+                    AND t."codeProduct" = v."codeProduct"
             `;
 
-            await prisma.$executeRawUnsafe(sql);
+            await prisma.$executeRaw(sql);
         }
 
         setUploadJob(jobId, 90, "saving data");
@@ -447,26 +448,27 @@ exports.uploadMasterItemXLSX = async (req, res) => {
         // 8) Bulk Update (raw SQL for max speed)
         //------------------------------------------
         if (toUpdate.length > 0) {
-            const values = toUpdate.map(r =>
-                `(${r.codeProduct}, 
-                 ${r.purchasePriceExcVAT ?? "NULL"}, 
-                 ${r.salesPriceIncVAT ?? "NULL"}, 
-                 ${r.GP ? `'${r.GP}'` : "NULL"},
-                 ${r.shelfLife ? `'${r.shelfLife}'` : "NULL"},
-                 ${r.productionDate ? `'${r.productionDate}'` : "NULL"},
-                 ${r.vatGroupPu ? `'${r.vatGroupPu}'` : "NULL"},
-                 ${r.status ? `'${r.status}'` : "NULL"},
-                 ${r.barcode ? `'${r.barcode}'` : "NULL"},
-                 ${r.nameBrand ? `'${r.nameBrand}'` : "NULL"},
-                 ${r.preferredVandorCode ? `'${r.preferredVandorCode}'` : "NULL"},
-                 ${r.preferredVandorName ? `'${r.preferredVandorName}'` : "NULL"},
-                 ${r.consingItem ? `'${r.consingItem}'` : "NULL"},
-                 ${r.groupName ? `'${r.groupName}'` : "NULL"},
-                 ${r.nameProduct ? `'${r.nameProduct}'` : "NULL"}
+            const values = toUpdate.map((r) =>
+                Prisma.sql`(
+                    ${r.codeProduct},
+                    ${r.purchasePriceExcVAT},
+                    ${r.salesPriceIncVAT},
+                    ${r.GP},
+                    ${r.shelfLife},
+                    ${r.productionDate},
+                    ${r.vatGroupPu},
+                    ${r.status},
+                    ${r.barcode},
+                    ${r.nameBrand},
+                    ${r.preferredVandorCode},
+                    ${r.preferredVandorName},
+                    ${r.consingItem},
+                    ${r.groupName},
+                    ${r.nameProduct}
                 )`
-            ).join(",");
+            );
 
-            const sql = `
+            const sql = Prisma.sql`
                 UPDATE "ListOfItemHold" AS t SET
                     "purchasePriceExcVAT" = v.purchase,
                     "salesPriceIncVAT" = v.saleprice,
@@ -482,7 +484,7 @@ exports.uploadMasterItemXLSX = async (req, res) => {
                     "consingItem" = v.consign,
                     "groupName" = v.groupname,
                     "nameProduct" = v.nameproduct
-                FROM (VALUES ${values})
+                FROM (VALUES ${Prisma.join(values)})
                 AS v(
                     codeProduct, purchase, saleprice, gp, shelf,
                     proddate, vat, status, barcode, brand,
@@ -491,7 +493,7 @@ exports.uploadMasterItemXLSX = async (req, res) => {
                 WHERE t."codeProduct" = v.codeProduct
             `;
 
-            await prisma.$executeRawUnsafe(sql);
+            await prisma.$executeRaw(sql);
         }
 
         //------------------------------------------
@@ -586,31 +588,23 @@ exports.uploadSalesDayXLSX = async (req, res) => {
         // STEP 2: ลบข้อมูลเก่าทั้งหมด
         // --------------------------------------------------------
         setUploadJob(jobId, 60, "clearing old data");
-        await prisma.$executeRawUnsafe(`DELETE FROM "SalesDay"`);
+        await prisma.$executeRaw`DELETE FROM "SalesDay"`;
 
         // --------------------------------------------------------
         // STEP 3: Insert ใหม่แบบ batch เร็วมาก
         // --------------------------------------------------------
-        const valuesSql = finalData
-            .map(r =>
-                `('${r.branchCode}',
-                  ${r.channelSales ? `'${r.channelSales.replace(/'/g, "''")}'` : 'NULL'},
-                  ${r.codeProduct},
-                  ${r.quantity},
-                  ${r.discount},
-                  ${r.totalPrice}
-                )`
-            )
-            .join(",");
+        const values = finalData.map((r) =>
+            Prisma.sql`(${r.branchCode}, ${r.channelSales}, ${r.codeProduct}, ${r.quantity}, ${r.discount}, ${r.totalPrice})`
+        );
 
-        const sql = `
+        const sql = Prisma.sql`
             INSERT INTO "SalesDay"
                 ("branchCode", "channelSales", "codeProduct", "quantity", "discount", "totalPrice")
-            VALUES ${valuesSql}
+            VALUES ${Prisma.join(values)}
         `;
 
         setUploadJob(jobId, 85, "saving data");
-        await prisma.$executeRawUnsafe(sql);
+        await prisma.$executeRaw(sql);
 
         await touchDataSync("sales-day", finalData.length);
 
@@ -672,8 +666,7 @@ exports.uploadStockXLSX = async (req, res) => {
             .map((row) => {
                 const codeProduct = parseInt(row["รหัสสินค้า"], 10);
 
-                let branchCode = (row["รหัสสาขา"] || "").trim();
-                branchCode = branchCode.replace(/'/g, "''"); // กัน SQL แตก
+                const branchCode = (row["รหัสสาขา"] || "").trim();
 
                 let qty = parseFloat(row["จำนวนคงเหลือ"]);
                 if (isNaN(qty)) qty = 0;
@@ -683,7 +676,7 @@ exports.uploadStockXLSX = async (req, res) => {
                 // ✅ qty = 0 ข้ามทันที
                 if (qty === 0) return null;
 
-                return `(${codeProduct}, '${branchCode}', ${qty})`;
+                return { codeProduct, branchCode, quantity: qty };
             })
             .filter(Boolean);
 
@@ -694,24 +687,27 @@ exports.uploadStockXLSX = async (req, res) => {
         setUploadJob(jobId, 60, "saving data");
         await prisma.$transaction(async (tx) => {
             // ล้างข้อมูลเดิม
-            await tx.$executeRawUnsafe(`TRUNCATE TABLE "Stock"`);
+            await tx.$executeRaw`TRUNCATE TABLE "Stock"`;
 
             // insert ใหม่
-            const insertSql = `
-        INSERT INTO "Stock" ("codeProduct", "branchCode", "quantity")
-        VALUES ${mapped.join(",")}
-      `;
-            await tx.$executeRawUnsafe(insertSql);
+            const values = mapped.map((r) =>
+                Prisma.sql`(${r.codeProduct}, ${r.branchCode}, ${r.quantity})`
+            );
+            const insertSql = Prisma.sql`
+                INSERT INTO "Stock" ("codeProduct", "branchCode", "quantity")
+                VALUES ${Prisma.join(values)}
+            `;
+            await tx.$executeRaw(insertSql);
 
             // ✅ บันทึกเวลาอัปเดตล่าสุด (แค่ 1 แถว)
-            const syncSql = `
-        INSERT INTO "DataSync" ("key", "updatedAt", "rowCount")
-        VALUES ('stock', NOW(), ${mapped.length})
-        ON CONFLICT ("key")
-        DO UPDATE SET "updatedAt" = EXCLUDED."updatedAt",
-                      "rowCount"  = EXCLUDED."rowCount"
-      `;
-            await tx.$executeRawUnsafe(syncSql);
+            const syncSql = Prisma.sql`
+                INSERT INTO "DataSync" ("key", "updatedAt", "rowCount")
+                VALUES ('stock', NOW(), ${mapped.length})
+                ON CONFLICT ("key")
+                DO UPDATE SET "updatedAt" = EXCLUDED."updatedAt",
+                              "rowCount"  = EXCLUDED."rowCount"
+            `;
+            await tx.$executeRaw(syncSql);
         });
 
         finishUploadJob(jobId, "completed");
@@ -888,7 +884,7 @@ exports.uploadWithdrawXLSX = async (req, res) => {
                 if (!codeProduct) return null;
 
                 // สกัดรหัสสาขาแบบ (ST024) The Nine → ST024
-                let branchCode = row["สาขา"]
+                const branchCode = row["สาขา"]
                     ?.split(")")[0]
                     ?.replace("(", "")
                     ?.trim();
@@ -900,20 +896,16 @@ exports.uploadWithdrawXLSX = async (req, res) => {
                 let val = parseFloat(row["มูลค่าเบิกออก"]);
                 if (isNaN(val)) val = 0;
 
-                // escape single quotes
-                const esc = (str) =>
-                    str ? `'${str.replace(/'/g, "''")}'` : "NULL";
-
-                return `
-                    (${codeProduct},
-                    '${branchCode}',
-                    ${esc(row["เลขที่เอกสาร"])},
-                    ${esc(row["วันที่"])},
-                    ${esc(row["สถานะเอกสาร"])},
-                    ${esc(row["เหตุผล"])},
-                    ${qty},
-                    ${val})
-                `;
+                return {
+                    codeProduct,
+                    branchCode,
+                    docNumber: row["เลขที่เอกสาร"] || null,
+                    date: row["วันที่"] || null,
+                    docStatus: row["สถานะเอกสาร"] || null,
+                    reason: row["เหตุผล"] || null,
+                    quantity: qty,
+                    value: val,
+                };
             })
             .filter(v => v !== null);
 
@@ -925,19 +917,23 @@ exports.uploadWithdrawXLSX = async (req, res) => {
         // 4) Clear Table (ต้องล้างก่อน insert)
         // ------------------------------------------------------------
         setUploadJob(jobId, 60, "clearing old data");
-        await prisma.$executeRawUnsafe(`DELETE FROM "withdraw"`);
+        await prisma.$executeRaw`DELETE FROM "withdraw"`;
 
         // ------------------------------------------------------------
         // 5) Build Ultra-Fast Bulk Insert
         // ------------------------------------------------------------
-        const sql = `
+        const values = mapped.map((r) =>
+            Prisma.sql`(${r.codeProduct}, ${r.branchCode}, ${r.docNumber}, ${r.date}, ${r.docStatus}, ${r.reason}, ${r.quantity}, ${r.value})`
+        );
+
+        const sql = Prisma.sql`
             INSERT INTO "withdraw"
             ("codeProduct", "branchCode", "docNumber", "date", "docStatus", "reason", "quantity", "value")
-            VALUES ${mapped.join(",")}
+            VALUES ${Prisma.join(values)}
         `;
 
         setUploadJob(jobId, 85, "saving data");
-        await prisma.$executeRawUnsafe(sql);
+        await prisma.$executeRaw(sql);
 
         finishUploadJob(jobId, "completed");
         return res.status(200).json({
