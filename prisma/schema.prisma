@@ -105,6 +105,7 @@ model withdraw {
   value       Float
 
   @@index([branchCode, codeProduct])
+  @@index([branchCode, docStatus, codeProduct])
 }
 
 model ListOfItemHold {

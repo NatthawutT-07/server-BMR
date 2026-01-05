@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const { authCheck, adminCheck } = require('../middlewares/authCheck')
 const { listUser, changeStatus, changeRole } = require('../controllers/admin/admin');
-const { tamplate, sku, itemDelete, itemCreate, itemUpdate, getMasterItem, getShelfDashboardSummary } = require("../controllers/admin/shelf");
+const { tamplate, sku, itemDelete, itemCreate, itemUpdate, getMasterItem, getShelfDashboardSummary, getShelfDashboardShelfSales } = require("../controllers/admin/shelf");
 
 // //Manege
 // router.get("/users", authCheck, adminCheck, listUser);
@@ -78,6 +78,7 @@ router.delete("/shelf-delete", authCheck, itemDelete);
 router.post("/shelf-add", authCheck, itemCreate);
 router.put("/shelf-update", authCheck, itemUpdate)
 router.get("/shelf-dashboard-summary", authCheck, getShelfDashboardSummary);
+router.get("/shelf-dashboard-shelf-sales", authCheck, getShelfDashboardShelfSales);
 // router.get("/shelf-summary",  summary)
 
 

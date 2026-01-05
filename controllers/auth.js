@@ -123,8 +123,15 @@ exports.register = async (req, res) => {
 exports.login = async (req, res) => {
   try {
     const { name, password } = req.body;
+    const rawName = String(name || "").trim();
+    const normalizedName = /^[A-Za-z]{2}\d{3}$/.test(rawName)
+      ? rawName.toUpperCase()
+      : rawName;
 
-    const user = await prisma.user.findFirst({ where: { name } });
+    let user = await prisma.user.findFirst({ where: { name: normalizedName } });
+    if (!user && !normalizedName.includes("@")) {
+      user = await prisma.user.findFirst({ where: { name: `POG@${normalizedName}` } });
+    }
 
     const ip = getClientIp(req);
     const userAgent = req.headers["user-agent"] || "";
@@ -136,9 +143,9 @@ exports.login = async (req, res) => {
           ip,
           userAgent,
           status: "failed",
-          message: "User not found or not enabled",
-        },
-      });
+        message: "User not found or not enabled",
+      },
+    });
 
       return res.status(400).json({ msg: "User Not found or not Enabled" });
     }

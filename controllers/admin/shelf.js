@@ -477,39 +477,69 @@ exports.sku = async (req, res) => {
         AND s."codeProduct" = bs."codeProduct"
 
         -- 🟢 Sales 3 เดือนก่อนหน้า จาก Bill / BillItem (รวมทุก channel)
-        -- ใช้ช่วงเวลา UTC ที่ได้จาก "เดือนตามเวลาไทย" 3 เดือนล่าสุดก่อนเดือนปัจจุบัน
+        -- ใช้ UNION ALL แยกช่วงเดือนเพื่อช่วยให้ index date ทำงานเต็ม
         LEFT JOIN (
-            SELECT 
-                br."branch_code"            AS "branchCode",
-                (prod."product_code")::int  AS "codeProduct",
-                SUM(bi."quantity")::int     AS "sales3mQty"
-            FROM "BillItem" bi
-            JOIN "Bill" b
-                ON bi."billId" = b."id"
-            JOIN "Branch" br
-                ON b."branchId" = br."id"
-            JOIN "Product" prod
-                ON bi."productId" = prod."id"
-            WHERE br."branch_code" = ${branchCode}
-              AND (
-                    (
-                        b."date" >= ${prevMonths[0].startUtc}
-                        AND b."date" <= ${prevMonths[0].endUtc}
-                    )
-                    OR
-                    (
-                        b."date" >= ${prevMonths[1].startUtc}
-                        AND b."date" <= ${prevMonths[1].endUtc}
-                    )
-                    OR
-                    (
-                        b."date" >= ${prevMonths[2].startUtc}
-                        AND b."date" <= ${prevMonths[2].endUtc}
-                    )
-              )
-            GROUP BY 
-                br."branch_code",
-                (prod."product_code")::int
+            SELECT "branchCode", "codeProduct", SUM("sales3mQty")::int AS "sales3mQty"
+            FROM (
+                SELECT 
+                    br."branch_code"            AS "branchCode",
+                    (prod."product_code")::int  AS "codeProduct",
+                    SUM(bi."quantity")::int     AS "sales3mQty"
+                FROM "BillItem" bi
+                JOIN "Bill" b
+                    ON bi."billId" = b."id"
+                JOIN "Branch" br
+                    ON b."branchId" = br."id"
+                JOIN "Product" prod
+                    ON bi."productId" = prod."id"
+                WHERE br."branch_code" = ${branchCode}
+                  AND b."date" >= ${prevMonths[0].startUtc}
+                  AND b."date" <= ${prevMonths[0].endUtc}
+                GROUP BY 
+                    br."branch_code",
+                    (prod."product_code")::int
+
+                UNION ALL
+
+                SELECT 
+                    br."branch_code"            AS "branchCode",
+                    (prod."product_code")::int  AS "codeProduct",
+                    SUM(bi."quantity")::int     AS "sales3mQty"
+                FROM "BillItem" bi
+                JOIN "Bill" b
+                    ON bi."billId" = b."id"
+                JOIN "Branch" br
+                    ON b."branchId" = br."id"
+                JOIN "Product" prod
+                    ON bi."productId" = prod."id"
+                WHERE br."branch_code" = ${branchCode}
+                  AND b."date" >= ${prevMonths[1].startUtc}
+                  AND b."date" <= ${prevMonths[1].endUtc}
+                GROUP BY 
+                    br."branch_code",
+                    (prod."product_code")::int
+
+                UNION ALL
+
+                SELECT 
+                    br."branch_code"            AS "branchCode",
+                    (prod."product_code")::int  AS "codeProduct",
+                    SUM(bi."quantity")::int     AS "sales3mQty"
+                FROM "BillItem" bi
+                JOIN "Bill" b
+                    ON bi."billId" = b."id"
+                JOIN "Branch" br
+                    ON b."branchId" = br."id"
+                JOIN "Product" prod
+                    ON bi."productId" = prod."id"
+                WHERE br."branch_code" = ${branchCode}
+                  AND b."date" >= ${prevMonths[2].startUtc}
+                  AND b."date" <= ${prevMonths[2].endUtc}
+                GROUP BY 
+                    br."branch_code",
+                    (prod."product_code")::int
+            ) u
+            GROUP BY "branchCode", "codeProduct"
         ) p3
         ON s."branchCode" = p3."branchCode" 
         AND s."codeProduct" = p3."codeProduct"
@@ -619,10 +649,6 @@ exports.sku = async (req, res) => {
 exports.getShelfDashboardSummary = async (req, res) => {
     const { startUtc, endUtc } = getBangkok90DaysRangeUtc();
     console.log( startUtc,":::", endUtc );
-    const cacheKey = `shelf-dashboard:${startUtc.toISOString()}:${endUtc.toISOString()}`;
-
-    const cached = summaryCache.get(cacheKey);
-    if (cached) return res.json(cached);
 
     try {
         const rows = await prisma.$queryRaw`
@@ -696,18 +722,58 @@ exports.getShelfDashboardSummary = async (req, res) => {
         ORDER BY b."branch_code" ASC
         `;
 
+        const mapped = rows.map((r) => {
+            return {
+                branchCode: r.branchCode,
+                branchName: r.branchName,
+                shelfCount: Number(r.shelfCount || 0),
+                productCount: Number(r.productCount || 0),
+                stockCost: Number(r.stockCost || 0),
+                withdrawValue: Number(r.withdrawValue || 0),
+                salesTotal: Number(r.salesTotal || 0),
+            };
+        });
+
+        const payload = {
+            range: {
+                start: toBkkDateStr(startUtc),
+                end: toBkkDateStr(endUtc),
+            },
+            rows: mapped,
+        };
+
+        // ✅ ไม่ใช้ cache สำหรับ Shelf Dashboard (ต้องเห็นผลลัพธ์ล่าสุดทันที)
+        return res.json(payload);
+    } catch (error) {
+        console.error("❌ getShelfDashboardSummary error:", error);
+        return res.status(500).json({ error: "shelf dashboard summary error" });
+    }
+};
+
+exports.getShelfDashboardShelfSales = async (req, res) => {
+    const branchCode = String(req.query.branchCode || "").trim();
+    if (!branchCode) {
+        return res.status(400).json({ error: "branchCode is required" });
+    }
+
+    const { startUtc, endUtc } = getBangkok90DaysRangeUtc();
+
+    try {
         const shelfSalesRows = await prisma.$queryRaw`
         WITH sku_rows AS (
             SELECT "branchCode", "shelfCode", "codeProduct"
             FROM "Sku"
+            WHERE "branchCode" = ${branchCode}
         ),
         shelf_names AS (
             SELECT "branchCode", "shelfCode", "fullName"
             FROM "Tamplate"
+            WHERE "branchCode" = ${branchCode}
         ),
         stock_map AS (
             SELECT "branchCode", "codeProduct", SUM("quantity")::float8 AS stock_qty
             FROM "Stock"
+            WHERE "branchCode" = ${branchCode}
             GROUP BY "branchCode", "codeProduct"
         ),
         sales_map AS (
@@ -719,7 +785,8 @@ exports.getShelfDashboardSummary = async (req, res) => {
             JOIN "Bill" b ON bi."billId" = b."id"
             JOIN "Branch" br ON b."branchId" = br."id"
             JOIN "Product" pr ON bi."productId" = pr."id"
-            WHERE b."date" >= ${startUtc}
+            WHERE br."branch_code" = ${branchCode}
+              AND b."date" >= ${startUtc}
               AND b."date" <= ${endUtc}
             GROUP BY br."branch_code", (pr."product_code")::int
         ),
@@ -758,50 +825,23 @@ exports.getShelfDashboardSummary = async (req, res) => {
         LEFT JOIN shelf_names sn
             ON sn."branchCode" = ss.branch_code
            AND sn."shelfCode" = ss.shelf_code
-        ORDER BY ss.branch_code, ss.shelf_code
+        ORDER BY ss.shelf_code
         `;
 
-        const shelfSalesMap = new Map();
-        for (const row of shelfSalesRows) {
-            const key = String(row.branchCode || "");
-            if (!shelfSalesMap.has(key)) shelfSalesMap.set(key, []);
-            shelfSalesMap.get(key).push({
-                shelfCode: row.shelfCode,
-                shelfName: row.shelfName || null,
-                salesTotal: Number(row.salesTotal || 0),
-                skuCount: Number(row.skuCount || 0),
-                stockCost: Number(row.stockCost || 0),
-            });
-        }
+        const shelves = shelfSalesRows.map((row) => ({
+            shelfCode: row.shelfCode,
+            shelfName: row.shelfName || null,
+            salesTotal: Number(row.salesTotal || 0),
+            skuCount: Number(row.skuCount || 0),
+            stockCost: Number(row.stockCost || 0),
+        }));
 
-        const mapped = rows.map((r) => {
-            const shelves = shelfSalesMap.get(String(r.branchCode || "")) || [];
-            shelves.sort((a, b) => String(a.shelfCode).localeCompare(String(b.shelfCode)));
-
-            return {
-                branchCode: r.branchCode,
-                branchName: r.branchName,
-                shelfCount: Number(r.shelfCount || 0),
-                productCount: Number(r.productCount || 0),
-                stockCost: Number(r.stockCost || 0),
-                withdrawValue: Number(r.withdrawValue || 0),
-                salesTotal: Number(r.salesTotal || 0),
-                shelfSales: shelves,
-            };
+        return res.json({
+            branchCode,
+            shelves,
         });
-
-        const payload = {
-            range: {
-                start: toBkkDateStr(startUtc),
-                end: toBkkDateStr(endUtc),
-            },
-            rows: mapped,
-        };
-
-        summaryCache.set(cacheKey, payload);
-        return res.json(payload);
     } catch (error) {
-        console.error("❌ getShelfDashboardSummary error:", error);
-        return res.status(500).json({ error: "shelf dashboard summary error" });
+        console.error("❌ getShelfDashboardShelfSales error:", error);
+        return res.status(500).json({ error: "shelf dashboard shelf sales error" });
     }
 };

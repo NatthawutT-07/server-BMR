@@ -176,6 +176,45 @@ app.use(
 // ✅ CSRF cookie (double-submit)
 app.use(ensureCsrfCookie);
 
+// ✅ Normalize error responses (ให้ทุก controller ได้รูปแบบเดียวกัน)
+app.use((req, res, next) => {
+  const rawJson = res.json.bind(res);
+  const rawSend = res.send.bind(res);
+
+  res.json = (payload) => {
+    const status = res.statusCode || 200;
+    if (status >= 400) {
+      if (payload && payload.ok === false) return rawJson(payload);
+
+      const message =
+        payload?.message ||
+        payload?.msg ||
+        payload?.error ||
+        "Error";
+      const code = payload?.code || "ERROR";
+
+      const normalized = { ok: false, code, message };
+      return rawJson(normalized);
+    }
+    return rawJson(payload);
+  };
+
+  res.send = (payload) => {
+    const status = res.statusCode || 200;
+    if (status >= 400) {
+      const message =
+        typeof payload === "string" && payload.trim()
+          ? payload
+          : "Error";
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      return rawSend(JSON.stringify({ ok: false, code: "ERROR", message }));
+    }
+    return rawSend(payload);
+  };
+
+  next();
+});
+
 // ✅ CORS (ต้องเปิด credentials เพื่อส่ง cookie refresh token)
 const allowedOrigins = [
   "https://web-bmr.ngrok.app",
@@ -200,6 +239,18 @@ app.use("/api", require("./router/auth"));
 app.use("/api", require("./router/admin"));
 app.use("/api", require("./router/user"));
 app.use("/api", require("./router/userMobile"));
+
+// ✅ Error handler: response format สั้น/สม่ำเสมอ
+app.use((err, req, res, next) => {
+  const status = err?.status || err?.statusCode || 500;
+  const message = err?.message || "Server error";
+  const code = err?.code || "SERVER_ERROR";
+  res.status(status).json({
+    ok: false,
+    code,
+    message,
+  });
+});
 
 const port = process.env.PORT || 5001;
 app.listen(port, () => console.log(`Server running on port ${port}`));

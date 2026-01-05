@@ -84,13 +84,19 @@ exports.getStock = async (req, res) => {
     const normalized = normalizeBranchCode(branchCode);
     if (branchCode && EXCLUDED_SALES_BRANCHES.has(normalized)) {
       rows = await prisma.$queryRaw`
+        WITH stock_rows AS (
+          SELECT s."branchCode", s."codeProduct", s."quantity"
+          FROM "Stock" AS s
+          WHERE s."branchCode" = ${branchCode}
+            AND s."quantity" != 0
+        )
         SELECT
-          s."branchCode" AS "branch_code",
-          (s."branchCode" || ' : ' || COALESCE(b."branch_name", '')) AS "branchCode",
+          sr."branchCode" AS "branch_code",
+          (sr."branchCode" || ' : ' || COALESCE(b."branch_name", '')) AS "branchCode",
           b."branch_name" AS "branch_name",
 
-          s."codeProduct",
-          s."quantity",
+          sr."codeProduct",
+          sr."quantity",
           l."nameProduct",
           l."nameBrand",
           l."purchasePriceExcVAT",
@@ -98,14 +104,12 @@ exports.getStock = async (req, res) => {
 
           NULL::int AS "sales90dQty"
 
-        FROM "Stock" AS s
+        FROM stock_rows AS sr
         JOIN "ListOfItemHold" AS l
-          ON s."codeProduct" = l."codeProduct"
+          ON sr."codeProduct" = l."codeProduct"
         LEFT JOIN "Branch" AS b
-          ON b."branch_code" = s."branchCode"
-        WHERE s."branchCode" = ${branchCode}
-          AND s."quantity" != 0
-        ORDER BY s."branchCode", s."codeProduct";
+          ON b."branch_code" = sr."branchCode"
+        ORDER BY sr."branchCode", sr."codeProduct";
       `;
 
       const data = JSON.parse(
@@ -124,27 +128,13 @@ exports.getStock = async (req, res) => {
     // =========================================================
     if (branchCode) {
       rows = await prisma.$queryRaw`
-        SELECT
-          s."branchCode" AS "branch_code",
-          (s."branchCode" || ' : ' || COALESCE(b."branch_name", '')) AS "branchCode",
-          b."branch_name" AS "branch_name",
-
-          s."codeProduct",
-          s."quantity",
-          l."nameProduct",
-          l."nameBrand",
-          l."purchasePriceExcVAT",
-          l."salesPriceIncVAT",
-
-          s90."sales90dQty"::int AS "sales90dQty"
-
-        FROM "Stock" AS s
-        JOIN "ListOfItemHold" AS l
-          ON s."codeProduct" = l."codeProduct"
-        LEFT JOIN "Branch" AS b
-          ON b."branch_code" = s."branchCode"
-
-        LEFT JOIN (
+        WITH stock_rows AS (
+          SELECT s."branchCode", s."codeProduct", s."quantity"
+          FROM "Stock" AS s
+          WHERE s."branchCode" = ${branchCode}
+            AND s."quantity" != 0
+        ),
+        sales90 AS (
           SELECT
             br."branch_code"           AS "branchCode",
             (prod."product_code")::int AS "codeProduct",
@@ -156,24 +146,37 @@ exports.getStock = async (req, res) => {
             ON b."branchId" = br."id"
           JOIN "Product" prod
             ON bi."productId" = prod."id"
+          JOIN stock_rows sr
+            ON sr."branchCode" = br."branch_code"
+           AND sr."codeProduct" = (prod."product_code")::int
           WHERE br."branch_code" = ${branchCode}
             AND b."date" >= ${startUtc}
             AND b."date" <= ${endUtc}
-            AND EXISTS (
-              SELECT 1
-              FROM "Stock" s2
-              WHERE s2."branchCode" = br."branch_code"
-                AND s2."codeProduct" = (prod."product_code")::int
-                AND s2."quantity" != 0
-            )
           GROUP BY br."branch_code", (prod."product_code")::int
-        ) s90
-          ON s."branchCode" = s90."branchCode"
-         AND s."codeProduct" = s90."codeProduct"
+        )
+        SELECT
+          sr."branchCode" AS "branch_code",
+          (sr."branchCode" || ' : ' || COALESCE(b."branch_name", '')) AS "branchCode",
+          b."branch_name" AS "branch_name",
 
-        WHERE s."branchCode" = ${branchCode}
-          AND s."quantity" != 0
-        ORDER BY s."branchCode", s."codeProduct";
+          sr."codeProduct",
+          sr."quantity",
+          l."nameProduct",
+          l."nameBrand",
+          l."purchasePriceExcVAT",
+          l."salesPriceIncVAT",
+
+          s90."sales90dQty"::int AS "sales90dQty"
+
+        FROM stock_rows AS sr
+        JOIN "ListOfItemHold" AS l
+          ON sr."codeProduct" = l."codeProduct"
+        LEFT JOIN "Branch" AS b
+          ON b."branch_code" = sr."branchCode"
+        LEFT JOIN sales90 s90
+          ON sr."branchCode" = s90."branchCode"
+         AND sr."codeProduct" = s90."codeProduct"
+        ORDER BY sr."branchCode", sr."codeProduct";
       `;
     } else {
       // =========================================================
@@ -182,31 +185,12 @@ exports.getStock = async (req, res) => {
       // -> สาขา exclude จะได้ sales90dQty = NULL
       // =========================================================
       rows = await prisma.$queryRaw`
-        SELECT
-          s."branchCode" AS "branch_code",
-          (s."branchCode" || ' : ' || COALESCE(b."branch_name", '')) AS "branchCode",
-          b."branch_name" AS "branch_name",
-
-          s."codeProduct",
-          s."quantity",
-          l."nameProduct",
-          l."nameBrand",
-          l."purchasePriceExcVAT",
-          l."salesPriceIncVAT",
-
-          CASE
-            WHEN UPPER(TRIM(s."branchCode")) IN ('EC000','ST000','ST036','ST037')
-              THEN NULL::int
-            ELSE s90."sales90dQty"::int
-          END AS "sales90dQty"
-
-        FROM "Stock" AS s
-        JOIN "ListOfItemHold" AS l
-          ON s."codeProduct" = l."codeProduct"
-        LEFT JOIN "Branch" AS b
-          ON b."branch_code" = s."branchCode"
-
-        LEFT JOIN (
+        WITH stock_rows AS (
+          SELECT s."branchCode", s."codeProduct", s."quantity"
+          FROM "Stock" AS s
+          WHERE s."quantity" != 0
+        ),
+        sales90 AS (
           SELECT
             br."branch_code"           AS "branchCode",
             (prod."product_code")::int AS "codeProduct",
@@ -218,24 +202,42 @@ exports.getStock = async (req, res) => {
             ON b."branchId" = br."id"
           JOIN "Product" prod
             ON bi."productId" = prod."id"
+          JOIN stock_rows sr
+            ON sr."branchCode" = br."branch_code"
+           AND sr."codeProduct" = (prod."product_code")::int
           WHERE b."date" >= ${startUtc}
             AND b."date" <= ${endUtc}
             -- ✅ ไม่คำนวณยอดขายให้ 4 สาขานี้เลย
             AND br."branch_code" NOT IN ('EC000','ST000','ST036','ST037')
-            AND EXISTS (
-              SELECT 1
-              FROM "Stock" s2
-              WHERE s2."branchCode" = br."branch_code"
-                AND s2."codeProduct" = (prod."product_code")::int
-                AND s2."quantity" != 0
-            )
           GROUP BY br."branch_code", (prod."product_code")::int
-        ) s90
-          ON s."branchCode" = s90."branchCode"
-         AND s."codeProduct" = s90."codeProduct"
+        )
+        SELECT
+          sr."branchCode" AS "branch_code",
+          (sr."branchCode" || ' : ' || COALESCE(b."branch_name", '')) AS "branchCode",
+          b."branch_name" AS "branch_name",
 
-        WHERE s."quantity" != 0
-        ORDER BY s."branchCode", s."codeProduct";
+          sr."codeProduct",
+          sr."quantity",
+          l."nameProduct",
+          l."nameBrand",
+          l."purchasePriceExcVAT",
+          l."salesPriceIncVAT",
+
+          CASE
+            WHEN UPPER(TRIM(sr."branchCode")) IN ('EC000','ST000','ST036','ST037')
+              THEN NULL::int
+            ELSE s90."sales90dQty"::int
+          END AS "sales90dQty"
+
+        FROM stock_rows AS sr
+        JOIN "ListOfItemHold" AS l
+          ON sr."codeProduct" = l."codeProduct"
+        LEFT JOIN "Branch" AS b
+          ON b."branch_code" = sr."branchCode"
+        LEFT JOIN sales90 s90
+          ON sr."branchCode" = s90."branchCode"
+         AND sr."codeProduct" = s90."codeProduct"
+        ORDER BY sr."branchCode", sr."codeProduct";
       `;
     }
 
