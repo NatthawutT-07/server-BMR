@@ -95,81 +95,6 @@ const touchDataSync = async (key, rowCount) => {
 };
 
 
-
-// exports.uploadPartnersCSV = async (req, res) => {
-//     if (!req.file) return res.status(400).send('No file uploaded');
-
-//     const results = [];
-
-//     // ✅ ใช้ buffer จาก memory แทนการอ่านไฟล์จากดิสก์
-//     const bufferStream = new Readable();
-//     bufferStream.push(req.file.buffer);
-//     bufferStream.push(null);
-
-//     bufferStream
-//         .pipe(csv())
-//         .on('data', (data) => {
-//             // console.log('CSV Row:', data);
-//             results.push(data);
-//         })
-//         .on('error', (err) => {
-//             console.error('CSV parse error:', err);
-//             return res.status(500).send('Failed to parse CSV file.');
-//         })
-//         .on('end', async () => {
-//             try {
-//                 // ลบข้อมูลเก่า
-//                 await prisma.partners.deleteMany();
-
-//                 // Mapping ข้อมูลจาก CSV
-//                 const partners = results.map(row => ({
-//                     codeBP: row.BPCode || null,
-//                     nameBP: row.BPName || null,
-//                     accountBalance: row.AccountBalance ? parseFloat(row.AccountBalance.replace(/[^0-9.-]+/g, '')) : null,
-//                     interfaceADA: row.InterfaceStatusforADASoft || null,
-//                     interfaceEDI: row.InterfaceStatusforEDI || null,
-//                     brand: row.Brand || null,
-//                     paymentTermsCode: row.PaymentTermsCode || null,
-//                     noOldBP: row.BPOldNo || null,
-//                     taxGroup: row.TaxGroup || null,
-//                     remarks: row.Remarks || null,
-//                     idNoTwo: row.IDNo2 || null,
-//                     gp: row.GP || null,
-//                     dc: row.DC || null,
-//                     email: row.EMail || null,
-//                     phoneOne: row.Telephone1 || null,
-//                     phoneTwo: row.Telephone2 || null,
-//                     billAddressType: row.BilltoAddressType || null,
-//                     billBlock: row.BilltoBlock || null,
-//                     billBuildingFloorRoom: row.BilltoBuilding || null,
-//                     billCity: row.BilltoCity || null,
-//                     billCountry: row.BilltoCountry || null,
-//                     billCountryNo: row.BilltoCounty || null,
-//                     billZipCode: row.BilltoZipCode || null,
-//                     branchBP: row.BPBranch ? parseInt(row.BPBranch.trim(), 10) : null,
-//                     billExchangeOnCollection: row.BillofExchangeonCollection || null,
-//                     billDefault: row.BilltoDefault || null,
-//                     billState: row.BilltoState || null,
-//                     billStreet: row.BilltoStreet || null,
-//                     billStreetNo: row.BilltoStreetNo || null,
-//                     remarkOne: row.Remark || null,
-//                     groupCode: row.GroupCode || null,
-//                     federalTaxId: row.FederalTaxID || null,
-//                 }));
-
-//                 await prisma.partners.createMany({
-//                     data: partners,
-//                     skipDuplicates: true,
-//                 });
-
-//                 res.status(200).send('CSV uploaded and data saved to DB ✅');
-//             } catch (err) {
-//                 console.error('Database error:', err);
-//                 res.status(500).json({ error: err.message });
-//             }
-//         });
-// };
-
 exports.uploadItemMinMaxXLSX = async (req, res) => {
     if (!req.file) return res.status(400).send("No file uploaded");
 
@@ -315,10 +240,6 @@ exports.uploadItemMinMaxXLSX = async (req, res) => {
         failUploadJob(jobId, err?.message || "failed");
         res.status(500).json({ error: err.message });
     }
-};
-
-exports.uploadStationXLSX = async (req, res) => {
-    return res.status(501).json({ message: "Station upload not implemented yet" });
 };
 
 exports.uploadMasterItemXLSX = async (req, res) => {
@@ -515,112 +436,6 @@ exports.uploadMasterItemXLSX = async (req, res) => {
     }
 };
 
-exports.uploadSalesDayXLSX = async (req, res) => {
-    if (!req.file) return res.status(400).send("No file uploaded");
-
-    const jobId = initUploadJob(req, "upload-sales");
-    setUploadJob(jobId, 5, "reading file");
-
-    try {
-        const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const raw = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
-        setUploadJob(jobId, 20, "parsing rows");
-
-        // หา header
-        const headerRowIndex = raw.findIndex(row =>
-            row.includes("รหัสสินค้า") &&
-            row.includes("รหัสสาขา") &&
-            row.includes("ช่องทางการขาย") &&
-            row.includes("จำนวน")
-        );
-
-        if (headerRowIndex === -1) {
-            return res.status(400).send("❌ ไม่พบ header ของ sales day");
-        }
-
-        const header = raw[headerRowIndex];
-        const dataRows = raw.slice(headerRowIndex + 1);
-
-        // matrix → JSON
-        const rows = dataRows.map(r => {
-            let obj = {};
-            header.forEach((h, i) => obj[h] = r[i]);
-            return obj;
-        });
-
-        // clean + mapping
-        const mapped = rows
-            .filter(row => row["รหัสสินค้า"] && !isNaN(row["รหัสสินค้า"]) && row["รหัสสาขา"])
-            .map(row => ({
-                branchCode: row["รหัสสาขา"].trim(),
-                codeProduct: parseInt(row["รหัสสินค้า"], 10),
-                channelSales: row["ช่องทางการขาย"]?.toString().trim() || null,
-                quantity: parseFloat(row["จำนวน"]) || 0,
-                discount: parseFloat(row["ส่วนลด"]) || 0,
-                totalPrice: parseFloat(row["ยอดขายรวม"]) || 0
-            }));
-
-        if (mapped.length === 0) {
-            return res.status(200).send("No valid sales records found.");
-        }
-
-        // --------------------------------------------------------
-        // STEP 1: รวมข้อมูลซ้ำในไฟล์ (aggregate)
-        // --------------------------------------------------------
-        const agg = {};
-
-        mapped.forEach(r => {
-            const key = `${r.branchCode}|${r.codeProduct}|${r.channelSales || ""}`;
-
-            if (!agg[key]) {
-                agg[key] = { ...r };
-            } else {
-                agg[key].quantity += r.quantity;
-                agg[key].discount += r.discount;
-                agg[key].totalPrice += r.totalPrice;
-            }
-        });
-
-        const finalData = Object.values(agg);
-
-        // --------------------------------------------------------
-        // STEP 2: ลบข้อมูลเก่าทั้งหมด
-        // --------------------------------------------------------
-        setUploadJob(jobId, 60, "clearing old data");
-        await prisma.$executeRaw`DELETE FROM "SalesDay"`;
-
-        // --------------------------------------------------------
-        // STEP 3: Insert ใหม่แบบ batch เร็วมาก
-        // --------------------------------------------------------
-        const values = finalData.map((r) =>
-            Prisma.sql`(${r.branchCode}, ${r.channelSales}, ${r.codeProduct}, ${r.quantity}, ${r.discount}, ${r.totalPrice})`
-        );
-
-        const sql = Prisma.sql`
-            INSERT INTO "SalesDay"
-                ("branchCode", "channelSales", "codeProduct", "quantity", "discount", "totalPrice")
-            VALUES ${Prisma.join(values)}
-        `;
-
-        setUploadJob(jobId, 85, "saving data");
-        await prisma.$executeRaw(sql);
-
-        await touchDataSync("sales-day", finalData.length);
-
-        finishUploadJob(jobId, "completed");
-        return res.status(200).json({
-            message: "SalesDay imported successfully",
-            inserted: finalData.length
-        });
-
-    } catch (err) {
-        console.error("XLSX Error:", err);
-        failUploadJob(jobId, err?.message || "failed");
-        res.status(500).json({ error: err.message });
-    }
-};
-
 exports.uploadStockXLSX = async (req, res) => {
     if (!req.file) return res.status(400).send("No file uploaded");
 
@@ -721,116 +536,6 @@ exports.uploadStockXLSX = async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 };
-
-
-// exports.uploadWithdrawXLSX = async (req, res) => {
-//     if (!req.file) return res.status(400).send("No file uploaded");
-
-//     try {
-//         const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
-//         const sheet = workbook.Sheets[workbook.SheetNames[0]];
-//         const raw = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
-
-//         // ------------------------------------------------------------
-//         // 1) หาแถว Header
-//         // ------------------------------------------------------------
-//         const headerRowIndex = raw.findIndex(row =>
-//             row.includes("รหัสสินค้า") &&
-//             row.includes("เลขที่เอกสาร") &&
-//             row.includes("จำนวน") &&
-//             row.includes("สาขา")
-//         );
-
-//         if (headerRowIndex === -1) {
-//             return res.status(400).send("❌ ไม่พบหัวตาราง withdraw");
-//         }
-
-//         const header = raw[headerRowIndex];
-//         const dataRows = raw.slice(headerRowIndex + 1);
-
-//         // ------------------------------------------------------------
-//         // 2) แปลง Matrix → JSON
-//         // ------------------------------------------------------------
-//         const rows = dataRows.map(r => {
-//             let obj = {};
-//             header.forEach((h, i) => obj[h] = r[i]);
-//             return obj;
-//         });
-
-//         // ------------------------------------------------------------
-//         // 3) Clean + Mapping
-//         // ------------------------------------------------------------
-//         const mapped = rows
-//             .filter(row =>
-//                 row["รหัสสินค้า"] &&
-//                 !isNaN(row["รหัสสินค้า"]) &&
-//                 row["สาขา"]
-//             )
-//             .map(row => {
-//                 const codeProduct = parseInt(row["รหัสสินค้า"], 10);
-//                 if (!codeProduct) return null;
-
-//                 // สกัดรหัสสาขาแบบ (ST024) The Nine → ST024
-//                 let branchCode = row["สาขา"]
-//                     ?.split(")")[0]
-//                     ?.replace("(", "")
-//                     ?.trim();
-//                 if (!branchCode) return null;
-
-//                 let qty = parseFloat(row["จำนวน"]);
-//                 if (isNaN(qty)) qty = 0;
-
-//                 let val = parseFloat(row["มูลค่าเบิกออก"]);
-//                 if (isNaN(val)) val = 0;
-
-//                 // escape single quotes
-//                 const esc = (str) =>
-//                     str ? `'${str.replace(/'/g, "''")}'` : "NULL";
-
-//                 return `
-//                     (${codeProduct},
-//                     '${branchCode}',
-//                     ${esc(row["เลขที่เอกสาร"])},
-//                     ${esc(row["วันที่"])},
-//                     ${esc(row["สถานะเอกสาร"])},
-//                     ${esc(row["เหตุผล"])},
-//                     ${qty},
-//                     ${val})
-//                 `;
-//             })
-//             .filter(v => v !== null);
-
-//         if (mapped.length === 0) {
-//             return res.status(200).send("No valid withdraw rows found.");
-//         }
-
-//         // ------------------------------------------------------------
-//         // 4) Clear Table (ต้องล้างก่อน insert)
-//         // ------------------------------------------------------------
-//         await prisma.$executeRawUnsafe(`DELETE FROM "withdraw"`);
-
-//         // ------------------------------------------------------------
-//         // 5) Build Ultra-Fast Bulk Insert
-//         // ------------------------------------------------------------
-//         const sql = `
-//             INSERT INTO "withdraw"
-//             ("codeProduct", "branchCode", "docNumber", "date", "docStatus", "reason", "quantity", "value")
-//             VALUES ${mapped.join(",")}
-//         `;
-
-//         await prisma.$executeRawUnsafe(sql);
-
-//         return res.status(200).json({
-//             message: "withdraw XLSX imported (Ultra-Fast)",
-//             inserted: mapped.length
-//         });
-
-//     } catch (err) {
-//         console.error("XLSX Error:", err);
-//         res.status(500).json({ error: err.message });
-//     }
-// };
-
 
 exports.uploadWithdrawXLSX = async (req, res) => {
     if (!req.file) return res.status(400).send("No file uploaded");
@@ -1210,7 +915,6 @@ exports.uploadGourmetXLSX = async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 };
-
 
 exports.uploadSKU_XLSX = async (req, res) => {
     if (!req.file) return res.status(400).send("No file uploaded");

@@ -1,5 +1,6 @@
 const express = require("express");
 const app = express();
+app.disable("x-powered-by");
 
 const morgan = require("morgan");
 const cors = require("cors");
@@ -153,6 +154,22 @@ app.use(
   helmet({
     crossOriginEmbedderPolicy: false,
     crossOriginResourcePolicy: { policy: "cross-origin" },
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        baseUri: ["'self'"],
+        objectSrc: ["'none'"],
+        frameAncestors: ["'none'"],
+        imgSrc: ["'self'", "data:", "https:"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+      },
+    },
+    referrerPolicy: { policy: "no-referrer" },
+    hsts:
+      process.env.NODE_ENV === "production"
+        ? { maxAge: 15552000, includeSubDomains: true, preload: true }
+        : false,
   })
 );
 
