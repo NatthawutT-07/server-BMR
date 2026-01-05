@@ -5,10 +5,12 @@ const morgan = require("morgan");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const compression = require("compression");
+const helmet = require("helmet");
 const fs = require("fs");
 const path = require("path");
 const jwt = require("jsonwebtoken");
 require("dotenv").config();
+const { ensureCsrfCookie } = require("./middlewares/csrf");
 
 // ✅ อยู่หลัง proxy (เช่น Cloudflare / Nginx)
 app.set("trust proxy", 1);
@@ -145,6 +147,17 @@ app.use(
 
 app.use(express.json({ limit: "20mb" }));
 app.use(cookieParser());
+
+// ✅ Security headers (helmet)
+app.use(
+  helmet({
+    crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+  })
+);
+
+// ✅ CSRF cookie (double-submit)
+app.use(ensureCsrfCookie);
 
 // ✅ CORS (ต้องเปิด credentials เพื่อส่ง cookie refresh token)
 const allowedOrigins = [
