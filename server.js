@@ -16,9 +16,11 @@ const { ensureCsrfCookie } = require("./middlewares/csrf");
 // ✅ อยู่หลัง proxy (เช่น Cloudflare / Nginx)
 app.set("trust proxy", 1);
 
-
 // ✅ CORS (ต้องเปิด credentials เพื่อส่ง cookie refresh token)
 const allowedOrigins = [
+  // "https://web-bmr.ngrok.app",
+  // "http://localhost:4173",
+  // "http://localhost:5173",
   "https://bmrpog.com",
 ];
 
@@ -147,11 +149,11 @@ app.use(
 );
 
 // ---------- log ลง console (ใส่สี) ----------
-// app.use(
-//   morgan(
-//     ':th-time | user=:user | ip=:real-ip | :method-color :url | :status-color | :response-time ms'
-//   )
-// );
+app.use(
+  morgan(
+    ':th-time | user=:user | ip=:real-ip | :method-color :url | :status-color | :response-time ms'
+  )
+);
 
 /* =========================
    Middlewares

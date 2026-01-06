@@ -436,6 +436,9 @@ exports.uploadMasterItemXLSX = async (req, res) => {
     }
 };
 
+// Batch size สำหรับ insert
+const BATCH_SIZE = 1000;
+
 exports.uploadStockXLSX = async (req, res) => {
     if (!req.file) return res.status(400).send("No file uploaded");
 
@@ -443,11 +446,13 @@ exports.uploadStockXLSX = async (req, res) => {
     setUploadJob(jobId, 5, "reading file");
 
     try {
+        // อ่านไฟล์
         const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
         const raw = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
         setUploadJob(jobId, 20, "parsing rows");
 
+        // หาหัวตาราง
         const headerRowIndex = raw.findIndex(
             (row) =>
                 row.includes("รหัสสินค้า") &&
@@ -474,23 +479,15 @@ exports.uploadStockXLSX = async (req, res) => {
             .filter((row) => {
                 const code = row["รหัสสินค้า"];
                 const branch = row["รหัสสาขา"];
-                if (!code || isNaN(code)) return false;
-                if (!branch) return false;
-                return true;
+                return code && !isNaN(code) && branch;
             })
             .map((row) => {
                 const codeProduct = parseInt(row["รหัสสินค้า"], 10);
-
                 const branchCode = (row["รหัสสาขา"] || "").trim();
-
                 let qty = parseFloat(row["จำนวนคงเหลือ"]);
-                if (isNaN(qty)) qty = 0;
-                if (qty > INT32_MAX || qty < INT32_MIN) qty = 0;
+                if (isNaN(qty) || qty > INT32_MAX || qty < INT32_MIN) qty = 0;
                 qty = Math.floor(qty);
-
-                // ✅ qty = 0 ข้ามทันที
-                if (qty === 0) return null;
-
+                if (qty === 0) return null; // ข้าม qty = 0
                 return { codeProduct, branchCode, quantity: qty };
             })
             .filter(Boolean);
@@ -500,40 +497,38 @@ exports.uploadStockXLSX = async (req, res) => {
         }
 
         setUploadJob(jobId, 60, "saving data");
-        await prisma.$transaction(async (tx) => {
-            // ล้างข้อมูลเดิม
-            await tx.$executeRaw`TRUNCATE TABLE "Stock"`;
 
-            // insert ใหม่
-            const values = mapped.map((r) =>
-                Prisma.sql`(${r.codeProduct}, ${r.branchCode}, ${r.quantity})`
-            );
-            const insertSql = Prisma.sql`
-                INSERT INTO "Stock" ("codeProduct", "branchCode", "quantity")
-                VALUES ${Prisma.join(values)}
-            `;
-            await tx.$executeRaw(insertSql);
+        // ล้างข้อมูลเก่า
+        await prisma.$executeRaw`TRUNCATE TABLE "Stock"`;
 
-            // ✅ บันทึกเวลาอัปเดตล่าสุด (แค่ 1 แถว)
-            const syncSql = Prisma.sql`
-                INSERT INTO "DataSync" ("key", "updatedAt", "rowCount")
-                VALUES ('stock', NOW(), ${mapped.length})
-                ON CONFLICT ("key")
-                DO UPDATE SET "updatedAt" = EXCLUDED."updatedAt",
-                              "rowCount"  = EXCLUDED."rowCount"
-            `;
-            await tx.$executeRaw(syncSql);
+        // insert แบบ batch
+        for (let i = 0; i < mapped.length; i += BATCH_SIZE) {
+            const chunk = mapped.slice(i, i + BATCH_SIZE);
+            await prisma.stock.createMany({
+                data: chunk,
+                skipDuplicates: true,
+            });
+            const progress = 60 + Math.floor((i / mapped.length) * 35);
+            setUploadJob(jobId, progress, `saving ${i}/${mapped.length}`);
+        }
+
+        // อัปเดตเวลาอัปเดตล่าสุด
+        await prisma.dataSync.upsert({
+            where: { key: 'stock' },
+            update: { updatedAt: new Date(), rowCount: mapped.length },
+            create: { key: 'stock', updatedAt: new Date(), rowCount: mapped.length },
         });
 
         finishUploadJob(jobId, "completed");
+
         return res.status(200).json({
-            message: "Stock XLSX imported successfully (Ultra-Fast)",
+            message: "Stock XLSX imported successfully (batch insert)",
             inserted: mapped.length,
         });
     } catch (err) {
         console.error("XLSX Error:", err);
         failUploadJob(jobId, err?.message || "failed");
-        res.status(500).json({ error: err.message });
+        return res.status(500).json({ error: err.message });
     }
 };
 
