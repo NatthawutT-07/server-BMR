@@ -16,6 +16,24 @@ const { ensureCsrfCookie } = require("./middlewares/csrf");
 // ✅ อยู่หลัง proxy (เช่น Cloudflare / Nginx)
 app.set("trust proxy", 1);
 
+
+// ✅ CORS (ต้องเปิด credentials เพื่อส่ง cookie refresh token)
+const allowedOrigins = [
+  "https://bmrpog.com",
+];
+
+app.use(
+  cors({
+    origin: (origin, cb) => {
+      if (!origin) return cb(null, true);
+      if (allowedOrigins.includes(origin)) return cb(null, true);
+      return cb(new Error(`CORS blocked: ${origin}`));
+    },
+    credentials: true,
+  })
+);
+app.options("*", cors());
+
 /* =========================
    Helpers: Client IP + User
 ========================= */
@@ -130,11 +148,11 @@ app.use(
 );
 
 // ---------- log ลง console (ใส่สี) ----------
-app.use(
-  morgan(
-    ':th-time | user=:user | ip=:real-ip | :method-color :url | :status-color | :response-time ms'
-  )
-);
+// app.use(
+//   morgan(
+//     ':th-time | user=:user | ip=:real-ip | :method-color :url | :status-color | :response-time ms'
+//   )
+// );
 
 /* =========================
    Middlewares
@@ -215,21 +233,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// ✅ CORS (ต้องเปิด credentials เพื่อส่ง cookie refresh token)
-const allowedOrigins = [
-  "https://bmrpog.com",
-];
 
-app.use(
-  cors({
-    origin: (origin, cb) => {
-      if (!origin) return cb(null, true);
-      if (allowedOrigins.includes(origin)) return cb(null, true);
-      return cb(new Error(`CORS blocked: ${origin}`));
-    },
-    credentials: true,
-  })
-);
 
 // routes
 app.use("/api", require("./router/auth"));
