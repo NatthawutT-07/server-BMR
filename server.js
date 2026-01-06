@@ -32,7 +32,6 @@ app.use(
     credentials: true,
   })
 );
-app.options("*", cors());
 
 /* =========================
    Helpers: Client IP + User
