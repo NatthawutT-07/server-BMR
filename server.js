@@ -20,7 +20,7 @@ app.set("trust proxy", 1);
 const allowedOrigins = [
   // "https://web-bmr.ngrok.app",
   // "http://localhost:4173",
-  // "http://localhost:5173",
+  "http://localhost:5173",
   "https://bmrpog.com",
 ];
 

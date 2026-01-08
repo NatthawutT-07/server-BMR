@@ -270,3 +270,35 @@ model BillItem {
   // Index เสริมสำหรับ dashboard product (JOIN Bill + GROUP BY product)
   @@index([billId, productId])
 }
+
+model PogRequest {
+  id              Int      @id @default(autoincrement())
+  branchCode      String
+  action          String   // "add" | "swap" | "delete"
+  barcode         String
+  productName     String?
+  
+  // Current position
+  fromShelf       String?
+  fromRow         Int?
+  fromIndex       Int?
+  
+  // Target position (for add/swap)
+  toShelf         String?
+  toRow           Int?
+  toIndex         Int?
+  
+  // For swap - second product
+  swapBarcode     String?
+  swapProductName String?
+  
+  status          String   @default("pending") // pending | approved | rejected | completed
+  note            String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([branchCode, status])
+  @@index([status])
+  @@index([createdAt])
+}
+

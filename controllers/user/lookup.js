@@ -33,7 +33,17 @@ const lookupByBarcode = async (req, res) => {
     });
 
     if (!loc.length) {
-      return res.json({ found: false, reason: "NO_LOCATION_IN_POG", product: item });
+      return res.json({
+        found: false,
+        reason: "NO_LOCATION_IN_POG",
+        product: {
+          codeProduct: item.codeProduct,
+          barcode: item.barcode,
+          name: item.nameProduct,
+          brand: item.nameBrand,
+          price: item.salesPriceIncVAT,
+        },
+      });
     }
 
     const shelfCodes = [...new Set(loc.map((x) => x.shelfCode))];

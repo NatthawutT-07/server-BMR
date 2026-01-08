@@ -69,7 +69,6 @@ const { getStock } = require("../controllers/admin/stock");
 router.get("/stock-data", authCheck, getStock)
 
 
-
 //Tamplate 
 router.get("/shelf-template", authCheck, tamplate); //Tamplate //user
 router.get("/shelf-getMasterItem", authCheck, getMasterItem);
@@ -80,6 +79,12 @@ router.put("/shelf-update", authCheck, itemUpdate)
 router.get("/shelf-dashboard-summary", authCheck, getShelfDashboardSummary);
 router.get("/shelf-dashboard-shelf-sales", authCheck, getShelfDashboardShelfSales);
 // router.get("/shelf-summary",  summary)
+
+// POG Request - Admin
+const { getAllPogRequests, updatePogRequestStatus, deletePogRequest } = require('../controllers/admin/pogRequest');
+router.get("/pog-requests", authCheck, adminCheck, getAllPogRequests);
+router.patch("/pog-requests/:id", authCheck, adminCheck, updatePogRequestStatus);
+router.delete("/pog-requests/:id", authCheck, adminCheck, deletePogRequest);
 
 
 module.exports = router;
