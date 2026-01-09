@@ -266,7 +266,7 @@ const getAllPogRequests = async (req, res) => {
 const updatePogRequestStatus = async (req, res) => {
     try {
         const { id } = req.params;
-        const { status, note } = req.body;
+        const { status, note, rejectReason } = req.body;
 
         if (!id) {
             return res.status(400).json({
@@ -286,7 +286,10 @@ const updatePogRequestStatus = async (req, res) => {
 
         const updateData = {};
         if (status) updateData.status = status;
+
+        // ✅ Support both note and rejectReason (for reject with reason)
         if (note !== undefined) updateData.note = note;
+        if (rejectReason !== undefined) updateData.note = rejectReason;
 
         // ✅ AUTO-APPLY if Completed
         if (status === "completed") {
