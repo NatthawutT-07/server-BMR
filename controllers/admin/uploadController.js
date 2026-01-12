@@ -2,6 +2,9 @@ const prisma = require('../../config/prisma');
 const { Prisma } = require("@prisma/client");
 const XLSX = require("xlsx");
 
+// ✅ Worker Thread สำหรับ Parse Excel (ไม่ Block Event Loop)
+const { runExcelWorker } = require("../../workers/workerHelper");
+
 const uploadJobs = new Map();
 const MAX_JOB_AGE_MS = 6 * 60 * 60 * 1000;
 
@@ -95,69 +98,27 @@ const touchDataSync = async (key, rowCount) => {
 };
 
 
+// ✅ ใช้ Worker Thread สำหรับ Parse Excel (ไม่ Block Event Loop)
 exports.uploadItemMinMaxXLSX = async (req, res) => {
     if (!req.file) return res.status(400).send("No file uploaded");
 
     const jobId = initUploadJob(req, "upload-minmax");
-    setUploadJob(jobId, 5, "reading file");
+    setUploadJob(jobId, 5, "starting worker");
 
     try {
-        const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        setUploadJob(jobId, 20, "parsing rows");
-
-        // อ่านทุกแถว
-        const raw = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
-
-        // ---------------------------
-        // 1) Detect header
-        // ---------------------------
-        const headerRowIndex = raw.findIndex(row =>
-            row.includes("BranchCode") &&
-            row.includes("ItemCode") &&
-            row.includes("MinStock") &&
-            row.includes("MaxStock")
+        // ✅ ใช้ Worker Thread parse Excel (Non-blocking)
+        const mapped = await runExcelWorker(
+            req.file.buffer,
+            "minmax",
+            (progress, message) => setUploadJob(jobId, progress, message)
         );
 
-        if (headerRowIndex === -1) {
-            return res.status(400).send("❌ Header Format Incorrect");
+        if (!mapped || mapped.length === 0) {
+            failUploadJob(jobId, "No valid data found");
+            return res.status(400).json({ error: "No valid data found in file" });
         }
 
-        const header = raw[headerRowIndex];
-        const dataRows = raw.slice(headerRowIndex + 1);
-
-        // ---------------------------
-        // 2) Convert rows → objects
-        // ---------------------------
-        const mapped = dataRows.map(r => {
-            let obj = {};
-            header.forEach((h, i) => obj[h] = r[i]);
-
-            const rawCode = obj.BranchCode?.trim();
-            const item = obj.ItemCode;
-
-            if (!rawCode || !item) return null;
-
-            const prefix = rawCode.slice(0, 2);
-            const num = parseInt(rawCode.slice(2), 10);
-            if (isNaN(num)) return null;
-
-            const branchCode = prefix + num.toString().padStart(3, "0");
-            const codeProduct = parseInt(item, 10);
-            if (isNaN(codeProduct)) return null;
-
-            let min = parseInt(obj.MinStock, 10);
-            let max = parseInt(obj.MaxStock, 10);
-            if (isNaN(min)) min = null;
-            if (isNaN(max)) max = null;
-
-            return {
-                branchCode,
-                codeProduct,
-                minStore: min,
-                maxStore: max
-            };
-        }).filter(v => v !== null);
+        setUploadJob(jobId, 85, "comparing with database");
 
         // ---------------------------
         // 3) Load all existing rows (only 1 query)
@@ -204,7 +165,6 @@ exports.uploadItemMinMaxXLSX = async (req, res) => {
 
         // ---------------------------
         // 6) Batch Update (Super Fast)
-        // Prisma ไม่มี updateMany แบบหลายเงื่อนไข → ใช้ raw SQL
         // ---------------------------
         if (toUpdate.length > 0) {
             const values = toUpdate.map((r) =>
@@ -225,103 +185,49 @@ exports.uploadItemMinMaxXLSX = async (req, res) => {
             await prisma.$executeRaw(sql);
         }
 
-        setUploadJob(jobId, 90, "saving data");
+        setUploadJob(jobId, 95, "saving data");
 
         finishUploadJob(jobId, "completed");
         return res.status(200).json({
-            message: "Item MinMax imported successfully",
+            message: "Item MinMax imported successfully (Worker Thread)",
             inserted: toInsert.length,
             updated: toUpdate.length,
             skipped: mapped.length - (toInsert.length + toUpdate.length)
         });
 
     } catch (err) {
-        console.error("XLSX Error:", err);
+        console.error("XLSX Worker Error:", err);
         failUploadJob(jobId, err?.message || "failed");
         res.status(500).json({ error: err.message });
     }
 };
 
+// ✅ ใช้ Worker Thread สำหรับ Parse Excel (ไม่ Block Event Loop)
 exports.uploadMasterItemXLSX = async (req, res) => {
     if (!req.file) return res.status(400).send("No file uploaded");
 
     const jobId = initUploadJob(req, "upload-masterItem");
-    setUploadJob(jobId, 5, "reading file");
+    setUploadJob(jobId, 5, "starting worker");
 
     try {
-        const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const raw = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
-        setUploadJob(jobId, 20, "parsing rows");
-
-        //------------------------------------------
-        // 1) หา header
-        //------------------------------------------
-        const headerRowIndex = raw.findIndex(row =>
-            row.includes("Item No.") &&
-            row.includes("Item Description") &&
-            row.includes("Sales Price (Inc. VAT)")
+        // ✅ ใช้ Worker Thread parse Excel (Non-blocking)
+        const mapped = await runExcelWorker(
+            req.file.buffer,
+            "masterItem",
+            (progress, message) => setUploadJob(jobId, progress, message)
         );
 
-        if (headerRowIndex === -1) {
-            return res.status(400).send("❌ ไม่พบ header master item");
+        if (!mapped || mapped.length === 0) {
+            failUploadJob(jobId, "No valid data found");
+            return res.status(400).json({ error: "No valid master item data found in file" });
         }
 
-        const header = raw[headerRowIndex];
-        const dataRows = raw.slice(headerRowIndex + 1);
-
-        //------------------------------------------
-        // 2) Matrix → JSON using header
-        //------------------------------------------
-        const rows = dataRows.map(r => {
-            let obj = {};
-            header.forEach((h, i) => obj[h] = r[i]);
-            return obj;
-        });
-
-        //------------------------------------------
-        // 3) Clean
-        //------------------------------------------
-        const cleaned = rows.filter(r =>
-            r["Item No."] && !isNaN(r["Item No."])
-        );
-
-        //------------------------------------------
-        // 4) Map into Prisma format
-        //------------------------------------------
-        const mapped = cleaned.map(row => ({
-            codeProduct: parseInt(row["Item No."], 10),
-
-            nameProduct: row["Item Description"] || null,
-            groupName: row["Group Name"] || null,
-            status: row["Status"] || null,
-
-            barcode: row["Bar Code"] || null,
-            nameBrand: row["Name"] || null,
-
-            consingItem: row["Consign Item"] || null,
-
-            purchasePriceExcVAT: row["Purchase Price (Exc. VAT)"]
-                ? parseFloat(row["Purchase Price (Exc. VAT)"])
-                : 0,
-
-            salesPriceIncVAT: row["Sales Price (Inc. VAT)"]
-                ? parseFloat(row["Sales Price (Inc. VAT)"])
-                : 0,
-
-            preferredVandorCode: row["Preferred Vendor"] || null,
-            preferredVandorName: row["Preferred Vendor Name"] || null,
-
-            GP: row["GP %"] != null && row["GP %"] !== "" ? String(row["GP %"]) : null,
-            shelfLife: row["Shelf Life (Days)"] != null && row["Shelf Life (Days)"] !== "" ? String(row["Shelf Life (Days)"]) : null,
-
-            productionDate: row["Production Date"] || null,
-            vatGroupPu: row["VatGroupPu"] || null
-        }));
+        setUploadJob(jobId, 85, "comparing with database");
 
         //------------------------------------------
         // 5) Load existing items (1 query only)
         //------------------------------------------
+
         const existingRows = await prisma.listOfItemHold.findMany();
         const dbMap = new Map();
 
@@ -439,64 +345,27 @@ exports.uploadMasterItemXLSX = async (req, res) => {
 // Batch size สำหรับ insert
 const BATCH_SIZE = 1000;
 
+// ✅ ใช้ Worker Thread สำหรับ Parse Excel (ไม่ Block Event Loop)
 exports.uploadStockXLSX = async (req, res) => {
     if (!req.file) return res.status(400).send("No file uploaded");
 
     const jobId = initUploadJob(req, "upload-stock");
-    setUploadJob(jobId, 5, "reading file");
+    setUploadJob(jobId, 5, "starting worker");
 
     try {
-        // อ่านไฟล์
-        const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const raw = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
-        setUploadJob(jobId, 20, "parsing rows");
-
-        // หาหัวตาราง
-        const headerRowIndex = raw.findIndex(
-            (row) =>
-                row.includes("รหัสสินค้า") &&
-                row.includes("รหัสสาขา") &&
-                row.includes("จำนวนคงเหลือ")
+        // ✅ ใช้ Worker Thread parse Excel (Non-blocking)
+        const mapped = await runExcelWorker(
+            req.file.buffer,
+            "stock",
+            (progress, message) => setUploadJob(jobId, progress, message)
         );
-        if (headerRowIndex === -1) {
-            return res.status(400).send("❌ ไม่พบ header ของ Stock XLSX");
-        }
 
-        const header = raw[headerRowIndex];
-        const dataRows = raw.slice(headerRowIndex + 1);
-
-        const rows = dataRows.map((r) => {
-            let obj = {};
-            header.forEach((h, i) => (obj[h] = r[i]));
-            return obj;
-        });
-
-        const INT32_MAX = 2147483647;
-        const INT32_MIN = -2147483648;
-
-        const mapped = rows
-            .filter((row) => {
-                const code = row["รหัสสินค้า"];
-                const branch = row["รหัสสาขา"];
-                return code && !isNaN(code) && branch;
-            })
-            .map((row) => {
-                const codeProduct = parseInt(row["รหัสสินค้า"], 10);
-                const branchCode = (row["รหัสสาขา"] || "").trim();
-                let qty = parseFloat(row["จำนวนคงเหลือ"]);
-                if (isNaN(qty) || qty > INT32_MAX || qty < INT32_MIN) qty = 0;
-                qty = Math.floor(qty);
-                if (qty === 0) return null; // ข้าม qty = 0
-                return { codeProduct, branchCode, quantity: qty };
-            })
-            .filter(Boolean);
-
-        if (mapped.length === 0) {
+        if (!mapped || mapped.length === 0) {
+            failUploadJob(jobId, "No valid stock data");
             return res.status(200).send("No valid stock rows found (all qty = 0 or invalid).");
         }
 
-        setUploadJob(jobId, 60, "saving data");
+        setUploadJob(jobId, 85, "saving data");
 
         // ล้างข้อมูลเก่า
         await prisma.$executeRaw`TRUNCATE TABLE "Stock"`;
@@ -508,7 +377,7 @@ exports.uploadStockXLSX = async (req, res) => {
                 data: chunk,
                 skipDuplicates: true,
             });
-            const progress = 60 + Math.floor((i / mapped.length) * 35);
+            const progress = 85 + Math.floor((i / mapped.length) * 10);
             setUploadJob(jobId, progress, `saving ${i}/${mapped.length}`);
         }
 
@@ -522,101 +391,41 @@ exports.uploadStockXLSX = async (req, res) => {
         finishUploadJob(jobId, "completed");
 
         return res.status(200).json({
-            message: "Stock XLSX imported successfully (batch insert)",
+            message: "Stock XLSX imported successfully (Worker Thread)",
             inserted: mapped.length,
         });
     } catch (err) {
-        console.error("XLSX Error:", err);
+        console.error("XLSX Worker Error:", err);
         failUploadJob(jobId, err?.message || "failed");
         return res.status(500).json({ error: err.message });
     }
 };
 
+
+// ✅ ใช้ Worker Thread สำหรับ Parse Excel (ไม่ Block Event Loop)
 exports.uploadWithdrawXLSX = async (req, res) => {
     if (!req.file) return res.status(400).send("No file uploaded");
 
     const jobId = initUploadJob(req, "upload-withdraw");
-    setUploadJob(jobId, 5, "reading file");
+    setUploadJob(jobId, 5, "starting worker");
 
     try {
-        const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const raw = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
-        setUploadJob(jobId, 20, "parsing rows");
-
-        // ------------------------------------------------------------
-        // 1) หาแถว Header
-        // ------------------------------------------------------------
-        const headerRowIndex = raw.findIndex(row =>
-            row.includes("รหัสสินค้า") &&
-            row.includes("เลขที่เอกสาร") &&
-            row.includes("จำนวน") &&
-            row.includes("สาขา")
+        // ✅ ใช้ Worker Thread parse Excel (Non-blocking)
+        const mapped = await runExcelWorker(
+            req.file.buffer,
+            "withdraw",
+            (progress, message) => setUploadJob(jobId, progress, message)
         );
 
-        if (headerRowIndex === -1) {
-            return res.status(400).send("❌ ไม่พบหัวตาราง withdraw");
-        }
-
-        const header = raw[headerRowIndex];
-        const dataRows = raw.slice(headerRowIndex + 1);
-
-        // ------------------------------------------------------------
-        // 2) แปลง Matrix → JSON
-        // ------------------------------------------------------------
-        const rows = dataRows.map(r => {
-            let obj = {};
-            header.forEach((h, i) => obj[h] = r[i]);
-            return obj;
-        });
-
-        // ------------------------------------------------------------
-        // 3) Clean + Mapping
-        // ------------------------------------------------------------
-        const mapped = rows
-            .filter(row =>
-                row["รหัสสินค้า"] &&
-                !isNaN(row["รหัสสินค้า"]) &&
-                row["สาขา"]
-            )
-            .map(row => {
-                const codeProduct = parseInt(row["รหัสสินค้า"], 10);
-                if (!codeProduct) return null;
-
-                // สกัดรหัสสาขาแบบ (ST024) The Nine → ST024
-                const branchCode = row["สาขา"]
-                    ?.split(")")[0]
-                    ?.replace("(", "")
-                    ?.trim();
-                if (!branchCode) return null;
-
-                let qty = parseFloat(row["จำนวน"]);
-                if (isNaN(qty)) qty = 0;
-
-                let val = parseFloat(row["มูลค่าเบิกออก"]);
-                if (isNaN(val)) val = 0;
-
-                return {
-                    codeProduct,
-                    branchCode,
-                    docNumber: row["เลขที่เอกสาร"] || null,
-                    date: row["วันที่"] || null,
-                    docStatus: row["สถานะเอกสาร"] || null,
-                    reason: row["เหตุผล"] || null,
-                    quantity: qty,
-                    value: val,
-                };
-            })
-            .filter(v => v !== null);
-
-        if (mapped.length === 0) {
+        if (!mapped || mapped.length === 0) {
+            failUploadJob(jobId, "No valid withdraw data");
             return res.status(200).send("No valid withdraw rows found.");
         }
 
         // ------------------------------------------------------------
         // 4) Clear Table (ต้องล้างก่อน insert)
         // ------------------------------------------------------------
-        setUploadJob(jobId, 60, "clearing old data");
+        setUploadJob(jobId, 85, "clearing old data");
         await prisma.$executeRaw`DELETE FROM "withdraw"`;
 
         // ------------------------------------------------------------
@@ -632,21 +441,23 @@ exports.uploadWithdrawXLSX = async (req, res) => {
             VALUES ${Prisma.join(values)}
         `;
 
-        setUploadJob(jobId, 85, "saving data");
+        setUploadJob(jobId, 95, "saving data");
         await prisma.$executeRaw(sql);
 
         finishUploadJob(jobId, "completed");
         return res.status(200).json({
-            message: "withdraw XLSX imported (Ultra-Fast)",
+            message: "withdraw XLSX imported (Worker Thread)",
             inserted: mapped.length
         });
 
     } catch (err) {
-        console.error("XLSX Error:", err);
+        console.error("XLSX Worker Error:", err);
         failUploadJob(jobId, err?.message || "failed");
         res.status(500).json({ error: err.message });
     }
 };
+
+
 
 exports.uploadTemplateXLSX = async (req, res) => {
     if (!req.file) return res.status(400).send("No file uploaded");
