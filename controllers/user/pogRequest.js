@@ -124,10 +124,10 @@ const getMyPogRequests = async (req, res) => {
 };
 
 /**
- * DELETE /api/pog-request/:id
- * User ลบ request ตัวเอง (เฉพาะ pending)
+ * PATCH /api/pog-request/:id/cancel
+ * User ยกเลิก request ตัวเอง (เฉพาะ pending) - ไม่ลบจริง เปลี่ยนสถานะเป็น cancelled
  */
-const deleteMyPogRequest = async (req, res) => {
+const cancelMyPogRequest = async (req, res) => {
     try {
         const { id } = req.params;
         const request = await prisma.pogRequest.findUnique({
@@ -139,23 +139,25 @@ const deleteMyPogRequest = async (req, res) => {
         }
 
         if (request.status !== "pending") {
-            return res.status(400).json({ ok: false, message: "ลบได้เฉพาะรายการที่รอดำเนินการเท่านั้น" });
+            return res.status(400).json({ ok: false, message: "ยกเลิกได้เฉพาะรายการที่รอดำเนินการเท่านั้น" });
         }
 
-        await prisma.pogRequest.delete({
-            where: { id: Number(id) }
+        // ✅ เปลี่ยนสถานะเป็น cancelled แทนการลบ
+        await prisma.pogRequest.update({
+            where: { id: Number(id) },
+            data: { status: "cancelled" }
         });
 
-        return res.json({ ok: true, message: "ลบคำขอสำเร็จ" });
+        return res.json({ ok: true, message: "ยกเลิกคำขอสำเร็จ" });
 
     } catch (error) {
-        console.error("deleteMyPogRequest error:", error);
-        return res.status(500).json({ ok: false, message: "เกิดข้อผิดพลาดในการลบ" });
+        console.error("cancelMyPogRequest error:", error);
+        return res.status(500).json({ ok: false, message: "เกิดข้อผิดพลาดในการยกเลิก" });
     }
 };
 
 module.exports = {
     createPogRequest,
     getMyPogRequests,
-    deleteMyPogRequest,
+    cancelMyPogRequest,
 };

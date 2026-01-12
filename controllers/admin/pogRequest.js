@@ -239,16 +239,43 @@ const getAllPogRequests = async (req, res) => {
         if (status) where.status = status;
         if (action) where.action = action;
 
+        // 1. Get filtered data
         const requests = await prisma.pogRequest.findMany({
             where,
             orderBy: { createdAt: "desc" },
             take: Number(limit),
         });
 
+        // 2. Get stats (counts by status) - use base filter (branch/action) but ignore status filter
+        const statsWhere = {};
+        if (branchCode) statsWhere.branchCode = branchCode;
+        if (action) statsWhere.action = action; // Include action filter in stats if needed, typically stats should reflect current scope
+
+        const statsGroup = await prisma.pogRequest.groupBy({
+            by: ['status'],
+            where: statsWhere,
+            _count: {
+                id: true
+            }
+        });
+
+        const stats = {
+            pending: 0,
+            rejected: 0,
+            completed: 0
+        };
+
+        statsGroup.forEach(g => {
+            if (stats[g.status] !== undefined) {
+                stats[g.status] = g._count.id;
+            }
+        });
+
         return res.json({
             ok: true,
             data: requests,
             count: requests.length,
+            stats, // ✅ Include stats
         });
     } catch (error) {
         console.error("getAllPogRequests error:", error);

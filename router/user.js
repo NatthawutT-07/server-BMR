@@ -1,7 +1,7 @@
 const express = require('express');
 const { authCheck } = require('../middlewares/authCheck');
 const { UserTemplateItem, getStockLastUpdate, getBranchShelves } = require('../controllers/user/template');
-const { createPogRequest, getMyPogRequests, deleteMyPogRequest } = require('../controllers/user/pogRequest');
+const { createPogRequest, getMyPogRequests, cancelMyPogRequest } = require('../controllers/user/pogRequest');
 const router = express.Router()
 
 
@@ -12,7 +12,7 @@ router.get("/branch-shelves", authCheck, getBranchShelves); // ✅ ดึง she
 // POG Request routes (for user)
 router.post('/pog-request', authCheck, createPogRequest);
 router.get('/pog-request', authCheck, getMyPogRequests);
-router.delete('/pog-request/:id', authCheck, deleteMyPogRequest);
+router.patch('/pog-request/:id/cancel', authCheck, cancelMyPogRequest); // ✅ ยกเลิก (ไม่ลบ)
 
 module.exports = router;
 
