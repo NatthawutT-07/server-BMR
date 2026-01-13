@@ -43,7 +43,8 @@ const { getSearchBranchSales, getBranchListSales, getSearchBranchSalesDay
     , getSearchBranchSalesProductMonth, getSearchBranchSalesProductDay,
     searchProductSales,
     getProductSalesDetail,
-    getCustomers } = require("../controllers/admin/sales");
+    getCustomers,
+    getBillItems } = require("../controllers/admin/sales");
 //sales
 router.get('/sales-list-branch', authCheck, getBranchListSales); //user
 router.post('/sales-search-branch', authCheck, getSearchBranchSales);
@@ -53,6 +54,7 @@ router.post('/sales-search-branch-dayproduct', authCheck, getSearchBranchSalesPr
 
 // member
 router.post('/sales-member', getCustomers,);
+router.get('/sales-bill-items/:billId', authCheck, getBillItems);
 
 
 // product search + sales detail
@@ -81,10 +83,12 @@ router.get("/shelf-dashboard-shelf-sales", authCheck, getShelfDashboardShelfSale
 // router.get("/shelf-summary",  summary)
 
 // POG Request - Admin
-const { getAllPogRequests, updatePogRequestStatus, deletePogRequest } = require('../controllers/admin/pogRequest');
+const { getAllPogRequests, updatePogRequestStatus, deletePogRequest, bulkApprove, updatePogRequestPosition } = require('../controllers/admin/pogRequest');
 router.get("/pog-requests", authCheck, adminCheck, getAllPogRequests);
 router.patch("/pog-requests/:id", authCheck, adminCheck, updatePogRequestStatus);
 router.delete("/pog-requests/:id", authCheck, adminCheck, deletePogRequest);
+router.post("/pog-requests/bulk-approve", authCheck, adminCheck, bulkApprove);
+router.put("/pog-requests/:id/position", authCheck, adminCheck, updatePogRequestPosition);
 
 
 module.exports = router;

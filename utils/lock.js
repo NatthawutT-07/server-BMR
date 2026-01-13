@@ -15,3 +15,5 @@ module.exports = {
         await prisma.$queryRawUnsafe(`SELECT pg_advisory_unlock(${key})::text`);
     }
 };
+
+// protected by lock 2 admin ready

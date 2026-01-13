@@ -40,39 +40,40 @@ const createPogRequest = async (req, res) => {
             });
         }
 
-        // Check Pending Duplicate
-        const existing = await prisma.pogRequest.findFirst({
-            where: {
-                branchCode,
-                barcode,
-                status: "pending"
-            }
-        });
-
-        if (existing) {
-            return res.status(400).json({
-                ok: false,
-                message: "มีคำขอนี้อยู่ระหว่างดำเนินการ กรุณาลบคำขอเดิมก่อนหากต้องการส่งใหม่"
+        // ✅ ใช้ Transaction เพื่อป้องกัน Race Condition (2 tabs ส่งพร้อมกัน)
+        const request = await prisma.$transaction(async (tx) => {
+            // Check Pending Duplicate ใน transaction
+            const existing = await tx.pogRequest.findFirst({
+                where: {
+                    branchCode,
+                    barcode,
+                    status: "pending"
+                }
             });
-        }
 
-        const request = await prisma.pogRequest.create({
-            data: {
-                branchCode,
-                action,
-                barcode,
-                productName: productName || null,
-                fromShelf: fromShelf || null,
-                fromRow: fromRow ? Number(fromRow) : null,
-                fromIndex: fromIndex ? Number(fromIndex) : null,
-                toShelf: toShelf || null,
-                toRow: toRow ? Number(toRow) : null,
-                toIndex: toIndex ? Number(toIndex) : null,
-                swapBarcode: swapBarcode || null,
-                swapProductName: swapProductName || null,
-                note: note || null,
-                status: "pending",
-            },
+            if (existing) {
+                throw new Error("มีคำขอนี้อยู่ระหว่างดำเนินการ กรุณาลบคำขอเดิมก่อนหากต้องการส่งใหม่");
+            }
+
+            // Create ใน transaction เดียวกัน
+            return await tx.pogRequest.create({
+                data: {
+                    branchCode,
+                    action,
+                    barcode,
+                    productName: productName || null,
+                    fromShelf: fromShelf || null,
+                    fromRow: fromRow ? Number(fromRow) : null,
+                    fromIndex: fromIndex ? Number(fromIndex) : null,
+                    toShelf: toShelf || null,
+                    toRow: toRow ? Number(toRow) : null,
+                    toIndex: toIndex ? Number(toIndex) : null,
+                    swapBarcode: swapBarcode || null,
+                    swapProductName: swapProductName || null,
+                    note: note || null,
+                    status: "pending",
+                },
+            });
         });
 
         return res.status(201).json({

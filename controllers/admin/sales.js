@@ -696,49 +696,49 @@ exports.getProductSalesDetail = async (req, res) => {
  * Bangkok-safe date helpers
  * ------------------------------*/
 const toBangkokUtcRange = (startStr, endStr) => {
-  const start = new Date(`${startStr}T00:00:00+07:00`);
-  const end = new Date(`${endStr}T23:59:59.999+07:00`);
-  return { start, end };
+    const start = new Date(`${startStr}T00:00:00+07:00`);
+    const end = new Date(`${endStr}T23:59:59.999+07:00`);
+    return { start, end };
 };
 
 const toBkkDayStart = (iso) => new Date(`${iso}T00:00:00+07:00`);
 
 const diffDays = (endISO, startISO) => {
-  const end = toBkkDayStart(endISO);
-  const start = toBkkDayStart(startISO);
-  return Math.max(0, Math.floor((end - start) / 86400000));
+    const end = toBkkDayStart(endISO);
+    const start = toBkkDayStart(startISO);
+    return Math.max(0, Math.floor((end - start) / 86400000));
 };
 
 // DateTime -> YYYY-MM-DD ในเวลา Bangkok
 const toISODateBkk = (dateObj) => {
-  if (!dateObj) return null;
-  const d = new Date(dateObj);
-  if (Number.isNaN(d.getTime())) return null;
+    if (!dateObj) return null;
+    const d = new Date(dateObj);
+    if (Number.isNaN(d.getTime())) return null;
 
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Bangkok",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(d);
+    const parts = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Bangkok",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+    }).formatToParts(d);
 
-  const y = parts.find((p) => p.type === "year")?.value;
-  const m = parts.find((p) => p.type === "month")?.value;
-  const dd = parts.find((p) => p.type === "day")?.value;
-  if (!y || !m || !dd) return null;
-  return `${y}-${m}-${dd}`;
+    const y = parts.find((p) => p.type === "year")?.value;
+    const m = parts.find((p) => p.type === "month")?.value;
+    const dd = parts.find((p) => p.type === "day")?.value;
+    if (!y || !m || !dd) return null;
+    return `${y}-${m}-${dd}`;
 };
 
 const safeDiv = (a, b) => {
-  const x = Number(a || 0);
-  const y = Number(b || 0);
-  return y === 0 ? 0 : x / y;
+    const x = Number(a || 0);
+    const y = Number(b || 0);
+    return y === 0 ? 0 : x / y;
 };
 
 // ตรวจบิลคืน (รองรับชื่อไทย/อังกฤษแบบคร่าว ๆ)
 const isReturnDoc = (docType) => {
-  const s = String(docType || "").toLowerCase();
-  return s.includes("คืน") || s.includes("return") || s.includes("refund");
+    const s = String(docType || "").toLowerCase();
+    return s.includes("คืน") || s.includes("return") || s.includes("refund");
 };
 
 /**
@@ -751,128 +751,128 @@ const isReturnDoc = (docType) => {
  * }
  */
 exports.getCustomers = async (req, res) => {
-  try {
-    const { startDate, endDate, customerId } = req.body || {};
-    if (!startDate || !endDate) {
-      return res.status(400).json({
-        ok: false,
-        message: "ต้องส่ง startDate และ endDate (YYYY-MM-DD)",
-      });
-    }
+    try {
+        const { startDate, endDate, customerId } = req.body || {};
+        if (!startDate || !endDate) {
+            return res.status(400).json({
+                ok: false,
+                message: "ต้องส่ง startDate และ endDate (YYYY-MM-DD)",
+            });
+        }
 
-    const { start, end } = toBangkokUtcRange(startDate, endDate);
+        const { start, end } = toBangkokUtcRange(startDate, endDate);
 
-    // =========================
-    // DETAIL MODE (เฉพาะช่วงที่เลือก)
-    // =========================
-    if (customerId) {
-      const custId = Number(customerId);
+        // =========================
+        // DETAIL MODE (เฉพาะช่วงที่เลือก)
+        // =========================
+        if (customerId) {
+            const custId = Number(customerId);
 
-      const customer = await prisma.customer.findUnique({
-        where: { id: custId },
-        select: { id: true, customer_code: true, customer_name: true },
-      });
-      if (!customer) {
-        return res.status(404).json({ ok: false, message: "ไม่พบลูกค้า" });
-      }
+            const customer = await prisma.customer.findUnique({
+                where: { id: custId },
+                select: { id: true, customer_code: true, customer_name: true },
+            });
+            if (!customer) {
+                return res.status(404).json({ ok: false, message: "ไม่พบลูกค้า" });
+            }
 
-      // bills in range เท่านั้น (ไม่ดึงทั้งชีวิต)
-      const bills = await prisma.bill.findMany({
-        where: {
-          customerId: custId,
-          date: { gte: start, lte: end },
-        },
-        orderBy: [{ date: "asc" }, { id: "asc" }],
-        select: {
-          id: true,
-          bill_number: true,
-          date: true,
-          doc_type: true,
-          total_payment: true,
-          branch: { select: { branch_code: true, branch_name: true } },
-          salesChannel: { select: { channel_code: true, channel_name: true } },
-          payments: {
-            select: {
-              id: true,
-              amount: true,
-              payment_method: true,
-              bank: true,
-              reference_number: true,
-            },
-            orderBy: { id: "asc" },
-          },
-        },
-      });
+            // bills in range เท่านั้น (ไม่ดึงทั้งชีวิต)
+            const bills = await prisma.bill.findMany({
+                where: {
+                    customerId: custId,
+                    date: { gte: start, lte: end },
+                },
+                orderBy: [{ date: "asc" }, { id: "asc" }],
+                select: {
+                    id: true,
+                    bill_number: true,
+                    date: true,
+                    doc_type: true,
+                    total_payment: true,
+                    branch: { select: { branch_code: true, branch_name: true } },
+                    salesChannel: { select: { channel_code: true, channel_name: true } },
+                    payments: {
+                        select: {
+                            id: true,
+                            amount: true,
+                            payment_method: true,
+                            bank: true,
+                            reference_number: true,
+                        },
+                        orderBy: { id: "asc" },
+                    },
+                },
+            });
 
-      const visits = bills.length;
+            const visits = bills.length;
 
-      let salesAmount = 0;
-      let returnAmount = 0;
+            let salesAmount = 0;
+            let returnAmount = 0;
 
-      const visitsRows = bills.map((b) => {
-        const absAmt = Math.abs(Number(b.total_payment || 0));
-        const ret = isReturnDoc(b.doc_type);
+            const visitsRows = bills.map((b) => {
+                const absAmt = Math.abs(Number(b.total_payment || 0));
+                const ret = isReturnDoc(b.doc_type);
 
-        if (ret) returnAmount += absAmt;
-        else salesAmount += absAmt;
+                if (ret) returnAmount += absAmt;
+                else salesAmount += absAmt;
 
-        return {
-          billId: b.id,
-          billNumber: b.bill_number,
-          date: b.date,
-          docType: b.doc_type,
-          isReturn: ret,
+                return {
+                    billId: b.id,
+                    billNumber: b.bill_number,
+                    date: b.date,
+                    docType: b.doc_type,
+                    isReturn: ret,
 
-          amountRaw: Number(b.total_payment || 0),
-          amountNet: ret ? -absAmt : absAmt,
+                    amountRaw: Number(b.total_payment || 0),
+                    amountNet: ret ? -absAmt : absAmt,
 
-          branch: b.branch,
-          channel: b.salesChannel,
-          payments: (b.payments || []).map((p) => ({
-            id: p.id,
-            amount: Number(p.amount || 0),
-            method: p.payment_method || null,
-            bank: p.bank || null,
-            ref: p.reference_number || null,
-          })),
-        };
-      });
+                    branch: b.branch,
+                    channel: b.salesChannel,
+                    payments: (b.payments || []).map((p) => ({
+                        id: p.id,
+                        amount: Number(p.amount || 0),
+                        method: p.payment_method || null,
+                        bank: p.bank || null,
+                        ref: p.reference_number || null,
+                    })),
+                };
+            });
 
-      const netAmount = salesAmount - returnAmount;
-      const lastVisitInRange = bills.length ? bills[bills.length - 1].date : null;
+            const netAmount = salesAmount - returnAmount;
+            const lastVisitInRange = bills.length ? bills[bills.length - 1].date : null;
 
-      // absentDays:
-      // - ถ้ามี lastVisitInRange: end - lastVisitInRange (ไม่รวมวันล่าสุด)
-      // - ถ้าไม่มีเลยในช่วง: end - start + 1 (ขาดทั้งช่วง)
-      const lastInRangeISO = toISODateBkk(lastVisitInRange);
-      const absentDays =
-        lastInRangeISO ? diffDays(endDate, lastInRangeISO) : diffDays(endDate, startDate) + 1;
+            // absentDays:
+            // - ถ้ามี lastVisitInRange: end - lastVisitInRange (ไม่รวมวันล่าสุด)
+            // - ถ้าไม่มีเลยในช่วง: end - start + 1 (ขาดทั้งช่วง)
+            const lastInRangeISO = toISODateBkk(lastVisitInRange);
+            const absentDays =
+                lastInRangeISO ? diffDays(endDate, lastInRangeISO) : diffDays(endDate, startDate) + 1;
 
-      return res.json({
-        ok: true,
-        mode: "detail",
-        meta: { startDate, endDate },
-        customer,
-        totals: {
-          visits,
-          salesAmount,
-          returnAmount,
-          netAmount,
-          avgNetPerVisit: safeDiv(netAmount, visits),
-          lastVisitInRange,
-          absentDays,
-        },
-        visits: visitsRows,
-      });
-    }
+            return res.json({
+                ok: true,
+                mode: "detail",
+                meta: { startDate, endDate },
+                customer,
+                totals: {
+                    visits,
+                    salesAmount,
+                    returnAmount,
+                    netAmount,
+                    avgNetPerVisit: safeDiv(netAmount, visits),
+                    lastVisitInRange,
+                    absentDays,
+                },
+                visits: visitsRows,
+            });
+        }
 
-    // =========================
-    // SUMMARY MODE (เฉพาะช่วงที่เลือก)
-    // ✅ ไม่ group ทั้งชีวิตแล้ว
-    // ✅ WHERE date อยู่ในช่วงเท่านั้น
-    // =========================
+        // =========================
+        // SUMMARY MODE (เฉพาะช่วงที่เลือก)
+        // ✅ ไม่ group ทั้งชีวิตแล้ว
+        // ✅ WHERE date อยู่ในช่วงเท่านั้น
+        // =========================
 
-    const rows = await prisma.$queryRaw`
+        const rows = await prisma.$queryRaw`
       SELECT
         c.id AS "customerId",
         c.customer_code AS "customer_code",
@@ -926,57 +926,173 @@ exports.getCustomers = async (req, res) => {
       ORDER BY c.id ASC;
     `;
 
-    const finalRows = rows.map((r) => {
-      const visits = Number(r.visits || 0);
-      const netAmount = Number(r.netAmount || 0);
+        // ✅ Query หายอดรวมของ Non-Member (ไม่มี customerId)
+        const nonMemberRows = await prisma.$queryRaw`
+      SELECT
+        COUNT(*)::int AS "visits",
+        SUM(
+            CASE
+                WHEN (
+                    LOWER(COALESCE(b.doc_type,'')) LIKE '%คืน%'
+                    OR LOWER(COALESCE(b.doc_type,'')) LIKE '%return%'
+                    OR LOWER(COALESCE(b.doc_type,'')) LIKE '%refund%'
+                )
+                THEN -ABS(COALESCE(b.total_payment, 0))
+                ELSE  ABS(COALESCE(b.total_payment, 0))
+            END
+        ) AS "netAmount"
+      FROM "Bill" b
+      WHERE b."customerId" IS NULL
+        AND b.date >= ${start}
+        AND b.date <= ${end};
+    `;
 
-      const lastInRangeISO = toISODateBkk(r.lastVisitInRange);
-      // ใน summary จะมี lastVisitInRange อยู่แล้ว (เพราะมีบิลในช่วง)
-      const absentDays = lastInRangeISO ? diffDays(endDate, lastInRangeISO) : diffDays(endDate, startDate) + 1;
+        const nmRow = nonMemberRows[0] || {};
+        const nonMember = {
+            visits: Number(nmRow.visits || 0),
+            netAmount: Number(nmRow.netAmount || 0),
+        };
 
-      return {
-        customerId: Number(r.customerId),
-        customer_code: r.customer_code,
-        customer_name: r.customer_name,
+        const finalRows = rows.map((r) => {
+            const visits = Number(r.visits || 0);
+            const netAmount = Number(r.netAmount || 0);
 
-        visits,
-        lastVisitInRange: r.lastVisitInRange,
+            const lastInRangeISO = toISODateBkk(r.lastVisitInRange);
+            // ใน summary จะมี lastVisitInRange อยู่แล้ว (เพราะมีบิลในช่วง)
+            const absentDays = lastInRangeISO ? diffDays(endDate, lastInRangeISO) : diffDays(endDate, startDate) + 1;
 
-        salesAmount: Number(r.salesAmount || 0),
-        returnAmount: Number(r.returnAmount || 0),
-        netAmount,
+            return {
+                customerId: Number(r.customerId),
+                customer_code: r.customer_code,
+                customer_name: r.customer_name,
 
-        avgNetPerVisit: safeDiv(netAmount, visits),
-        absentDays,
-      };
-    });
+                visits,
+                lastVisitInRange: r.lastVisitInRange,
 
-    const customers = finalRows.length;
-    const totalVisits = finalRows.reduce((s, r) => s + Number(r.visits || 0), 0);
-    const totalSales = finalRows.reduce((s, r) => s + Number(r.salesAmount || 0), 0);
-    const totalReturn = finalRows.reduce((s, r) => s + Number(r.returnAmount || 0), 0);
-    const totalNet = finalRows.reduce((s, r) => s + Number(r.netAmount || 0), 0);
+                salesAmount: Number(r.salesAmount || 0),
+                returnAmount: Number(r.returnAmount || 0),
+                netAmount,
 
-    return res.json({
-      ok: true,
-      mode: "summary",
-      meta: { startDate, endDate },
-      totals: {
-        customers, // ✅ ลูกค้าที่มีบิลในช่วงนี้เท่านั้น
-        visits: totalVisits,
-        salesAmount: totalSales,
-        returnAmount: totalReturn,
-        netAmount: totalNet,
-        avgNetPerVisitAll: safeDiv(totalNet, totalVisits),
-      },
-      rows: finalRows,
-    });
-  } catch (err) {
-    console.error("getCustomers error:", err);
-    return res.status(500).json({
-      ok: false,
-      message: "Server error",
-      error: String(err?.message || err),
-    });
-  }
+                avgNetPerVisit: safeDiv(netAmount, visits),
+                absentDays,
+            };
+        });
+
+        const customers = finalRows.length;
+        const totalVisits = finalRows.reduce((s, r) => s + Number(r.visits || 0), 0);
+        const totalSales = finalRows.reduce((s, r) => s + Number(r.salesAmount || 0), 0);
+        const totalReturn = finalRows.reduce((s, r) => s + Number(r.returnAmount || 0), 0);
+        const totalNet = finalRows.reduce((s, r) => s + Number(r.netAmount || 0), 0);
+
+        return res.json({
+            ok: true,
+            mode: "summary",
+            meta: { startDate, endDate },
+            totals: {
+                customers, // ✅ ลูกค้าที่มีบิลในช่วงนี้เท่านั้น
+                visits: totalVisits,
+                salesAmount: totalSales,
+                returnAmount: totalReturn,
+                netAmount: totalNet,
+                avgNetPerVisitAll: safeDiv(totalNet, totalVisits),
+            },
+            nonMember, // ✅ ส่งยอด Non-Member แยกไปด้วย
+            rows: finalRows,
+        });
+    } catch (err) {
+        console.error("getCustomers error:", err);
+        return res.status(500).json({
+            ok: false,
+            message: "Server error",
+            error: String(err?.message || err),
+        });
+    }
+};
+
+/**
+ * GET /sales-bill-items/:billId
+ * ดึงรายการสินค้าในบิล
+ */
+exports.getBillItems = async (req, res) => {
+    try {
+        const { billId } = req.params;
+
+        if (!billId) {
+            return res.status(400).json({ ok: false, message: "ต้องระบุ billId" });
+        }
+
+        const bill = await prisma.bill.findUnique({
+            where: { id: Number(billId) },
+            select: {
+                id: true,
+                bill_number: true,
+                date: true,
+                doc_type: true,
+                total_payment: true,
+                end_bill_discount: true,
+                branch: { select: { branch_code: true, branch_name: true } },
+                customer: { select: { customer_code: true, customer_name: true } },
+            },
+        });
+
+        if (!bill) {
+            return res.status(404).json({ ok: false, message: "ไม่พบบิล" });
+        }
+
+        const items = await prisma.billItem.findMany({
+            where: { billId: Number(billId) },
+            orderBy: { id: "asc" },
+            select: {
+                id: true,
+                quantity: true,
+                price_per_unit: true,
+                discount: true,
+                net_sales: true,
+                product: {
+                    select: {
+                        id: true,
+                        product_code: true,
+                        product_name: true,
+                        product_brand: true,
+                    },
+                },
+            },
+        });
+
+        const formattedItems = items.map((item) => ({
+            id: item.id,
+            productId: item.product?.id || null,
+            productCode: item.product?.product_code || "-",
+            productName: item.product?.product_name || "-",
+            productBrand: item.product?.product_brand || "-",
+            quantity: Number(item.quantity || 0),
+            unitPrice: Number(item.price_per_unit || 0),
+            discount: Number(item.discount || 0),
+            netSales: Number(item.net_sales || 0),
+        }));
+
+        return res.json({
+            ok: true,
+            bill: {
+                id: bill.id,
+                billNumber: bill.bill_number,
+                date: bill.date,
+                docType: bill.doc_type,
+                totalPayment: Number(bill.total_payment || 0),
+                endBillDiscount: Number(bill.end_bill_discount || 0),
+                branch: bill.branch,
+                customer: bill.customer,
+            },
+            items: formattedItems,
+            totalItems: formattedItems.length,
+        });
+
+    } catch (err) {
+        console.error("getBillItems error:", err);
+        return res.status(500).json({
+            ok: false,
+            message: "Server error",
+            error: String(err?.message || err),
+        });
+    }
 };
