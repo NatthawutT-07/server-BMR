@@ -1,0 +1,72 @@
+# ============================================
+# BMR Server - Docker Compose
+# ============================================
+# Usage:
+#   docker compose up -d          # Start all services
+#   docker compose down           # Stop all services
+#   docker compose logs -f        # View logs
+#   docker compose ps             # Check status
+# ============================================
+
+services:
+  # ============================================
+  # PostgreSQL Database
+  # ============================================
+  db:
+    image: postgres:16-alpine
+    container_name: bmr-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-bmr}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bmr_secure_password_2024}
+      POSTGRES_DB: ${POSTGRES_DB:-bmr_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bmr} -d ${POSTGRES_DB:-bmr_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================
+  # BMR Backend Server
+  # ============================================
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bmr-server
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-bmr}:${POSTGRES_PASSWORD:-bmr_secure_password_2024}@db:5432/${POSTGRES_DB:-bmr_db}?schema=public
+      JWT_SECRET: ${JWT_SECRET:-your_jwt_secret_here}
+      PORT: 5001
+    ports:
+      - "5001:5001"
+    volumes:
+      - ./uploads:/app/uploads
+      - ./access.log:/app/access.log
+
+  # ============================================
+  # Cloudflare Tunnel (Optional)
+  # ============================================
+  # Uncomment if you want to run cloudflared in Docker
+  # cloudflared:
+  #   image: cloudflare/cloudflared:latest
+  #   container_name: bmr-tunnel
+  #   restart: always
+  #   command: tunnel --protocol http2 run bmr-backend
+  #   environment:
+  #     TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
+  #   depends_on:
+  #     - server
+
+volumes:
+  postgres_data:
+    driver: local

@@ -18,17 +18,47 @@ app.set("trust proxy", 1);
 
 // ✅ CORS (ต้องเปิด credentials เพื่อส่ง cookie refresh token)
 const allowedOrigins = [
-  // "https://web-bmr.ngrok.app",
-  // "http://localhost:4173",
-  "http://localhost:5173",
+  // Production
   "https://bmrpog.com",
+
+  // Development - Web
+  "http://localhost:5173",
+  "http://localhost:4173",
+  "http://localhost:3000",
+
+  // Development - Mobile (Expo)
+  "http://localhost:8081",  // Metro bundler
+  "http://localhost:19000", // Expo dev server
+  "http://localhost:19001",
+  "http://localhost:19006", // Expo web
 ];
+
+// Mobile apps ไม่มี origin (เหมือน Postman) หรือมี pattern พิเศษ
+const isMobileOrDevOrigin = (origin) => {
+  if (!origin) return true; // Mobile apps, curl, Postman
+
+  // Expo development patterns
+  if (origin.includes("exp://")) return true;
+  if (origin.includes(".exp.direct")) return true;
+  if (origin.includes("expo.dev")) return true;
+
+  // LAN IP patterns (192.168.x.x, 10.x.x.x, etc.)
+  if (/^http:\/\/(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.)/.test(origin)) return true;
+
+  return false;
+};
 
 app.use(
   cors({
     origin: (origin, cb) => {
-      if (!origin) return cb(null, true);
+      // Mobile apps และ dev tools
+      if (isMobileOrDevOrigin(origin)) return cb(null, true);
+
+      // Allowed origins list
       if (allowedOrigins.includes(origin)) return cb(null, true);
+
+      // Production: log blocked origins for debugging
+      console.warn(`CORS blocked: ${origin}`);
       return cb(new Error(`CORS blocked: ${origin}`));
     },
     credentials: true,
@@ -235,6 +265,11 @@ app.use((req, res, next) => {
 });
 
 
+
+// ✅ Health check endpoint for Docker/Kubernetes
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
+});
 
 // routes
 app.use("/api", require("./router/auth"));

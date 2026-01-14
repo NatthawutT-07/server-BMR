@@ -1,0 +1,37 @@
+# Dependencies
+node_modules
+
+# Git
+.git
+.gitignore
+
+# Logs
+*.log
+access.log
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Uploads (will be mounted as volume)
+uploads/*
+!uploads/.gitkeep
+
+# Development files
+nodemon.json
