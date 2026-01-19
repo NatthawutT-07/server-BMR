@@ -4,6 +4,7 @@ const summaryCache = new NodeCache({ stdTTL: 60 });
 
 const prisma = require("../../config/prisma");
 const { lockKey, releaseLock, acquireLock } = require("../../utils/lock");
+const { markShelfUpdated, createShelfChangeLogs, createSingleChangeLog } = require("./shelfUpdate");
 
 
 
@@ -92,6 +93,12 @@ exports.itemCreate = async (req, res) => {
       skipDuplicates: true,
     });
 
+    // ✅ Create change log for add action
+    await createSingleChangeLog(branchCode, shelfCode, "add", itemsToInsert, req.user?.name);
+
+    // ✅ Mark shelf update for this branch
+    await markShelfUpdated(branchCode, req.user?.name);
+
     return res.status(201).json({ success: true, message: "✅ Information added successfully." });
   } catch (error) {
     console.error("❌ Error in itemCreate:", error);
@@ -135,6 +142,20 @@ exports.itemDelete = async (req, res) => {
     key = lockKey(bc, sc);
     await acquireLock(prisma, key);
 
+    // ดึงข้อมูลสินค้าก่อนลบเพื่อเก็บ log
+    let deletedItem = null;
+    if (id != null && id !== "") {
+      deletedItem = await prisma.sku.findUnique({ where: { id: Number(id) } });
+    } else {
+      deletedItem = {
+        branchCode: bc,
+        shelfCode: sc,
+        rowNo: Number(rowNo),
+        index: Number(index),
+        codeProduct: Number(codeProduct),
+      };
+    }
+
     // ---------- delete target ----------
     if (id != null && id !== "") {
       await prisma.sku.deleteMany({ where: { id: Number(id) } }); // ใช้ deleteMany กันพังถ้าไม่มี
@@ -172,6 +193,14 @@ exports.itemDelete = async (req, res) => {
       await prisma.$transaction(updateOps);
     }
 
+    // ✅ Create change log for delete action
+    if (deletedItem) {
+      await createSingleChangeLog(bc, sc, "delete", [deletedItem], req.user?.name);
+    }
+
+    // ✅ Mark shelf update for this branch
+    await markShelfUpdated(bc, req.user?.name);
+
     return res.json({ success: true, message: "✅ Deleted and rearranged successfully" });
   } catch (error) {
     console.error("❌ itemDelete error:", error?.message || error);
@@ -202,6 +231,12 @@ exports.itemUpdate = async (req, res) => {
     key = lockKey(branchCode, shelfCode);
     await acquireLock(prisma, key);
 
+    // ✅ ดึงข้อมูลเก่าก่อน (สำหรับ compare change logs)
+    const oldItems = await prisma.sku.findMany({
+      where: { branchCode, shelfCode },
+      select: { codeProduct: true, rowNo: true, index: true },
+    });
+
     const itemsToInsert = items.map((item) => ({
       branchCode: item.branchCode,
       shelfCode: item.shelfCode,
@@ -214,6 +249,17 @@ exports.itemUpdate = async (req, res) => {
       prisma.sku.deleteMany({ where: { branchCode, shelfCode } }),
       prisma.sku.createMany({ data: itemsToInsert }),
     ]);
+
+    // ✅ สร้าง change logs (compare old vs new)
+    const newItems = itemsToInsert.map((i) => ({
+      codeProduct: i.codeProduct,
+      rowNo: i.rowNo,
+      index: i.index,
+    }));
+    await createShelfChangeLogs(branchCode, shelfCode, oldItems, newItems, req.user?.name);
+
+    // ✅ Mark shelf update for this branch
+    await markShelfUpdated(branchCode, req.user?.name);
 
     return res.json({ success: true, message: "✅ Shelf update successful" });
   } catch (error) {
@@ -229,6 +275,7 @@ exports.itemUpdate = async (req, res) => {
     }
   }
 };
+
 
 exports.tamplate = async (req, res) => {
   try {
@@ -250,11 +297,11 @@ exports.tamplate = async (req, res) => {
  * คืนค่า: Date ที่ตรงกับเวลาไทยนั้น (offset +07:00) ในรูปแบบ UTC
  */
 const makeBangkokDateTimeUtc = (year, month, day, timeStr) => {
-    const y = String(year).padStart(4, "0");
-    const m = String(month).padStart(2, "0");
-    const d = String(day).padStart(2, "0");
-    // รูปแบบเช่น "2025-01-31T23:59:59.999+07:00"
-    return new Date(`${y}-${m}-${d}T${timeStr}+07:00`);
+  const y = String(year).padStart(4, "0");
+  const m = String(month).padStart(2, "0");
+  const d = String(day).padStart(2, "0");
+  // รูปแบบเช่น "2025-01-31T23:59:59.999+07:00"
+  return new Date(`${y}-${m}-${d}T${timeStr}+07:00`);
 };
 
 /**
@@ -263,29 +310,29 @@ const makeBangkokDateTimeUtc = (year, month, day, timeStr) => {
  * → ใช้สำหรับ Sales Qty / Sales Amount (90 วัน)
  */
 const getBangkok90DaysRangeUtc = () => {
-    const now = new Date();
-    const bangkokNow = new Date(
-        now.toLocaleString("en-US", { timeZone: "Asia/Bangkok" })
-    );
+  const now = new Date();
+  const bangkokNow = new Date(
+    now.toLocaleString("en-US", { timeZone: "Asia/Bangkok" })
+  );
 
-    // yesterday ตามเวลาไทย
-    const endThai = new Date(bangkokNow);
-    endThai.setDate(endThai.getDate() - 1);
-    const endYear = endThai.getFullYear();
-    const endMonth = endThai.getMonth() + 1;
-    const endDay = endThai.getDate();
+  // yesterday ตามเวลาไทย
+  const endThai = new Date(bangkokNow);
+  endThai.setDate(endThai.getDate() - 1);
+  const endYear = endThai.getFullYear();
+  const endMonth = endThai.getMonth() + 1;
+  const endDay = endThai.getDate();
 
-    // start = yesterday - 89 วัน (รวมเป็น 90 วัน)
-    const startThai = new Date(endThai);
-    startThai.setDate(startThai.getDate() - 89);
-    const startYear = startThai.getFullYear();
-    const startMonth = startThai.getMonth() + 1;
-    const startDay = startThai.getDate();
+  // start = yesterday - 89 วัน (รวมเป็น 90 วัน)
+  const startThai = new Date(endThai);
+  startThai.setDate(startThai.getDate() - 89);
+  const startYear = startThai.getFullYear();
+  const startMonth = startThai.getMonth() + 1;
+  const startDay = startThai.getDate();
 
-    const startUtc = makeBangkokDateTimeUtc(startYear, startMonth, startDay, "00:00:00.000");
-    const endUtc = makeBangkokDateTimeUtc(endYear, endMonth, endDay, "23:59:59.999");
+  const startUtc = makeBangkokDateTimeUtc(startYear, startMonth, startDay, "00:00:00.000");
+  const endUtc = makeBangkokDateTimeUtc(endYear, endMonth, endDay, "23:59:59.999");
 
-    return { startUtc, endUtc };
+  return { startUtc, endUtc };
 };
 
 /**
@@ -297,24 +344,24 @@ const getBangkok90DaysRangeUtc = () => {
  *   endUtc   = 23:59:59.999 ของวันสุดท้ายของเดือนนั้น (เวลาไทย) แปลงเป็น UTC
  */
 const getMonthRangeUtcFromBangkok = (year, month) => {
-    const startThai = new Date(year, month - 1, 1, 0, 0, 0, 0); // local แต่เราเอาเฉพาะ y/m/d
-    const startYear = startThai.getFullYear();
-    const startMonth = startThai.getMonth() + 1;
-    const startDay = startThai.getDate();
+  const startThai = new Date(year, month - 1, 1, 0, 0, 0, 0); // local แต่เราเอาเฉพาะ y/m/d
+  const startYear = startThai.getFullYear();
+  const startMonth = startThai.getMonth() + 1;
+  const startDay = startThai.getDate();
 
-    // ไปเดือนถัดไป แล้วถอยกลับมา 1 ms = สิ้นเดือน
-    const nextMonthThai = new Date(startThai);
-    nextMonthThai.setMonth(nextMonthThai.getMonth() + 1);
-    nextMonthThai.setMilliseconds(nextMonthThai.getMilliseconds() - 1);
+  // ไปเดือนถัดไป แล้วถอยกลับมา 1 ms = สิ้นเดือน
+  const nextMonthThai = new Date(startThai);
+  nextMonthThai.setMonth(nextMonthThai.getMonth() + 1);
+  nextMonthThai.setMilliseconds(nextMonthThai.getMilliseconds() - 1);
 
-    const endYear = nextMonthThai.getFullYear();
-    const endMonth = nextMonthThai.getMonth() + 1;
-    const endDay = nextMonthThai.getDate();
+  const endYear = nextMonthThai.getFullYear();
+  const endMonth = nextMonthThai.getMonth() + 1;
+  const endDay = nextMonthThai.getDate();
 
-    const startUtc = makeBangkokDateTimeUtc(startYear, startMonth, startDay, "00:00:00.000");
-    const endUtc = makeBangkokDateTimeUtc(endYear, endMonth, endDay, "23:59:59.999");
+  const startUtc = makeBangkokDateTimeUtc(startYear, startMonth, startDay, "00:00:00.000");
+  const endUtc = makeBangkokDateTimeUtc(endYear, endMonth, endDay, "23:59:59.999");
 
-    return { startUtc, endUtc };
+  return { startUtc, endUtc };
 };
 
 /**
@@ -324,75 +371,75 @@ const getMonthRangeUtcFromBangkok = (year, month) => {
  *   แต่ละตัวมี { year, month, startUtc, endUtc }
  */
 const getBangkokMonthMeta = () => {
-    const now = new Date();
-    const bangkokNow = new Date(
-        now.toLocaleString("en-US", { timeZone: "Asia/Bangkok" })
-    );
+  const now = new Date();
+  const bangkokNow = new Date(
+    now.toLocaleString("en-US", { timeZone: "Asia/Bangkok" })
+  );
 
-    const currentYear = bangkokNow.getFullYear();
-    const currentMonth = bangkokNow.getMonth() + 1; // 1–12
+  const currentYear = bangkokNow.getFullYear();
+  const currentMonth = bangkokNow.getMonth() + 1; // 1–12
 
-    const prevMonths = [];
-    for (let i = 1; i <= 3; i++) {
-        const d = new Date(bangkokNow);
-        d.setDate(1);
-        d.setMonth(d.getMonth() - i);
+  const prevMonths = [];
+  for (let i = 1; i <= 3; i++) {
+    const d = new Date(bangkokNow);
+    d.setDate(1);
+    d.setMonth(d.getMonth() - i);
 
-        const y = d.getFullYear();
-        const m = d.getMonth() + 1;
+    const y = d.getFullYear();
+    const m = d.getMonth() + 1;
 
-        const { startUtc, endUtc } = getMonthRangeUtcFromBangkok(y, m);
+    const { startUtc, endUtc } = getMonthRangeUtcFromBangkok(y, m);
 
-        prevMonths.push({
-            year: y,
-            month: m, // 1–12
-            startUtc,
-            endUtc,
-        });
-    }
+    prevMonths.push({
+      year: y,
+      month: m, // 1–12
+      startUtc,
+      endUtc,
+    });
+  }
 
-    // เดือนปัจจุบัน (ไว้ใช้ถ้าต้องการช่วงทั้งเดือน)
-    const { startUtc: currentMonthStartUtc, endUtc: currentMonthEndUtc } =
-        getMonthRangeUtcFromBangkok(currentYear, currentMonth);
+  // เดือนปัจจุบัน (ไว้ใช้ถ้าต้องการช่วงทั้งเดือน)
+  const { startUtc: currentMonthStartUtc, endUtc: currentMonthEndUtc } =
+    getMonthRangeUtcFromBangkok(currentYear, currentMonth);
 
-    return {
-        currentYear,
-        currentMonth,
-        currentMonthStartUtc,
-        currentMonthEndUtc,
-        prevMonths,
-    };
+  return {
+    currentYear,
+    currentMonth,
+    currentMonthStartUtc,
+    currentMonthEndUtc,
+    prevMonths,
+  };
 };
 
 exports.sku = async (req, res) => {
-    const { branchCode } = req.body;
+  const { branchCode } = req.body;
 
-    if (!branchCode) {
-        return res.status(400).json({ msg: "❌ branchCode is required" });
-    }
+  if (!branchCode) {
+    return res.status(400).json({ msg: "❌ branchCode is required" });
+  }
 
-    // 🔹 ช่วง 90 วัน (ตามเวลาไทย) → แปลงเป็น UTC สำหรับ WHERE b."date"
-    const { startUtc, endUtc } = getBangkok90DaysRangeUtc();
+  // 🔹 ช่วง 90 วัน (ตามเวลาไทย) → แปลงเป็น UTC สำหรับ WHERE b."date"
+  const { startUtc, endUtc } = getBangkok90DaysRangeUtc();
 
-    // 🔹 meta เดือน สำหรับ 3M / current month (คิดจากเวลาไทย)
-    const {
-        currentYear,
-        currentMonth,
-        currentMonthStartUtc,
-        currentMonthEndUtc,
-        prevMonths,
-    } = getBangkokMonthMeta();
+  // 🔹 meta เดือน สำหรับ 3M / current month (คิดจากเวลาไทย)
+  const {
+    currentYear,
+    currentMonth,
+    currentMonthStartUtc,
+    currentMonthEndUtc,
+    prevMonths,
+  } = getBangkokMonthMeta();
 
-    // cache key ผูกกับ branchCode + ช่วงวันที่ (กันข้อมูลค้างข้ามวัน)
-    const key = `sku-${branchCode}-${startUtc.toISOString().slice(0, 10)}-${endUtc
-        .toISOString()
-        .slice(0, 10)}`;
+  // cache key ผูกกับ branchCode + ช่วงวันที่ (กันข้อมูลค้างข้ามวัน)
+  const key = `sku-${branchCode}-${startUtc.toISOString().slice(0, 10)}-${endUtc
+    .toISOString()
+    .slice(0, 10)}`;
 
-    const cached = cache.get(key);
-    if (cached) return res.json(cached);
+  const cached = cache.get(key);
+  if (cached) return res.json(cached);
 
-    try {
-        const rawResult = await prisma.$queryRaw`
+  try {
+    const rawResult = await prisma.$queryRaw`
         SELECT 
             s."branchCode",
             s."codeProduct",
@@ -579,79 +626,79 @@ exports.sku = async (req, res) => {
         ORDER BY s."shelfCode", s."index", s."rowNo"
         `;
 
-        // 🧮 Convert และคำนวณ target
-        const result = rawResult.map((r) => {
-            const sales3mQty = Number(r.sales3mQty ?? 0);
-            const sales3mAvgQty = sales3mQty / 3;           // เฉลี่ย 3 เดือน
-            const salesTargetQty = sales3mAvgQty * 0.8;     // 80% ของ avg
+    // 🧮 Convert และคำนวณ target
+    const result = rawResult.map((r) => {
+      const sales3mQty = Number(r.sales3mQty ?? 0);
+      const sales3mAvgQty = sales3mQty / 3;           // เฉลี่ย 3 เดือน
+      const salesTargetQty = sales3mAvgQty * 0.8;     // 80% ของ avg
 
-            return {
-                branchCode: r.branchCode,
-                codeProduct:
-                    r.codeProduct !== null && r.codeProduct !== undefined
-                        ? Number(r.codeProduct)
-                        : null,
-                shelfCode: r.shelfCode,
-                rowNo: r.rowNo,
-                index: r.index,
+      return {
+        branchCode: r.branchCode,
+        codeProduct:
+          r.codeProduct !== null && r.codeProduct !== undefined
+            ? Number(r.codeProduct)
+            : null,
+        shelfCode: r.shelfCode,
+        rowNo: r.rowNo,
+        index: r.index,
 
-                nameProduct: r.nameProduct ?? null,
-                nameBrand: r.nameBrand ?? null,
-                shelfLife: r.shelfLife ?? null,
+        nameProduct: r.nameProduct ?? null,
+        nameBrand: r.nameBrand ?? null,
+        shelfLife: r.shelfLife ?? null,
 
-                purchasePriceExcVAT:
-                    r.purchasePriceExcVAT !== null && r.purchasePriceExcVAT !== undefined
-                        ? Number(r.purchasePriceExcVAT)
-                        : null,
-                salesPriceIncVAT:
-                    r.salesPriceIncVAT !== null && r.salesPriceIncVAT !== undefined
-                        ? Number(r.salesPriceIncVAT)
-                        : null,
+        purchasePriceExcVAT:
+          r.purchasePriceExcVAT !== null && r.purchasePriceExcVAT !== undefined
+            ? Number(r.purchasePriceExcVAT)
+            : null,
+        salesPriceIncVAT:
+          r.salesPriceIncVAT !== null && r.salesPriceIncVAT !== undefined
+            ? Number(r.salesPriceIncVAT)
+            : null,
 
-                barcode: r.barcode ?? null,
+        barcode: r.barcode ?? null,
 
-                minStore:
-                    r.minStore !== null && r.minStore !== undefined
-                        ? Number(r.minStore)
-                        : null,
-                maxStore:
-                    r.maxStore !== null && r.maxStore !== undefined
-                        ? Number(r.maxStore)
-                        : null,
+        minStore:
+          r.minStore !== null && r.minStore !== undefined
+            ? Number(r.minStore)
+            : null,
+        maxStore:
+          r.maxStore !== null && r.maxStore !== undefined
+            ? Number(r.maxStore)
+            : null,
 
-                stockQuantity: Number(r.stockQuantity ?? 0),
+        stockQuantity: Number(r.stockQuantity ?? 0),
 
-                withdrawQuantity: Number(r.withdrawQuantity ?? 0),
-                withdrawValue: Number(r.withdrawValue ?? 0),
+        withdrawQuantity: Number(r.withdrawQuantity ?? 0),
+        withdrawValue: Number(r.withdrawValue ?? 0),
 
-                // 90 วัน (Qty / Amount)
-                salesQuantity: Number(r.salesQuantity ?? 0),
-                salesTotalPrice: Number(r.salesTotalPrice ?? 0),
+        // 90 วัน (Qty / Amount)
+        salesQuantity: Number(r.salesQuantity ?? 0),
+        salesTotalPrice: Number(r.salesTotalPrice ?? 0),
 
-                // 🔹 ยอดขาย 3 เดือนก่อนหน้า (รวม 3 เดือน)
-                sales3mQty,
-                // 🔹 target = 80% ของ avg 3 เดือน
-                salesTargetQty,
+        // 🔹 ยอดขาย 3 เดือนก่อนหน้า (รวม 3 เดือน)
+        sales3mQty,
+        // 🔹 target = 80% ของ avg 3 เดือน
+        salesTargetQty,
 
-                // 🔹 ยอดขายเดือนปัจจุบันเท่านั้น
-                salesCurrentMonthQty: Number(r.salesCurrentMonthQty ?? 0),
-            };
-        });
+        // 🔹 ยอดขายเดือนปัจจุบันเท่านั้น
+        salesCurrentMonthQty: Number(r.salesCurrentMonthQty ?? 0),
+      };
+    });
 
-        cache.set(key, result);
-        return res.json(result);
-    } catch (error) {
-        console.error("❌ sku error:", error);
-        return res.status(500).json({ msg: "❌ Failed to retrieve data" });
-    }
+    cache.set(key, result);
+    return res.json(result);
+  } catch (error) {
+    console.error("❌ sku error:", error);
+    return res.status(500).json({ msg: "❌ Failed to retrieve data" });
+  }
 };
 
 exports.getShelfDashboardSummary = async (req, res) => {
-    const { startUtc, endUtc } = getBangkok90DaysRangeUtc();
-    console.log( startUtc,":::", endUtc );
+  const { startUtc, endUtc } = getBangkok90DaysRangeUtc();
+  console.log(startUtc, ":::", endUtc);
 
-    try {
-        const rows = await prisma.$queryRaw`
+  try {
+    const rows = await prisma.$queryRaw`
         WITH sku_rows AS (
             SELECT "branchCode", "shelfCode", "codeProduct"
             FROM "Sku"
@@ -722,44 +769,44 @@ exports.getShelfDashboardSummary = async (req, res) => {
         ORDER BY b."branch_code" ASC
         `;
 
-        const mapped = rows.map((r) => {
-            return {
-                branchCode: r.branchCode,
-                branchName: r.branchName,
-                shelfCount: Number(r.shelfCount || 0),
-                productCount: Number(r.productCount || 0),
-                stockCost: Number(r.stockCost || 0),
-                withdrawValue: Number(r.withdrawValue || 0),
-                salesTotal: Number(r.salesTotal || 0),
-            };
-        });
+    const mapped = rows.map((r) => {
+      return {
+        branchCode: r.branchCode,
+        branchName: r.branchName,
+        shelfCount: Number(r.shelfCount || 0),
+        productCount: Number(r.productCount || 0),
+        stockCost: Number(r.stockCost || 0),
+        withdrawValue: Number(r.withdrawValue || 0),
+        salesTotal: Number(r.salesTotal || 0),
+      };
+    });
 
-        const payload = {
-            range: {
-                start: toBkkDateStr(startUtc),
-                end: toBkkDateStr(endUtc),
-            },
-            rows: mapped,
-        };
+    const payload = {
+      range: {
+        start: toBkkDateStr(startUtc),
+        end: toBkkDateStr(endUtc),
+      },
+      rows: mapped,
+    };
 
-        // ✅ ไม่ใช้ cache สำหรับ Shelf Dashboard (ต้องเห็นผลลัพธ์ล่าสุดทันที)
-        return res.json(payload);
-    } catch (error) {
-        console.error("❌ getShelfDashboardSummary error:", error);
-        return res.status(500).json({ error: "shelf dashboard summary error" });
-    }
+    // ✅ ไม่ใช้ cache สำหรับ Shelf Dashboard (ต้องเห็นผลลัพธ์ล่าสุดทันที)
+    return res.json(payload);
+  } catch (error) {
+    console.error("❌ getShelfDashboardSummary error:", error);
+    return res.status(500).json({ error: "shelf dashboard summary error" });
+  }
 };
 
 exports.getShelfDashboardShelfSales = async (req, res) => {
-    const branchCode = String(req.query.branchCode || "").trim();
-    if (!branchCode) {
-        return res.status(400).json({ error: "branchCode is required" });
-    }
+  const branchCode = String(req.query.branchCode || "").trim();
+  if (!branchCode) {
+    return res.status(400).json({ error: "branchCode is required" });
+  }
 
-    const { startUtc, endUtc } = getBangkok90DaysRangeUtc();
+  const { startUtc, endUtc } = getBangkok90DaysRangeUtc();
 
-    try {
-        const shelfSalesRows = await prisma.$queryRaw`
+  try {
+    const shelfSalesRows = await prisma.$queryRaw`
         WITH sku_rows AS (
             SELECT "branchCode", "shelfCode", "codeProduct"
             FROM "Sku"
@@ -828,20 +875,20 @@ exports.getShelfDashboardShelfSales = async (req, res) => {
         ORDER BY ss.shelf_code
         `;
 
-        const shelves = shelfSalesRows.map((row) => ({
-            shelfCode: row.shelfCode,
-            shelfName: row.shelfName || null,
-            salesTotal: Number(row.salesTotal || 0),
-            skuCount: Number(row.skuCount || 0),
-            stockCost: Number(row.stockCost || 0),
-        }));
+    const shelves = shelfSalesRows.map((row) => ({
+      shelfCode: row.shelfCode,
+      shelfName: row.shelfName || null,
+      salesTotal: Number(row.salesTotal || 0),
+      skuCount: Number(row.skuCount || 0),
+      stockCost: Number(row.stockCost || 0),
+    }));
 
-        return res.json({
-            branchCode,
-            shelves,
-        });
-    } catch (error) {
-        console.error("❌ getShelfDashboardShelfSales error:", error);
-        return res.status(500).json({ error: "shelf dashboard shelf sales error" });
-    }
+    return res.json({
+      branchCode,
+      shelves,
+    });
+  } catch (error) {
+    console.error("❌ getShelfDashboardShelfSales error:", error);
+    return res.status(500).json({ error: "shelf dashboard shelf sales error" });
+  }
 };

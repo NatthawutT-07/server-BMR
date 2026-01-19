@@ -90,5 +90,16 @@ router.delete("/pog-requests/:id", authCheck, adminCheck, deletePogRequest);
 router.post("/pog-requests/bulk-approve", authCheck, adminCheck, bulkApprove);
 router.put("/pog-requests/:id/position", authCheck, adminCheck, updatePogRequestPosition);
 
+// ✅ Shelf Update Notification - for mobile branch
+const { checkShelfUpdate, acknowledgeShelfUpdate, getShelfChangeLogs, acknowledgeChangeLog, acknowledgeAllChangeLogs, getAllBranchAckStatus } = require('../controllers/admin/shelfUpdate');
+router.get("/shelf-update-check/:branchCode", authCheck, checkShelfUpdate);
+router.post("/shelf-update-acknowledge/:branchCode", authCheck, acknowledgeShelfUpdate);
+router.get("/shelf-change-logs/:branchCode", authCheck, getShelfChangeLogs);
+router.post("/shelf-change-log-acknowledge/:id", authCheck, acknowledgeChangeLog);
+router.post("/shelf-change-logs-acknowledge-all/:branchCode", authCheck, acknowledgeAllChangeLogs);
+
+// ✅ Admin: Monitor branch acknowledgment status
+router.get("/branch-ack-status", authCheck, adminCheck, getAllBranchAckStatus);
+
 
 module.exports = router;
