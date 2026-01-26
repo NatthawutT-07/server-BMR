@@ -9,8 +9,8 @@ const lookupByBarcode = async (req, res) => {
       return res.status(400).json({ message: "branchCode, barcode required" });
     }
 
-    // barcode unique อยู่แล้ว ใช้ findUnique ได้
-    const item = await prisma.listOfItemHold.findUnique({
+    // barcode ไม่ใช่ unique field ใช้ findFirst แทน
+    const item = await prisma.listOfItemHold.findFirst({
       where: { barcode: String(barcode) },
       select: {
         codeProduct: true,
@@ -72,8 +72,16 @@ const lookupByBarcode = async (req, res) => {
       })),
     });
   } catch (err) {
-    console.error("lookupByBarcode error:", err);
-    return res.status(500).json({ message: "INTERNAL_ERROR" });
+    console.error("lookupByBarcode error:", err.message);
+    console.error("lookupByBarcode stack:", err.stack);
+
+    // Return standardized error format
+    return res.status(500).json({
+      ok: false,
+      code: "ERROR",
+      message: "INTERNAL_ERROR",
+      debug: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 };
 

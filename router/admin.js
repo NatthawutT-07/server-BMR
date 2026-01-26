@@ -21,7 +21,7 @@ const {
     uploadBillXLSX,
     uploadGourmetXLSX,
     getUploadStatus,
-} = require('../controllers/admin/uploadController');
+} = require('../controllers/admin/upload/uploadController');
 // Upload endpoints
 router.post('/upload-minmax', authCheck, adminCheck, upload.single('file'), uploadItemMinMaxXLSX);
 // router.post('/upload-partners', authCheck, adminCheck, upload.single('file'), uploadPartnersCSV)

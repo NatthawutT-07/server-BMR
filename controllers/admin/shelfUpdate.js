@@ -61,22 +61,30 @@ exports.markShelfUpdated = async (branchCode, updatedBy = null) => {
     }
 };
 
-// ✅ ดึง change logs ที่ยังไม่รับทราบสำหรับสาขา (history mode)
+// ✅ ดึง change logs ที่ยังไม่รับทราบสำหรับสาขา (history mode + pagination)
 exports.getShelfChangeLogs = async (req, res) => {
     try {
         const { branchCode } = req.params;
         const showAll = req.query.all === "true"; // ?all=true = แสดงทั้งหมด
+        const page = Math.max(1, parseInt(req.query.page) || 1);
+        const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+        const skip = (page - 1) * limit;
 
         if (!branchCode) {
             return res.status(400).json({ ok: false, message: "Missing branchCode" });
         }
 
+        const whereClause = {
+            branchCode,
+            ...(showAll ? {} : { acknowledged: false }),
+        };
+
+        // Get total count for pagination
+        const total = await prisma.shelfChangeLog.count({ where: whereClause });
+
         // ดึง logs ที่ยังไม่รับทราบ (หรือทั้งหมดถ้า showAll)
         const logs = await prisma.shelfChangeLog.findMany({
-            where: {
-                branchCode,
-                ...(showAll ? {} : { acknowledged: false }),
-            },
+            where: whereClause,
             orderBy: [{ createdAt: "desc" }, { shelfCode: "asc" }],
             select: {
                 id: true,
@@ -93,7 +101,8 @@ exports.getShelfChangeLogs = async (req, res) => {
                 createdBy: true,
                 acknowledged: true,
             },
-            take: 100, // limit เพื่อไม่ให้หนักเกินไป
+            skip,
+            take: limit,
         });
 
         // นับ unacknowledged
@@ -105,6 +114,12 @@ exports.getShelfChangeLogs = async (req, res) => {
             ok: true,
             logs,
             unacknowledgedCount,
+            pagination: {
+                page,
+                limit,
+                count: logs.length,
+                total,
+            }
         });
     } catch (error) {
         console.error("❌ getShelfChangeLogs error:", error);

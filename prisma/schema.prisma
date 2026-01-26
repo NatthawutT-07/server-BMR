@@ -35,42 +35,6 @@ model LoginLog {
   createdAt DateTime @default(now())
 }
 
-model Partners {
-  id                       Int     @id @default(autoincrement())
-  codeBP                   String?
-  nameBP                   String?
-  accountBalance           Float
-  interfaceADA             String?
-  interfaceEDI             String?
-  brand                    String?
-  paymentTermsCode         String?
-  noOldBP                  String?
-  taxGroup                 String?
-  remarks                  String?
-  idNoTwo                  String?
-  gp                       String?
-  dc                       String?
-  email                    String?
-  phoneOne                 String?
-  phoneTwo                 String?
-  billAddressType          String?
-  billBlock                String?
-  billBuildingFloorRoom    String?
-  billCity                 String?
-  billCountry              String?
-  billCountryNo            String?
-  billZipCode              String?
-  branchBP                 Int
-  billExchangeOnCollection String?
-  billDefault              String?
-  billState                String?
-  billStreet               String?
-  billStreetNo             String?
-  remarkOne                String?
-  groupCode                String?
-  federalTaxId             String?
-}
-
 model ItemMinMax {
   id          Int    @id @default(autoincrement())
   branchCode  String
@@ -131,7 +95,6 @@ model ListOfItemHold {
   productionDate      String?
   vatGroupPu          String?
 
-  @@unique([barcode])
   @@index([codeProduct])
 }
 
@@ -159,15 +122,6 @@ model Sku {
   @@index([branchCode, shelfCode, rowNo, index])
   @@index([branchCode, shelfCode, index])
   @@index([branchCode, codeProduct]) // ✅  UserTemplateItem ไวขึ้น
-}
-
-model Gourmet {
-  id           Int      @id @default(autoincrement())
-  date         DateTime
-  branch_code  String
-  product_code String
-  quantity     Int
-  sales        Float
 }
 
 model Branch {

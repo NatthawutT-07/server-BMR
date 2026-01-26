@@ -76,31 +76,39 @@ const parseMasterItem = (raw) => {
         return obj;
     });
 
-    const cleaned = rows.filter(r =>
-        r["Item No."] && !isNaN(r["Item No."])
-    );
+    // Filter: Item No. must be a valid number after parsing
+    const cleaned = rows.filter(r => {
+        const itemNo = r["Item No."];
+        if (!itemNo) return false;
+        // Handle both number and text format
+        const parsed = parseInt(String(itemNo).trim(), 10);
+        return !isNaN(parsed) && parsed > 0;
+    });
 
-    const mapped = cleaned.map(row => ({
-        codeProduct: parseInt(row["Item No."], 10),
-        nameProduct: row["Item Description"] || null,
-        groupName: row["Group Name"] || null,
-        status: row["Status"] || null,
-        barcode: row["Bar Code"] || null,
-        nameBrand: row["Name"] || null,
-        consingItem: row["Consign Item"] || null,
-        purchasePriceExcVAT: row["Purchase Price (Exc. VAT)"]
-            ? parseFloat(row["Purchase Price (Exc. VAT)"])
-            : 0,
-        salesPriceIncVAT: row["Sales Price (Inc. VAT)"]
-            ? parseFloat(row["Sales Price (Inc. VAT)"])
-            : 0,
-        preferredVandorCode: row["Preferred Vendor"] || null,
-        preferredVandorName: row["Preferred Vendor Name"] || null,
-        GP: row["GP %"] != null && row["GP %"] !== "" ? String(row["GP %"]) : null,
-        shelfLife: row["Shelf Life (Days)"] != null && row["Shelf Life (Days)"] !== "" ? String(row["Shelf Life (Days)"]) : null,
-        productionDate: row["Production Date"] || null,
-        vatGroupPu: row["VatGroupPu"] || null
-    }));
+    const mapped = cleaned.map(row => {
+        const itemNo = String(row["Item No."]).trim();
+        return {
+            codeProduct: parseInt(itemNo, 10),
+            nameProduct: row["Item Description"] || null,
+            groupName: row["Group Name"] || null,
+            status: row["Status"] || null,
+            barcode: row["Bar Code"] || null,
+            nameBrand: row["Name"] || null,
+            consingItem: row["Consign Item"] || null,
+            purchasePriceExcVAT: row["Purchase Price (Exc. VAT)"]
+                ? parseFloat(row["Purchase Price (Exc. VAT)"])
+                : 0,
+            salesPriceIncVAT: row["Sales Price (Inc. VAT)"]
+                ? parseFloat(row["Sales Price (Inc. VAT)"])
+                : 0,
+            preferredVandorCode: row["Preferred Vendor"] || null,
+            preferredVandorName: row["Preferred Vendor Name"] || null,
+            GP: row["GP %"] != null && row["GP %"] !== "" ? String(row["GP %"]) : null,
+            shelfLife: row["Shelf Life (Days)"] != null && row["Shelf Life (Days)"] !== "" ? String(row["Shelf Life (Days)"]) : null,
+            productionDate: row["Production Date"] || null,
+            vatGroupPu: row["VatGroupPu"] || null
+        };
+    });
 
     return { data: mapped };
 };

@@ -91,12 +91,12 @@ const createPogRequest = async (req, res) => {
 };
 
 /**
- * GET /api/pog-request?branchCode=xxx
- * User ดู history ของสาขาตัวเอง
+ * GET /api/pog-request?branchCode=xxx&page=1&limit=20
+ * User ดู history ของสาขาตัวเอง (รองรับ Pagination)
  */
 const getMyPogRequests = async (req, res) => {
     try {
-        const { branchCode } = req.query;
+        const { branchCode, page = 1, limit = 20 } = req.query;
 
         if (!branchCode) {
             return res.status(400).json({
@@ -105,15 +105,31 @@ const getMyPogRequests = async (req, res) => {
             });
         }
 
+        const pageNum = Math.max(1, parseInt(page) || 1);
+        const limitNum = Math.min(100, Math.max(1, parseInt(limit) || 20)); // Max 100
+        const skip = (pageNum - 1) * limitNum;
+
+        // Get total count for pagination
+        const total = await prisma.pogRequest.count({
+            where: { branchCode },
+        });
+
         const requests = await prisma.pogRequest.findMany({
             where: { branchCode },
             orderBy: { createdAt: "desc" },
-            take: 100, // limit
+            skip,
+            take: limitNum,
         });
 
         return res.json({
             ok: true,
             data: requests,
+            pagination: {
+                page: pageNum,
+                limit: limitNum,
+                count: requests.length,
+                total, // จำนวนรวมทั้งหมด
+            }
         });
     } catch (error) {
         console.error("getMyPogRequests error:", error);

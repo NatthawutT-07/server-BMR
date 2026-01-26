@@ -286,7 +286,7 @@ const getAllProducts = async (start, end) => {
     SELECT
       p."product_code",
       p."product_name",
-      p."product_brand",
+      lih."nameBrand" AS "product_brand",
       lih."groupName" AS "groupName",
       COALESCE(SUM(bi."quantity"), 0)   AS qty,
       COALESCE(SUM(bi."net_sales"), 0)  AS sales,
@@ -301,7 +301,7 @@ const getAllProducts = async (start, end) => {
     GROUP BY
       p."product_code",
       p."product_name",
-      p."product_brand",
+      lih."nameBrand",
       lih."groupName"
     ORDER BY sales DESC
   `;

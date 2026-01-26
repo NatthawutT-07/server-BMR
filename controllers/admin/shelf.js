@@ -291,116 +291,61 @@ exports.tamplate = async (req, res) => {
 
 
 
+
 /**
- * Helper: แปลง "วันเวลาไทย" (ปี/เดือน/วัน/เวลา) → เป็น Date UTC
- * year: 2025, month: 1–12, day: 1–31, timeStr: "HH:MM:SS.sss"
- * คืนค่า: Date ที่ตรงกับเวลาไทยนั้น (offset +07:00) ในรูปแบบ UTC
+ * Helper: Create Date from UTC components
  */
-const makeBangkokDateTimeUtc = (year, month, day, timeStr) => {
-  const y = String(year).padStart(4, "0");
-  const m = String(month).padStart(2, "0");
-  const d = String(day).padStart(2, "0");
-  // รูปแบบเช่น "2025-01-31T23:59:59.999+07:00"
-  return new Date(`${y}-${m}-${d}T${timeStr}+07:00`);
+const makeUtcDate = (year, month, day, h = 0, m = 0, s = 0, ms = 0) => {
+  return new Date(Date.UTC(year, month - 1, day, h, m, s, ms));
 };
 
 /**
- * helper: ช่วงเวลา 90 วันย้อนหลัง (ยึดตามเวลา Asia/Bangkok) และใช้ yesterday เป็นวันสุดท้าย
- * → คืนค่าเป็น Date UTC { startUtc, endUtc }
- * → ใช้สำหรับ Sales Qty / Sales Amount (90 วัน)
+ * helper: 90 days range (UTC)
+ * End = Now, Start = Now - 90 days
  */
-const getBangkok90DaysRangeUtc = () => {
-  const now = new Date();
-  const bangkokNow = new Date(
-    now.toLocaleString("en-US", { timeZone: "Asia/Bangkok" })
-  );
+const get90DaysRangeUtc = () => {
+  const end = new Date();
+  const start = new Date();
+  start.setDate(start.getDate() - 90);
+  return { startUtc: start, endUtc: end };
+};
 
-  // yesterday ตามเวลาไทย
-  const endThai = new Date(bangkokNow);
-  endThai.setDate(endThai.getDate() - 1);
-  const endYear = endThai.getFullYear();
-  const endMonth = endThai.getMonth() + 1;
-  const endDay = endThai.getDate();
-
-  // start = yesterday - 89 วัน (รวมเป็น 90 วัน)
-  const startThai = new Date(endThai);
-  startThai.setDate(startThai.getDate() - 89);
-  const startYear = startThai.getFullYear();
-  const startMonth = startThai.getMonth() + 1;
-  const startDay = startThai.getDate();
-
-  const startUtc = makeBangkokDateTimeUtc(startYear, startMonth, startDay, "00:00:00.000");
-  const endUtc = makeBangkokDateTimeUtc(endYear, endMonth, endDay, "23:59:59.999");
-
+/**
+ * helper: Month range (UTC)
+ * First day 00:00 to last day 23:59:59
+ */
+const getMonthRangeUtc = (year, month) => {
+  const startUtc = makeUtcDate(year, month, 1, 0, 0, 0, 0);
+  const endUtc = makeUtcDate(year, month + 1, 0, 23, 59, 59, 999);
   return { startUtc, endUtc };
 };
 
 /**
- * helper: แปลง "ช่วงเดือนตามเวลาไทย" → เป็นช่วงเวลา UTC (Date)
- * - year: ปี (เช่น 2025)
- * - month: เดือน 1–12
- * คืนค่า: { startUtc, endUtc }
- *   startUtc = 00:00:00 ของวันแรกของเดือนนั้น (เวลาไทย) แปลงเป็น UTC
- *   endUtc   = 23:59:59.999 ของวันสุดท้ายของเดือนนั้น (เวลาไทย) แปลงเป็น UTC
+ * helper: Month Metadata (UTC)
  */
-const getMonthRangeUtcFromBangkok = (year, month) => {
-  const startThai = new Date(year, month - 1, 1, 0, 0, 0, 0); // local แต่เราเอาเฉพาะ y/m/d
-  const startYear = startThai.getFullYear();
-  const startMonth = startThai.getMonth() + 1;
-  const startDay = startThai.getDate();
-
-  // ไปเดือนถัดไป แล้วถอยกลับมา 1 ms = สิ้นเดือน
-  const nextMonthThai = new Date(startThai);
-  nextMonthThai.setMonth(nextMonthThai.getMonth() + 1);
-  nextMonthThai.setMilliseconds(nextMonthThai.getMilliseconds() - 1);
-
-  const endYear = nextMonthThai.getFullYear();
-  const endMonth = nextMonthThai.getMonth() + 1;
-  const endDay = nextMonthThai.getDate();
-
-  const startUtc = makeBangkokDateTimeUtc(startYear, startMonth, startDay, "00:00:00.000");
-  const endUtc = makeBangkokDateTimeUtc(endYear, endMonth, endDay, "23:59:59.999");
-
-  return { startUtc, endUtc };
-};
-
-/**
- * helper: คืนค่า meta เดือนตามเวลาไทย
- * - currentYear/currentMonth  = เดือนปัจจุบันตามเวลาไทย
- * - prevMonths = array 3 ตัวของ 3 เดือนก่อนหน้า (ตามเวลาไทย)
- *   แต่ละตัวมี { year, month, startUtc, endUtc }
- */
-const getBangkokMonthMeta = () => {
+const getMonthMetaUtc = () => {
   const now = new Date();
-  const bangkokNow = new Date(
-    now.toLocaleString("en-US", { timeZone: "Asia/Bangkok" })
-  );
-
-  const currentYear = bangkokNow.getFullYear();
-  const currentMonth = bangkokNow.getMonth() + 1; // 1–12
+  const currentYear = now.getUTCFullYear();
+  const currentMonth = now.getUTCMonth() + 1;
 
   const prevMonths = [];
   for (let i = 1; i <= 3; i++) {
-    const d = new Date(bangkokNow);
-    d.setDate(1);
-    d.setMonth(d.getMonth() - i);
+    const d = new Date(now);
+    d.setUTCMonth(d.getUTCMonth() - i);
+    const y = d.getUTCFullYear();
+    const m = d.getUTCMonth() + 1;
 
-    const y = d.getFullYear();
-    const m = d.getMonth() + 1;
-
-    const { startUtc, endUtc } = getMonthRangeUtcFromBangkok(y, m);
-
+    const { startUtc, endUtc } = getMonthRangeUtc(y, m);
     prevMonths.push({
       year: y,
-      month: m, // 1–12
+      month: m,
       startUtc,
       endUtc,
     });
   }
 
-  // เดือนปัจจุบัน (ไว้ใช้ถ้าต้องการช่วงทั้งเดือน)
   const { startUtc: currentMonthStartUtc, endUtc: currentMonthEndUtc } =
-    getMonthRangeUtcFromBangkok(currentYear, currentMonth);
+    getMonthRangeUtc(currentYear, currentMonth);
 
   return {
     currentYear,
@@ -419,7 +364,7 @@ exports.sku = async (req, res) => {
   }
 
   // 🔹 ช่วง 90 วัน (ตามเวลาไทย) → แปลงเป็น UTC สำหรับ WHERE b."date"
-  const { startUtc, endUtc } = getBangkok90DaysRangeUtc();
+  const { startUtc, endUtc } = get90DaysRangeUtc();
 
   // 🔹 meta เดือน สำหรับ 3M / current month (คิดจากเวลาไทย)
   const {
@@ -427,8 +372,7 @@ exports.sku = async (req, res) => {
     currentMonth,
     currentMonthStartUtc,
     currentMonthEndUtc,
-    prevMonths,
-  } = getBangkokMonthMeta();
+  } = getMonthMetaUtc();
 
   // cache key ผูกกับ branchCode + ช่วงวันที่ (กันข้อมูลค้างข้ามวัน)
   const key = `sku-${branchCode}-${startUtc.toISOString().slice(0, 10)}-${endUtc
@@ -465,9 +409,6 @@ exports.sku = async (req, res) => {
             -- 🟢 ยอดขาย 90 วันล่าสุดจาก Bill/BillItem (net_sales) → ใช้ทำ Sales Qty / Amount
             COALESCE(bs."quantity_total", 0)::int     AS "salesQuantity",
             COALESCE(bs."net_sales_total", 0)::float8 AS "salesTotalPrice",
-
-            -- 🟢 ยอดขาย 3 เดือนก่อนหน้า (ตาม "เดือนเวลาไทย" แต่ใช้ช่วง UTC)
-            COALESCE(p3."sales3mQty", 0)::int         AS "sales3mQty",
 
             -- 🟢 ยอดขายเดือนปัจจุบันเท่านั้น (ตาม "เดือนเวลาไทย" แต่ใช้ช่วง UTC)
             COALESCE(cm."salesCurrentMonthQty", 0)::int AS "salesCurrentMonthQty"
@@ -523,74 +464,6 @@ exports.sku = async (req, res) => {
         ON s."branchCode" = bs."branchCode" 
         AND s."codeProduct" = bs."codeProduct"
 
-        -- 🟢 Sales 3 เดือนก่อนหน้า จาก Bill / BillItem (รวมทุก channel)
-        -- ใช้ UNION ALL แยกช่วงเดือนเพื่อช่วยให้ index date ทำงานเต็ม
-        LEFT JOIN (
-            SELECT "branchCode", "codeProduct", SUM("sales3mQty")::int AS "sales3mQty"
-            FROM (
-                SELECT 
-                    br."branch_code"            AS "branchCode",
-                    (prod."product_code")::int  AS "codeProduct",
-                    SUM(bi."quantity")::int     AS "sales3mQty"
-                FROM "BillItem" bi
-                JOIN "Bill" b
-                    ON bi."billId" = b."id"
-                JOIN "Branch" br
-                    ON b."branchId" = br."id"
-                JOIN "Product" prod
-                    ON bi."productId" = prod."id"
-                WHERE br."branch_code" = ${branchCode}
-                  AND b."date" >= ${prevMonths[0].startUtc}
-                  AND b."date" <= ${prevMonths[0].endUtc}
-                GROUP BY 
-                    br."branch_code",
-                    (prod."product_code")::int
-
-                UNION ALL
-
-                SELECT 
-                    br."branch_code"            AS "branchCode",
-                    (prod."product_code")::int  AS "codeProduct",
-                    SUM(bi."quantity")::int     AS "sales3mQty"
-                FROM "BillItem" bi
-                JOIN "Bill" b
-                    ON bi."billId" = b."id"
-                JOIN "Branch" br
-                    ON b."branchId" = br."id"
-                JOIN "Product" prod
-                    ON bi."productId" = prod."id"
-                WHERE br."branch_code" = ${branchCode}
-                  AND b."date" >= ${prevMonths[1].startUtc}
-                  AND b."date" <= ${prevMonths[1].endUtc}
-                GROUP BY 
-                    br."branch_code",
-                    (prod."product_code")::int
-
-                UNION ALL
-
-                SELECT 
-                    br."branch_code"            AS "branchCode",
-                    (prod."product_code")::int  AS "codeProduct",
-                    SUM(bi."quantity")::int     AS "sales3mQty"
-                FROM "BillItem" bi
-                JOIN "Bill" b
-                    ON bi."billId" = b."id"
-                JOIN "Branch" br
-                    ON b."branchId" = br."id"
-                JOIN "Product" prod
-                    ON bi."productId" = prod."id"
-                WHERE br."branch_code" = ${branchCode}
-                  AND b."date" >= ${prevMonths[2].startUtc}
-                  AND b."date" <= ${prevMonths[2].endUtc}
-                GROUP BY 
-                    br."branch_code",
-                    (prod."product_code")::int
-            ) u
-            GROUP BY "branchCode", "codeProduct"
-        ) p3
-        ON s."branchCode" = p3."branchCode" 
-        AND s."codeProduct" = p3."codeProduct"
-
         -- 🟢 Sales เดือนปัจจุบัน จาก Bill / BillItem
         -- ใช้ช่วงเวลา UTC ของเดือนปัจจุบัน (ตามเดือนเวลาไทย)
         LEFT JOIN (
@@ -628,9 +501,6 @@ exports.sku = async (req, res) => {
 
     // 🧮 Convert และคำนวณ target
     const result = rawResult.map((r) => {
-      const sales3mQty = Number(r.sales3mQty ?? 0);
-      const sales3mAvgQty = sales3mQty / 3;           // เฉลี่ย 3 เดือน
-      const salesTargetQty = sales3mAvgQty * 0.8;     // 80% ของ avg
 
       return {
         branchCode: r.branchCode,
@@ -675,11 +545,6 @@ exports.sku = async (req, res) => {
         salesQuantity: Number(r.salesQuantity ?? 0),
         salesTotalPrice: Number(r.salesTotalPrice ?? 0),
 
-        // 🔹 ยอดขาย 3 เดือนก่อนหน้า (รวม 3 เดือน)
-        sales3mQty,
-        // 🔹 target = 80% ของ avg 3 เดือน
-        salesTargetQty,
-
         // 🔹 ยอดขายเดือนปัจจุบันเท่านั้น
         salesCurrentMonthQty: Number(r.salesCurrentMonthQty ?? 0),
       };
@@ -694,7 +559,7 @@ exports.sku = async (req, res) => {
 };
 
 exports.getShelfDashboardSummary = async (req, res) => {
-  const { startUtc, endUtc } = getBangkok90DaysRangeUtc();
+  const { startUtc, endUtc } = get90DaysRangeUtc();
   console.log(startUtc, ":::", endUtc);
 
   try {
@@ -803,7 +668,7 @@ exports.getShelfDashboardShelfSales = async (req, res) => {
     return res.status(400).json({ error: "branchCode is required" });
   }
 
-  const { startUtc, endUtc } = getBangkok90DaysRangeUtc();
+  const { startUtc, endUtc } = get90DaysRangeUtc();
 
   try {
     const shelfSalesRows = await prisma.$queryRaw`
