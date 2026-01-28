@@ -76,6 +76,7 @@ const applyPogChange = async (reqItem) => {
     }
 
     // 2. ADD (INSERT MODE - แทรกที่ตำแหน่งที่ระบุ + Shift สินค้าเดิมไปขวา)
+    // หมายเหตุ: bulk approve จะใช้ offset tracking เพื่อรักษาลำดับตาม createdAt
     if (action === "add") {
         if (!toShelf || !toRow || !toIndex) throw new Error("Missing toLocation for add");
 
@@ -85,115 +86,7 @@ const applyPogChange = async (reqItem) => {
         const key = lockKey(branchCode, toShelf);
         await acquireLock(prisma, key);
         try {
-            // ดึงข้อมูล row ปัจจุบัน
-            const existingItems = await prisma.sku.findMany({
-                where: { branchCode, shelfCode: toShelf, rowNo: toRow },
-                orderBy: { index: "asc" }
-            });
-
-            // หา max index ปัจจุบัน
-            const maxIndex = existingItems.length > 0
-                ? Math.max(...existingItems.map(i => i.index))
-                : 0;
-
-            // ✅ INSERT MODE:
-            // - ถ้า toIndex > maxIndex+1 → ใส่ที่ maxIndex+1 (ต่อท้าย)
-            // - ถ้า toIndex <= maxIndex → shift สินค้าเดิมไปขวา แล้วแทรก
-            let finalIndex = toIndex;
-
-            if (toIndex > maxIndex + 1) {
-                // ตำแหน่งที่ระบุเกินกว่าที่มี → ใส่ต่อท้าย
-                finalIndex = maxIndex + 1;
-                console.log(`⚠️ Index ${toIndex} > max+1, appending at ${finalIndex}`);
-            } else if (existingItems.some(i => i.index >= toIndex)) {
-                // มีสินค้าที่ index >= toIndex → shift ไปขวา (+1)
-                const itemsToShift = existingItems.filter(i => i.index >= toIndex);
-                const shiftUpdates = itemsToShift.map(itm =>
-                    prisma.sku.update({
-                        where: { id: itm.id },
-                        data: { index: itm.index + 1 }
-                    })
-                );
-                await prisma.$transaction(shiftUpdates);
-                console.log(`⬅️ Shifted ${itemsToShift.length} items to the right`);
-            }
-
-            // Insert new item at finalIndex
-            await prisma.sku.create({
-                data: {
-                    branchCode,
-                    shelfCode: toShelf,
-                    rowNo: toRow,
-                    index: finalIndex,
-                    codeProduct: code
-                }
-            });
-
-            // Re-index entire row (1, 2, 3, ...) เพื่อให้เรียงต่อกัน
-            const allItems = await prisma.sku.findMany({
-                where: { branchCode, shelfCode: toShelf, rowNo: toRow },
-                orderBy: { index: "asc" }
-            });
-
-            if (allItems.length > 0) {
-                const reindexUpdates = allItems.map((itm, idx) =>
-                    prisma.sku.update({ where: { id: itm.id }, data: { index: idx + 1 } })
-                );
-                await prisma.$transaction(reindexUpdates);
-            }
-
-            console.log(`✅ ADD (INSERT): ${barcode} → ${toShelf}/${toRow}/index:${finalIndex} (total: ${allItems.length})`);
-        } finally {
-            await releaseLock(prisma, key);
-        }
-        return;
-    }
-
-    // 3. MOVE (INSERT MODE - ค้นหาด้วย barcode แทน index เพื่อป้องกัน index เพี้ยน)
-    if (action === "move") {
-        // Requires Source and Target
-        if (!fromShelf || !fromRow) throw new Error("Missing fromLocation for move");
-        if (!toShelf || !toRow || !toIndex) throw new Error("Missing toLocation for move");
-
-        // Get Code
-        const code = await getCodeProduct(barcode);
-        if (!code) throw new Error(`Product not found for barcode: ${barcode}`);
-
-        // Lock both shelves
-        const key1 = lockKey(branchCode, fromShelf);
-        const key2 = fromShelf !== toShelf ? lockKey(branchCode, toShelf) : null;
-
-        await acquireLock(prisma, key1);
-        if (key2) await acquireLock(prisma, key2);
-
-        try {
-            // ========== Step A: Remove from Source (ค้นหาด้วย codeProduct) ==========
-            // ✅ ใช้ codeProduct แทน fromIndex เพื่อป้องกันปัญหา index เปลี่ยนหลัง re-index
-            const deleted = await prisma.sku.deleteMany({
-                where: { branchCode, shelfCode: fromShelf, rowNo: fromRow, codeProduct: code }
-            });
-
-            if (deleted.count === 0) {
-                throw new Error(`ไม่พบสินค้า ${barcode} ใน ${fromShelf}/Row${fromRow} (อาจถูกย้ายหรือลบไปแล้ว)`);
-            }
-
-            // Re-index Source Row (1, 2, 3, ...)
-            const sourceRemaining = await prisma.sku.findMany({
-                where: { branchCode, shelfCode: fromShelf, rowNo: fromRow },
-                orderBy: { index: "asc" }
-            });
-
-            if (sourceRemaining.length > 0) {
-                const sourceUpdates = sourceRemaining.map((itm, idx) =>
-                    prisma.sku.update({ where: { id: itm.id }, data: { index: idx + 1 } })
-                );
-                await prisma.$transaction(sourceUpdates);
-            }
-
-            console.log(`✅ MOVE Source: Removed ${barcode} from ${fromShelf}/${fromRow}, re-indexed ${sourceRemaining.length} items`);
-
-            // ========== Step B: INSERT to Target Row at toIndex ==========
-            // Step B1: Shift items >= toIndex to the right (+1)
+            // Shift items >= toIndex to the right (+1)
             const itemsToShift = await prisma.sku.findMany({
                 where: { branchCode, shelfCode: toShelf, rowNo: toRow, index: { gte: toIndex } },
                 orderBy: { index: "desc" }
@@ -206,7 +99,7 @@ const applyPogChange = async (reqItem) => {
                 await prisma.$transaction(shiftUpdates);
             }
 
-            // Step B2: Insert new item at toIndex
+            // Insert new item at toIndex
             await prisma.sku.create({
                 data: {
                     branchCode,
@@ -217,20 +110,155 @@ const applyPogChange = async (reqItem) => {
                 }
             });
 
-            // Step B3: Re-index Target Row (1, 2, 3, ...)
-            const targetAll = await prisma.sku.findMany({
+            // Re-index entire row (1, 2, 3, ...)
+            const allItems = await prisma.sku.findMany({
                 where: { branchCode, shelfCode: toShelf, rowNo: toRow },
                 orderBy: { index: "asc" }
             });
 
-            if (targetAll.length > 0) {
-                const targetUpdates = targetAll.map((itm, idx) =>
+            if (allItems.length > 0) {
+                const reindexUpdates = allItems.map((itm, idx) =>
                     prisma.sku.update({ where: { id: itm.id }, data: { index: idx + 1 } })
                 );
-                await prisma.$transaction(targetUpdates);
+                await prisma.$transaction(reindexUpdates);
             }
 
-            console.log(`✅ MOVE Target: Inserted at ${toShelf}/${toRow}/index:${toIndex}, total: ${targetAll.length}`);
+            console.log(`✅ ADD (INSERT): ${barcode} → ${toShelf}/${toRow}/index:${toIndex} (total: ${allItems.length})`);
+        } finally {
+            await releaseLock(prisma, key);
+        }
+        return;
+    }
+
+    // 3. MOVE (INSERT MODE - รองรับการย้ายทั้งภายใน row เดียวกันและข้าม row)
+    if (action === "move") {
+        // Requires Source and Target
+        if (!fromShelf || !fromRow) throw new Error("Missing fromLocation for move");
+        if (!toShelf || !toRow || !toIndex) throw new Error("Missing toLocation for move");
+
+        // Get Code
+        const code = await getCodeProduct(barcode);
+        if (!code) throw new Error(`Product not found for barcode: ${barcode}`);
+
+        // ตรวจสอบว่าย้ายภายใน row เดียวกันหรือไม่
+        const isSameRow = (fromShelf === toShelf && Number(fromRow) === Number(toRow));
+
+        // Lock both shelves
+        const key1 = lockKey(branchCode, fromShelf);
+        const key2 = fromShelf !== toShelf ? lockKey(branchCode, toShelf) : null;
+
+        await acquireLock(prisma, key1);
+        if (key2) await acquireLock(prisma, key2);
+
+        try {
+            if (isSameRow) {
+                // ========== SAME ROW MOVE ==========
+                // ดึงข้อมูล row ทั้งหมด
+                const allItems = await prisma.sku.findMany({
+                    where: { branchCode, shelfCode: fromShelf, rowNo: Number(fromRow) },
+                    orderBy: { index: "asc" }
+                });
+
+                // หา item ที่จะย้าย
+                const itemToMove = allItems.find(i => i.codeProduct === code);
+                if (!itemToMove) {
+                    throw new Error(`ไม่พบสินค้า ${barcode} ใน ${fromShelf}/Row${fromRow}`);
+                }
+
+                const currentIndex = itemToMove.index;
+                const targetIndex = Number(toIndex);
+
+                // ถ้าตำแหน่งเดิมกับใหม่เหมือนกัน ไม่ต้องทำอะไร
+                if (currentIndex === targetIndex) {
+                    console.log(`⚠️ MOVE: ${barcode} already at ${fromShelf}/${fromRow}/index:${currentIndex}, skipping`);
+                    return;
+                }
+
+                // สร้าง array ใหม่โดยย้าย item ไปตำแหน่งใหม่
+                const otherItems = allItems.filter(i => i.codeProduct !== code);
+
+                // แทรกที่ตำแหน่ง targetIndex (0-based จะเป็น targetIndex - 1)
+                const insertPosition = Math.min(targetIndex - 1, otherItems.length);
+                const newOrder = [
+                    ...otherItems.slice(0, insertPosition),
+                    itemToMove,
+                    ...otherItems.slice(insertPosition)
+                ];
+
+                // Update index ทั้งหมดตามลำดับใหม่
+                const updates = newOrder.map((itm, idx) =>
+                    prisma.sku.update({ where: { id: itm.id }, data: { index: idx + 1 } })
+                );
+                await prisma.$transaction(updates);
+
+                console.log(`✅ MOVE (Same Row): ${barcode} ${fromShelf}/${fromRow}/index:${currentIndex} → index:${targetIndex}, total: ${newOrder.length}`);
+
+            } else {
+                // ========== CROSS ROW/SHELF MOVE ==========
+                // Step A: Remove from Source (ค้นหาด้วย codeProduct)
+                const deleted = await prisma.sku.deleteMany({
+                    where: { branchCode, shelfCode: fromShelf, rowNo: Number(fromRow), codeProduct: code }
+                });
+
+                if (deleted.count === 0) {
+                    throw new Error(`ไม่พบสินค้า ${barcode} ใน ${fromShelf}/Row${fromRow} (อาจถูกย้ายหรือลบไปแล้ว)`);
+                }
+
+                // Re-index Source Row (1, 2, 3, ...)
+                const sourceRemaining = await prisma.sku.findMany({
+                    where: { branchCode, shelfCode: fromShelf, rowNo: Number(fromRow) },
+                    orderBy: { index: "asc" }
+                });
+
+                if (sourceRemaining.length > 0) {
+                    const sourceUpdates = sourceRemaining.map((itm, idx) =>
+                        prisma.sku.update({ where: { id: itm.id }, data: { index: idx + 1 } })
+                    );
+                    await prisma.$transaction(sourceUpdates);
+                }
+
+                console.log(`✅ MOVE Source: Removed ${barcode} from ${fromShelf}/${fromRow}, re-indexed ${sourceRemaining.length} items`);
+
+                // Step B: INSERT to Target Row at toIndex
+                // Shift items >= toIndex to the right (+1)
+                const itemsToShift = await prisma.sku.findMany({
+                    where: { branchCode, shelfCode: toShelf, rowNo: Number(toRow), index: { gte: Number(toIndex) } },
+                    orderBy: { index: "desc" }
+                });
+
+                if (itemsToShift.length > 0) {
+                    const shiftUpdates = itemsToShift.map(itm =>
+                        prisma.sku.update({ where: { id: itm.id }, data: { index: itm.index + 1 } })
+                    );
+                    await prisma.$transaction(shiftUpdates);
+                }
+
+                // Insert new item at toIndex
+                await prisma.sku.create({
+                    data: {
+                        branchCode,
+                        shelfCode: toShelf,
+                        rowNo: Number(toRow),
+                        index: Number(toIndex),
+                        codeProduct: code
+                    }
+                });
+
+                // Re-index Target Row (1, 2, 3, ...)
+                const targetAll = await prisma.sku.findMany({
+                    where: { branchCode, shelfCode: toShelf, rowNo: Number(toRow) },
+                    orderBy: { index: "asc" }
+                });
+
+                if (targetAll.length > 0) {
+                    const targetUpdates = targetAll.map((itm, idx) =>
+                        prisma.sku.update({ where: { id: itm.id }, data: { index: idx + 1 } })
+                    );
+                    await prisma.$transaction(targetUpdates);
+                }
+
+                console.log(`✅ MOVE Target: Inserted at ${toShelf}/${toRow}/index:${toIndex}, total: ${targetAll.length}`);
+            }
 
         } finally {
             await releaseLock(prisma, key1);
@@ -637,14 +665,47 @@ const bulkApprove = async (req, res) => {
             }
         }
 
-        // ========== 5. ADD ตามลำดับ createdAt ==========
+        // ========== 5. ADD ตามลำดับ createdAt พร้อม offset tracking ==========
+        // Track offset สำหรับแต่ละ target position เพื่อป้องกันลำดับกลับด้าน
+        // เมื่อ ADD หลายตัวที่ตำแหน่งเดียวกัน ต้องปรับ toIndex ให้เลื่อนตามจำนวนที่ insert ไปแล้ว
+        const addOffsets = {}; // key: "branchCode|toShelf|toRow|originalToIndex" -> offset count
+
         for (const req of addRequests) {
             try {
-                await applyPogChange(req);
+                const { branchCode, toShelf, toRow, toIndex } = req;
+
+                // สร้าง key สำหรับ target position
+                const targetKey = `${branchCode}|${toShelf}|${toRow}|${toIndex}`;
+
+                // หา offset ปัจจุบัน (กี่ตัวที่ insert ไปก่อนหน้าที่ตำแหน่งนี้หรือก่อนหน้า)
+                let totalOffset = 0;
+                for (const [key, count] of Object.entries(addOffsets)) {
+                    const [kb, ks, kr, ki] = key.split("|");
+                    if (kb === branchCode && ks === toShelf && kr === String(toRow)) {
+                        // ถ้าเป็น shelf/row เดียวกัน และ index <= toIndex ของเรา
+                        if (Number(ki) <= Number(toIndex)) {
+                            totalOffset += count;
+                        }
+                    }
+                }
+
+                // ปรับ toIndex ด้วย offset
+                const adjustedReq = {
+                    ...req,
+                    toIndex: Number(toIndex) + totalOffset
+                };
+
+                console.log(`📍 ADD ${req.barcode}: original toIndex=${toIndex}, offset=${totalOffset}, adjusted=${adjustedReq.toIndex}`);
+
+                await applyPogChange(adjustedReq);
                 await prisma.pogRequest.update({
                     where: { id: req.id },
                     data: { status: "completed" }
                 });
+
+                // บันทึก offset สำหรับ position นี้
+                addOffsets[targetKey] = (addOffsets[targetKey] || 0) + 1;
+
                 successCount++;
             } catch (e) {
                 errorCount++;
@@ -652,14 +713,47 @@ const bulkApprove = async (req, res) => {
             }
         }
 
-        // ========== 6. MOVE ตามลำดับ createdAt ==========
+        // ========== 6. MOVE ตามลำดับ createdAt พร้อม offset tracking ==========
+        // Track offset สำหรับแต่ละ target position เพื่อป้องกันลำดับกลับด้าน
+        // เมื่อ MOVE หลายตัวไป target เดียวกัน ต้องปรับ toIndex ให้เลื่อนตามจำนวนที่ insert ไปแล้ว
+        const moveOffsets = {}; // key: "branchCode|toShelf|toRow|originalToIndex" -> offset count
+
         for (const req of moveRequests) {
             try {
-                await applyPogChange(req);
+                const { branchCode, toShelf, toRow, toIndex } = req;
+
+                // สร้าง key สำหรับ target position
+                const targetKey = `${branchCode}|${toShelf}|${toRow}|${toIndex}`;
+
+                // หา offset ปัจจุบัน (กี่ตัวที่ insert ไปก่อนหน้าที่ตำแหน่งนี้หรือก่อนหน้า)
+                let totalOffset = 0;
+                for (const [key, count] of Object.entries(moveOffsets)) {
+                    const [kb, ks, kr, ki] = key.split("|");
+                    if (kb === branchCode && ks === toShelf && kr === String(toRow)) {
+                        // ถ้าเป็น shelf/row เดียวกัน และ index <= toIndex ของเรา
+                        if (Number(ki) <= Number(toIndex)) {
+                            totalOffset += count;
+                        }
+                    }
+                }
+
+                // ปรับ toIndex ด้วย offset
+                const adjustedReq = {
+                    ...req,
+                    toIndex: Number(toIndex) + totalOffset
+                };
+
+                console.log(`📍 MOVE ${req.barcode}: original toIndex=${toIndex}, offset=${totalOffset}, adjusted=${adjustedReq.toIndex}`);
+
+                await applyPogChange(adjustedReq);
                 await prisma.pogRequest.update({
                     where: { id: req.id },
                     data: { status: "completed" }
                 });
+
+                // บันทึก offset สำหรับ position นี้
+                moveOffsets[targetKey] = (moveOffsets[targetKey] || 0) + 1;
+
                 successCount++;
             } catch (e) {
                 errorCount++;
