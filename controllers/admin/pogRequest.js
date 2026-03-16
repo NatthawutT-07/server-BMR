@@ -14,7 +14,7 @@ const getCodeProduct = async (barcode) => {
 };
 
 // Helper: Apply Change to SKU Table
-const applyPogChange = async (reqItem) => {
+const applyPogChange = async (reqItem, insertOffset = 0) => {
     const { branchCode, action, barcode, swapBarcode } = reqItem;
     // Position Info
     const fromShelf = reqItem.fromShelf;
@@ -23,7 +23,9 @@ const applyPogChange = async (reqItem) => {
 
     const toShelf = reqItem.toShelf;
     const toRow = Number(reqItem.toRow || 0);
-    const toIndex = Number(reqItem.toIndex || 0);
+
+    // ✅ บวก insertOffset เข้าไปกับ toIndex เพื่อเลื่อนลำดับถ้ามีของมาต่อท้าย
+    const toIndex = Number(reqItem.toIndex || 0) + insertOffset;
 
     // 1. DELETE (ค้นหาด้วย barcode แทน index เพื่อป้องกัน index เพี้ยน)
     if (action === "delete") {
@@ -260,57 +262,7 @@ const applyPogChange = async (reqItem) => {
                 console.log(`✅ MOVE Target: Inserted at ${toShelf}/${toRow}/index:${toIndex}, total: ${targetAll.length}`);
             }
 
-        } finally {
-            await releaseLock(prisma, key1);
-            if (key2) await releaseLock(prisma, key2);
-        }
-        return;
-    }
 
-    // 4. SWAP
-    if (action === "swap") {
-        // Requires both locations? Or just From -> To?
-        // Modal implies moving Current(From) -> Target(To). And Target(SwapBarcode) -> Current(From).
-
-        if (!fromShelf || !fromRow || !fromIndex) throw new Error("Missing fromLocation for swap");
-        if (!toShelf || !toRow || !toIndex) throw new Error("Missing toLocation for swap");
-
-        const codeA = await getCodeProduct(barcode);
-        const codeB = await getCodeProduct(swapBarcode);
-
-        if (!codeA) throw new Error(`Product A not found: ${barcode}`);
-        if (!codeB) throw new Error(`Product B not found: ${swapBarcode}`);
-
-        // Lock both shelves (if different)
-        const key1 = lockKey(branchCode, fromShelf);
-        const key2 = fromShelf !== toShelf ? lockKey(branchCode, toShelf) : null;
-
-        await acquireLock(prisma, key1);
-        if (key2) await acquireLock(prisma, key2);
-
-        try {
-            // Update A -> B pos
-            // Update B -> A pos
-            // Use updateMany by location
-
-            // Move A to ToLocation (Overwrite B there)
-            const op1 = prisma.sku.updateMany({
-                where: { branchCode, shelfCode: toShelf, rowNo: toRow, index: toIndex },
-                data: { codeProduct: codeA }
-            });
-
-            // Move B to FromLocation (Overwrite A there)
-            const op2 = prisma.sku.updateMany({
-                where: { branchCode, shelfCode: fromShelf, rowNo: fromRow, index: fromIndex },
-                data: { codeProduct: codeB }
-            });
-
-            const res = await prisma.$transaction([op1, op2]);
-            if (res[0].count === 0 || res[1].count === 0) {
-                // Warn if nothing updated?
-                // If target or source didn't exist, we failed to swap correctly.
-                // But let's assume valid request.
-            }
         } finally {
             await releaseLock(prisma, key1);
             if (key2) await releaseLock(prisma, key2);
@@ -319,30 +271,61 @@ const applyPogChange = async (reqItem) => {
     }
 };
 
+
+
 /**
  * GET /api/admin/pog-requests
- * Admin ดูรายการทั้งหมด (filter ได้)
+ * Admin ดูรายการทั้งหมด (filter ได้, รองรับ pagination)
  */
 const getAllPogRequests = async (req, res) => {
     try {
-        const { branchCode, status, action, limit = 200 } = req.query;
+        // เพิ่ม page, shelf, row สำหรับ server-side pagination
+        const { branchCode, status, action, shelf, row, limit = 50, page = 1 } = req.query;
 
         const where = {};
         if (branchCode) where.branchCode = branchCode;
         if (status) where.status = status;
         if (action) where.action = action;
 
-        // 1. Get filtered data
+        if (shelf || row) {
+            const orConditions = [];
+            const r = row ? Number(row) : undefined;
+
+            if (shelf && row) {
+                // ต้องตรงทั้ง shelf และ row ในตำแหน่ง from หรือ to
+                orConditions.push({ fromShelf: shelf, fromRow: r });
+                orConditions.push({ toShelf: shelf, toRow: r });
+            } else if (shelf) {
+                orConditions.push({ fromShelf: shelf });
+                orConditions.push({ toShelf: shelf });
+            } else if (row) {
+                orConditions.push({ fromRow: r });
+                orConditions.push({ toRow: r });
+            }
+            if (orConditions.length > 0) {
+                where.OR = orConditions;
+            }
+        }
+
+        const pageNum = Math.max(1, parseInt(page) || 1);
+        const limitNum = Math.min(1000, Math.max(1, parseInt(limit) || 50));
+        const skip = (pageNum - 1) * limitNum;
+
+        // 1. Get filtered data with pagination
         const requests = await prisma.pogRequest.findMany({
             where,
             orderBy: { createdAt: "desc" },
-            take: Number(limit),
+            skip,
+            take: limitNum,
         });
 
-        // 2. Get stats (counts by status) - use base filter (branch/action) but ignore status filter
+        // 2. Get total count for pagination based on current filters
+        const totalFiltered = await prisma.pogRequest.count({ where });
+
+        // 3. Get stats (counts by status) - use base filter (branch/action) but ignore status filter
         const statsWhere = {};
         if (branchCode) statsWhere.branchCode = branchCode;
-        if (action) statsWhere.action = action; // Include action filter in stats if needed, typically stats should reflect current scope
+        if (action) statsWhere.action = action;
 
         const statsGroup = await prisma.pogRequest.groupBy({
             by: ['status'],
@@ -368,7 +351,10 @@ const getAllPogRequests = async (req, res) => {
             ok: true,
             data: requests,
             count: requests.length,
-            stats, // ✅ Include stats
+            total: totalFiltered,
+            page: pageNum,
+            totalPages: Math.ceil(totalFiltered / limitNum),
+            stats,
         });
     } catch (error) {
         console.error("getAllPogRequests error:", error);
@@ -593,9 +579,8 @@ const bulkApprove = async (req, res) => {
         const deleteRequests = requests.filter(r => r.action === "delete").sort(sortByCreatedAt);
         const addRequests = requests.filter(r => r.action === "add").sort(sortByCreatedAt);
         const moveRequests = requests.filter(r => r.action === "move").sort(sortByCreatedAt);
-        const swapRequests = requests.filter(r => r.action === "swap").sort(sortByCreatedAt);
 
-        console.log(`📋 Bulk Approve: DELETE=${deleteRequests.length}, ADD=${addRequests.length}, MOVE=${moveRequests.length}, SWAP=${swapRequests.length}`);
+        console.log(`📋 Bulk Approve: DELETE=${deleteRequests.length}, ADD=${addRequests.length}, MOVE=${moveRequests.length}`);
 
         let successCount = 0;
         let errorCount = 0;
@@ -689,15 +674,13 @@ const bulkApprove = async (req, res) => {
                     }
                 }
 
-                // ปรับ toIndex ด้วย offset
-                const adjustedReq = {
-                    ...req,
-                    toIndex: Number(toIndex) + totalOffset
-                };
+                // ปรับ toIndex ด้วย offset ที่บันทึกไว้
+                // โดยแก้ให้ส่ง insertOffset เข้าไปใน applyPogChange แทนการแก้ req.toIndex โดยตรง
 
-                console.log(`📍 ADD ${req.barcode}: original toIndex=${toIndex}, offset=${totalOffset}, adjusted=${adjustedReq.toIndex}`);
+                console.log(`📍 ADD ${req.barcode}: original toIndex=${toIndex}, offset=${totalOffset}, adjusted target=${Number(toIndex) + totalOffset}`);
 
-                await applyPogChange(adjustedReq);
+                // ส่ง offset ไปบวกข้างใน ไม่แก้ไขของเดิม
+                await applyPogChange(req, totalOffset);
                 await prisma.pogRequest.update({
                     where: { id: req.id },
                     data: { status: "completed" }
@@ -737,15 +720,11 @@ const bulkApprove = async (req, res) => {
                     }
                 }
 
-                // ปรับ toIndex ด้วย offset
-                const adjustedReq = {
-                    ...req,
-                    toIndex: Number(toIndex) + totalOffset
-                };
+                // ปรับ toIndex ด้วย offset ด้วยส่ง insertOffset เข้าระบบโดยตรง
 
-                console.log(`📍 MOVE ${req.barcode}: original toIndex=${toIndex}, offset=${totalOffset}, adjusted=${adjustedReq.toIndex}`);
+                console.log(`📍 MOVE ${req.barcode}: original toIndex=${toIndex}, offset=${totalOffset}, adjusted target=${Number(toIndex) + totalOffset}`);
 
-                await applyPogChange(adjustedReq);
+                await applyPogChange(req, totalOffset);
                 await prisma.pogRequest.update({
                     where: { id: req.id },
                     data: { status: "completed" }
@@ -761,20 +740,7 @@ const bulkApprove = async (req, res) => {
             }
         }
 
-        // ========== 7. SWAP ตามลำดับ createdAt ==========
-        for (const req of swapRequests) {
-            try {
-                await applyPogChange(req);
-                await prisma.pogRequest.update({
-                    where: { id: req.id },
-                    data: { status: "completed" }
-                });
-                successCount++;
-            } catch (e) {
-                errorCount++;
-                errors.push(`Swap ${req.barcode}: ${e.message}`);
-            }
-        }
+
 
         return res.json({
             ok: true,
@@ -793,6 +759,8 @@ const bulkApprove = async (req, res) => {
         });
     }
 };
+
+
 
 module.exports = {
     getAllPogRequests,

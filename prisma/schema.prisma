@@ -73,6 +73,7 @@ model withdraw {
   quantity    Int
   value       Float
 
+  @@unique([docNumber, branchCode, codeProduct,quantity,value])
   @@index([branchCode, codeProduct])
   @@index([branchCode, docStatus, codeProduct])
 }
@@ -256,7 +257,7 @@ model PogRequest {
   @@index([createdAt])
 }
 
-// ✅ เก็บสถานะการอัพเดท shelf ของแต่ละสาขา (สำหรับแจ้งเตือน mobile)
+// เก็บสถานะการอัพเดท shelf ของแต่ละสาขา (สำหรับแจ้งเตือน mobile)
 model ShelfUpdate {
   id         Int      @id @default(autoincrement())
   branchCode String   @unique
@@ -265,6 +266,24 @@ model ShelfUpdate {
   updatedBy  String?
 
   @@index([branchCode])
+}
+
+// ✅ เก็บยอดขายของกรูเม่ (Gourmet)
+model Gourmet {
+  id           Int      @id @default(autoincrement())
+  date         DateTime
+  branch_code  String
+  product_code String
+  quantity     Int
+  sales        Float
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([date, branch_code, product_code, quantity])
+  @@index([date])
+  @@index([branch_code])
+  @@index([product_code])
 }
 
 // ✅ เก็บ log รายละเอียดการเปลี่ยนแปลง shelf (add/delete/move)
@@ -288,7 +307,7 @@ model ShelfChangeLog {
   createdAt DateTime @default(now())
   createdBy String?
 
-  // ✅ สำหรับ acknowledge ทีละตัว
+  //  สำหรับ acknowledge ทีละตัว
   acknowledged   Boolean   @default(false)
   acknowledgedAt DateTime?
 
@@ -296,4 +315,53 @@ model ShelfChangeLog {
   @@index([branchCode, createdAt])
   @@index([branchCode, acknowledged])
   @@index([updateId])
+}
+
+model OrderSI {
+  id               Int      @id @default(autoincrement())
+  branchCode       String   @map("branch_code")
+  branchName       String   @map("branch_name")
+  siNo             String   @map("si_no")
+  orderDate        DateTime @map("order_date")
+  deliveryDate     DateTime @map("delivery_date")
+  vendorCode       String   @map("vendor_code")
+  vendorName       String   @map("vendor_name")
+  productCode      String   @map("product_code")
+  productName      String   @map("product_name")
+  barcode          String   @map("barcode")
+  itemType         String   @map("item_type")
+  quantity         Int      @map("quantity")
+  priceExV         Float    @map("price_ex_v")
+  priceInV         Float    @map("price_in_v")
+  amountExV        Float    @map("amount_ex_v")
+  amountInV        Float    @map("amount_in_v")
+  vatGroup         String   @map("vat_group")
+  shippingLocation String   @map("shipping_location")
+  terms            String   @map("terms")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([branchCode, siNo, productCode, barcode])
+  @@index([branchCode])
+  @@index([siNo])
+  @@index([productCode])
+  @@index([orderDate])
+}
+
+model TempSku {
+  id          Int    @id @default(autoincrement())
+  branchCode  String
+  shelfCode   String
+  rowNo       Int
+  codeProduct Int
+  index       Int
+}
+
+model TempTamplate {
+  id         Int     @id @default(autoincrement())
+  branchCode String
+  shelfCode  String
+  fullName   String?
+  rowQty     Int
+  type       String?
 }

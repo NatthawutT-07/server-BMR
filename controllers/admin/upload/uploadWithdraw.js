@@ -12,7 +12,7 @@ exports.uploadWithdrawXLSX = async (req, res) => {
 
     try {
         // ✅ ใช้ Worker Thread parse Excel (Non-blocking)
-        const mapped = await runExcelWorker(
+        let mapped = await runExcelWorker(
             req.file.buffer,
             "withdraw",
             (progress, message) => setUploadJob(jobId, progress, message)
@@ -23,27 +23,79 @@ exports.uploadWithdrawXLSX = async (req, res) => {
             return res.status(200).send("No valid withdraw rows found.");
         }
 
-        // ------------------------------------------------------------
-        // 4) Clear Table (ต้องล้างก่อน insert)
-        // ------------------------------------------------------------
-        setUploadJob(jobId, 85, "clearing old data");
-        await prisma.$executeRaw`DELETE FROM "withdraw"`;
+        // ✅ ฟิวเตอร์พื้นฐาน (docStatus === 'อนุมัติแล้ว' และ reason !== 'เบิกเพื่อขาย')
+        mapped = mapped.filter(r => r.docStatus === 'อนุมัติแล้ว' && r.reason !== 'เบิกเพื่อขาย');
+
+        if (mapped.length === 0) {
+            finishUploadJob(jobId, "completed");
+            return res.status(200).json({
+                message: "No valid withdraw data after filtering.",
+                inserted: 0
+            });
+        }
+
+        // ✅ ตรวจสอบและลบข้อมูลซ้ำใน batch เดียวกัน
+        const uniqueMap = new Map();
+        const duplicates = [];
+        
+        mapped.forEach((r, index) => {
+            const key = `${r.docNumber}-${r.branchCode}-${r.codeProduct}-${r.quantity}-${r.value}`;
+            if (uniqueMap.has(key)) {
+                duplicates.push({
+                    index,
+                    docNumber: r.docNumber,
+                    branchCode: r.branchCode,
+                    codeProduct: r.codeProduct,
+                    quantity: r.quantity,
+                    value: r.value,
+                    existingIndex: uniqueMap.get(key)
+                });
+            } else {
+                uniqueMap.set(key, index);
+            }
+        });
+
+        if (duplicates.length > 0) {
+            console.log(`🔍 Found ${duplicates.length} duplicate records in batch:`, duplicates.slice(0, 5));
+            // เก็บเฉพาะข้อมูลที่ไม่ซ้ำ
+            mapped = mapped.filter((_, index) => uniqueMap.has(`${mapped[index].docNumber}-${mapped[index].branchCode}-${mapped[index].codeProduct}-${mapped[index].quantity}-${mapped[index].value}`));
+            console.log(`📊 After deduplication: ${mapped.length} unique records`);
+        }
 
         // ------------------------------------------------------------
-        // 5) Build Ultra-Fast Bulk Insert
+        // 5) Build Ultra-Fast Bulk Upsert (with Batches to avoid P2035)
         // ------------------------------------------------------------
-        const values = mapped.map((r) =>
-            Prisma.sql`(${r.codeProduct}, ${r.branchCode}, ${r.docNumber}, ${r.date}, ${r.docStatus}, ${r.reason}, ${r.quantity}, ${r.value})`
-        );
+        const BATCH_SIZE = 3000; // 3000 rows * 8 params = 24,000 bind vars (< 32,767 limit)
+        const totalBatches = Math.ceil(mapped.length / BATCH_SIZE);
 
-        const sql = Prisma.sql`
-            INSERT INTO "withdraw"
-            ("codeProduct", "branchCode", "docNumber", "date", "docStatus", "reason", "quantity", "value")
-            VALUES ${Prisma.join(values)}
-        `;
+        for (let i = 0; i < mapped.length; i += BATCH_SIZE) {
+            const chunk = mapped.slice(i, i + BATCH_SIZE);
+            const currentBatch = Math.floor(i / BATCH_SIZE) + 1;
 
-        setUploadJob(jobId, 95, "saving data");
-        await prisma.$executeRaw(sql);
+            const values = chunk.map((r) => {
+                // Fallback for required string columns to prevent Prisma 23502 error
+                const docStatus = r.docStatus || "";
+                const reason = r.reason || "";
+
+                return Prisma.sql`(${r.codeProduct}, ${r.branchCode}, ${r.docNumber}, ${r.date}, ${docStatus}, ${reason}, ${r.quantity}, ${r.value})`;
+            });
+
+            const sql = Prisma.sql`
+                INSERT INTO "withdraw"
+                ("codeProduct", "branchCode", "docNumber", "date", "docStatus", "reason", "quantity", "value")
+                VALUES ${Prisma.join(values)}
+                ON CONFLICT ("docNumber", "branchCode", "codeProduct", "quantity", "value") 
+                DO UPDATE SET 
+                    "date" = EXCLUDED."date",
+                    "docStatus" = EXCLUDED."docStatus",
+                    "reason" = EXCLUDED."reason"
+            `;
+
+            await prisma.$executeRaw(sql);
+
+            const progress = 85 + Math.floor((currentBatch / totalBatches) * 10);
+            setUploadJob(jobId, progress, `saving batch ${currentBatch}/${totalBatches}`);
+        }
 
         finishUploadJob(jobId, "completed");
         return res.status(200).json({

@@ -17,13 +17,14 @@ exports.uploadGourmetXLSX = async (req, res) => {
         const requiredFields = ["date", "branch_code", "product_code", "quantity", "sales"];
         const aliases = {
             date: ["date", "วันที่"],
-            branch_code: ["branch_code", "branchcode", "branch code", "สาขา", "รหัสสาขา"],
-            product_code: ["product_code", "productcode", "product code", "รหัสสินค้า", "sku"],
-            quantity: ["quantity", "qty", "จำนวน"],
-            sales: ["sales", "ยอดขาย", "ยอดขายรวม", "net sales", "ยอดขายสุทธิ"],
+            branch_code: ["branchcode", "รหัสสาขา", "สาขา"],
+            product_code: ["productcode", "รหัสสินค้า", "sku"],
+            quantity: ["quantity", "qty", "จำนวน", "saleqty"],
+            sales: ["sales", "ยอดขาย", "ยอดขายรวม", "netsales", "salesamount", "ยอดขายสุทธิ"],
         };
 
-        const normalize = (v) => String(v || "").trim().toLowerCase();
+        // เอาช่องว่างเเละ _ ออกให้หมด เพื่อให้ match กับคำเช่น "Sale_QTY" ได้ตรงกับ "saleqty"
+        const normalize = (v) => String(v || "").trim().toLowerCase().replace(/[\s_]/g, "");
 
         const tryBuildHeader = (row) => {
             const map = {};
@@ -42,7 +43,7 @@ exports.uploadGourmetXLSX = async (req, res) => {
         let headerRowIndex = -1;
         let headerMap = null;
 
-        for (let i = 0; i < raw.length; i++) {
+        for (let i = 0; i < raw.length && i < 20; i++) {
             const map = tryBuildHeader(raw[i]);
             if (requiredFields.every((f) => map[f] !== undefined)) {
                 headerRowIndex = i;
@@ -52,6 +53,7 @@ exports.uploadGourmetXLSX = async (req, res) => {
         }
 
         if (headerRowIndex === -1 || !headerMap) {
+            failUploadJob(jobId, "ไม่พบ header gourmet (date, branch, product, quantity, sales)");
             return res.status(400).send("❌ ไม่พบ header gourmet (date, branch, product, quantity, sales)");
         }
 
@@ -69,52 +71,65 @@ exports.uploadGourmetXLSX = async (req, res) => {
                 const [d, m, y] = parts.map((p) => parseInt(p, 10));
                 if (!Number.isNaN(d) && !Number.isNaN(m) && !Number.isNaN(y)) {
                     const year = y < 100 ? 2000 + y : y;
-                    return new Date(year, m - 1, d);
+                    return new Date(Date.UTC(year, m - 1, d));
                 }
             }
             return null;
         };
 
-        const mapped = raw
-            .slice(headerRowIndex + 1)
-            .map((row) => {
-                const branchCode = String(row[headerMap.branch_code] || "").trim();
-                const productCode = String(row[headerMap.product_code] || "").trim();
-                const dateVal = excelDateToJS(row[headerMap.date]);
+        const mapped = [];
+        const seen = new Set();
 
-                if (!branchCode || !productCode || !dateVal) return null;
+        raw.slice(headerRowIndex + 1).forEach((row) => {
+            const branchCode = String(row[headerMap.branch_code] || "").trim();
+            const productCode = String(row[headerMap.product_code] || "").trim();
+            const dateVal = excelDateToJS(row[headerMap.date]);
 
-                let quantity = parseInt(String(row[headerMap.quantity]).replace(/,/g, ""), 10);
-                if (Number.isNaN(quantity)) quantity = 0;
+            if (!branchCode || !productCode || !dateVal) return;
 
-                const salesRaw = String(row[headerMap.sales]).replace(/,/g, "");
-                let sales = parseFloat(salesRaw);
-                if (Number.isNaN(sales)) sales = 0;
+            let quantity = parseInt(String(row[headerMap.quantity]).replace(/,/g, ""), 10);
+            if (Number.isNaN(quantity)) quantity = 0;
 
-                return {
+            const salesRaw = String(row[headerMap.sales]).replace(/,/g, "");
+            let sales = parseFloat(salesRaw);
+            if (Number.isNaN(sales)) sales = 0;
+
+            // Date processing to standard string for unique key
+            const yyyy = dateVal.getUTCFullYear();
+            const mm = String(dateVal.getUTCMonth() + 1).padStart(2, "0");
+            const dd = String(dateVal.getUTCDate()).padStart(2, "0");
+            const dateStr = `${yyyy}-${mm}-${dd}`;
+
+            const key = `${dateStr}_${branchCode}_${productCode}_${quantity}`;
+            if (!seen.has(key)) {
+                seen.add(key);
+                mapped.push({
                     date: dateVal,
                     branch_code: branchCode,
                     product_code: productCode,
                     quantity,
                     sales,
-                };
-            })
-            .filter(Boolean);
+                });
+            }
+        });
 
         if (mapped.length === 0) {
+            finishUploadJob(jobId, "No valid gourmet rows found.");
             return res.status(200).send("No valid gourmet rows found.");
         }
 
         setUploadJob(jobId, 70, "saving data");
-        await prisma.$transaction([
-            prisma.gourmet.deleteMany(),
-            prisma.gourmet.createMany({ data: mapped }),
-        ]);
+
+        // Use createMany with skipDuplicates to ignore existing rows with same unique constraints
+        const result = await prisma.gourmet.createMany({
+            data: mapped,
+            skipDuplicates: true
+        });
 
         finishUploadJob(jobId, "completed");
         return res.status(200).json({
             message: "Gourmet XLSX imported successfully",
-            inserted: mapped.length,
+            inserted: result.count,
         });
     } catch (err) {
         console.error("Gourmet XLSX Error:", err);

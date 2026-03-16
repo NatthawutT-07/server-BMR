@@ -40,7 +40,7 @@ exports.getSearchBranchSales = async (req, res) => {
         ======================================================== */
         const rows = await prisma.$queryRaw`
             SELECT
-                DATE_TRUNC('month', "date" + INTERVAL '7 hour') AS month,
+                DATE_TRUNC('month', "date") AS month,
                 "doc_type",
                 "salesChannelId",
                 SUM("total_sales") AS total_sales,
@@ -59,8 +59,8 @@ exports.getSearchBranchSales = async (req, res) => {
         ======================================================== */
         const dayRows = await prisma.$queryRaw`
             SELECT
-                DATE_TRUNC('month', b."date" + INTERVAL '7 hour') AS month,
-                COUNT(DISTINCT DATE_TRUNC('day', b."date" + INTERVAL '7 hour')) AS days_count
+                DATE_TRUNC('month', b."date") AS month,
+                COUNT(DISTINCT DATE_TRUNC('day', b."date")) AS days_count
             FROM "Bill" b
             WHERE b."branchId" = ${branch.id}
             GROUP BY month
@@ -215,7 +215,7 @@ exports.getSearchBranchSalesDay = async (req, res) => {
         // ⭐ ใช้เวลาไทย
         const rows = await prisma.$queryRaw`
             SELECT
-                DATE_TRUNC('day', "date" + INTERVAL '7 hour') AS day,
+                DATE_TRUNC('day', "date") AS day,
                 "doc_type",
                 "salesChannelId",
                 SUM("total_sales") AS total_sales,
@@ -224,8 +224,8 @@ exports.getSearchBranchSalesDay = async (req, res) => {
                 COUNT(id) AS bill_count
             FROM "Bill"
             WHERE "branchId" = ${branch.id}
-              AND EXTRACT(YEAR FROM "date" + INTERVAL '7 hour') = ${year}
-              AND EXTRACT(MONTH FROM "date" + INTERVAL '7 hour') = ${month}
+              AND EXTRACT(YEAR FROM "date") = ${year}
+              AND EXTRACT(MONTH FROM "date") = ${month}
               AND "doc_type" IN ('เอกสารขาย', 'เอกสารคืน')
             GROUP BY day, "doc_type", "salesChannelId"
             ORDER BY day;
@@ -416,8 +416,8 @@ exports.getSearchBranchSalesProductMonth = async (req, res) => {
             JOIN "Product" p ON p.id = bi."productId"
 
             WHERE b."branchId" = ${branch.id}
-              AND EXTRACT(YEAR FROM b."date" + INTERVAL '7 hour') = ${year}
-              AND EXTRACT(MONTH FROM b."date" + INTERVAL '7 hour') = ${month}
+              AND EXTRACT(YEAR FROM b."date") = ${year}
+              AND EXTRACT(MONTH FROM b."date") = ${month}
 
             GROUP BY p.product_code, p.product_name, p.product_brand
             ORDER BY p.product_code;
@@ -483,9 +483,9 @@ exports.getSearchBranchSalesProductDay = async (req, res) => {
             JOIN "Product" p ON p.id = bi."productId"
 
             WHERE b."branchId" = ${branch.id}
-              AND EXTRACT(YEAR FROM b."date" + INTERVAL '7 hour') = ${year}
-              AND EXTRACT(MONTH FROM b."date" + INTERVAL '7 hour') = ${month}
-              AND EXTRACT(DAY FROM b."date" + INTERVAL '7 hour') = ${day}
+              AND EXTRACT(YEAR FROM b."date") = ${year}
+              AND EXTRACT(MONTH FROM b."date") = ${month}
+              AND EXTRACT(DAY FROM b."date") = ${day}
 
             GROUP BY p.product_code, p.product_name, p.product_brand
             ORDER BY p.product_code;

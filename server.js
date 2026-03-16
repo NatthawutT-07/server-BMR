@@ -91,7 +91,7 @@ const getClientIp = (req) => {
   return ip;
 };
 
-// ✅ อ่าน user จาก access token แบบ “เบาๆ” เพื่อให้ morgan เห็น user ได้ทันที
+//  อ่าน user จาก access token แบบ “เบาๆ” เพื่อให้ morgan เห็น user ได้ทันที
 const attachUserFromAccessToken = (req, res, next) => {
   try {
     const auth = req.headers.authorization;
@@ -147,7 +147,7 @@ const colorStatus = (status) => {
   return `${ANSI.gray}${status}${ANSI.reset}`;
 };
 
-// token ที่ “คืน status แบบมีสี”
+// token ที่ "คืน status แบบมีสี"
 morgan.token("status-color", (req, res) => colorStatus(res.statusCode));
 
 // (เสริม) สี method ให้อ่านง่าย
@@ -160,23 +160,8 @@ const colorMethod = (method) => {
 };
 morgan.token("method-color", (req) => colorMethod(req.method));
 
-/* =========================
-   Log ลงไฟล์ (ไม่ใส่สี)
-========================= */
-
-const accessLogStream = fs.createWriteStream(path.join(__dirname, "access.log"), {
-  flags: "a",
-});
-
 // ✅ สำคัญ: attachUserFromAccessToken ต้องมาก่อน morgan
 app.use(attachUserFromAccessToken);
-
-app.use(
-  morgan(
-    ':th-time | user=:user | ip=:real-ip | agent=":agent" | :method :url | :status | :response-time ms',
-    { stream: accessLogStream }
-  )
-);
 
 // ---------- log ลง console (ใส่สี) ----------
 app.use(

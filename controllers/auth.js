@@ -1,5 +1,4 @@
-const prisma = require("../config/prisma");
-const bcrypt = require("bcryptjs");
+const authService = require("../services/authService");
 const jwt = require("jsonwebtoken");
 
 // ✅ ดึง Public IP ของ client ให้เหมือนที่ใช้ใน app.js
@@ -21,32 +20,6 @@ const getClientIp = (req) => {
   return ip;
 };
 
-// Helper: สร้าง access token
-const signAccessToken = (user) => {
-  return jwt.sign(
-    {
-      id: user.id,
-      name: user.name,
-      role: user.role,
-      tokenVersion: user.refreshTokenVersion,
-    },
-    process.env.SECRET,
-    { expiresIn: process.env.ACCESS_TOKEN_EXPIRE || "15m" }
-  );
-};
-
-// Helper: สร้าง refresh token
-const signRefreshToken = (user) => {
-  return jwt.sign(
-    {
-      id: user.id,
-      tokenVersion: user.refreshTokenVersion,
-    },
-    process.env.REFRESH_SECRET,
-    { expiresIn: process.env.REFRESH_TOKEN_EXPIRE || "7d" }
-  );
-};
-
 const getRefreshCookieOptions = () => {
   const isProd = process.env.NODE_ENV === "production";
   return {
@@ -57,7 +30,6 @@ const getRefreshCookieOptions = () => {
   };
 };
 
-// Helper: ส่ง refresh token ผ่าน cookie
 const sendRefreshToken = (res, token) => {
   res.cookie("jid", token, getRefreshCookieOptions());
 };
@@ -88,32 +60,16 @@ const getUserIdFromAccessToken = (req) => {
 exports.register = async (req, res) => {
   try {
     const { name, password, role } = req.body;
-
-    if (!name || !password) {
-      return res.status(400).json({ msg: "Name and password are required" });
-    }
-
-    const exist = await prisma.user.findUnique({ where: { name } });
-    if (exist) return res.status(400).json({ msg: "User already exists" });
-
-    const salt = await bcrypt.genSalt(10);
-    const hash = await bcrypt.hash(password, salt);
-
-    const user = await prisma.user.create({
-      data: {
-        name,
-        password: hash,
-        role: role || "user",
-        enabled: true,
-        lastPasswordChange: new Date(),
-      },
-    });
+    const user = await authService.register(name, password, role);
 
     res.json({
       msg: "Register success",
-      user: { id: user.id, name: user.name, role: user.role },
+      user,
     });
   } catch (e) {
+    if (e.message === "Name and password are required" || e.message === "User already exists") {
+      return res.status(400).json({ msg: e.message });
+    }
     console.log(e);
     res.status(500).json({ msg: "Server error" });
   }
@@ -123,68 +79,21 @@ exports.register = async (req, res) => {
 exports.login = async (req, res) => {
   try {
     const { name, password } = req.body;
-    const rawName = String(name || "").trim();
-    const normalizedName = /^[A-Za-z]{2}\d{3}$/.test(rawName)
-      ? rawName.toUpperCase()
-      : rawName;
-
-    let user = await prisma.user.findFirst({ where: { name: normalizedName } });
-    if (!user && !normalizedName.includes("@")) {
-      user = await prisma.user.findFirst({ where: { name: `POG@${normalizedName}` } });
-    }
-
     const ip = getClientIp(req);
     const userAgent = req.headers["user-agent"] || "";
 
-    if (!user || !user.enabled) {
-      await prisma.loginLog.create({
-        data: {
-          userId: user ? user.id : null,
-          ip,
-          userAgent,
-          status: "failed",
-        message: "User not found or not enabled",
-      },
-    });
-
-      return res.status(400).json({ msg: "User Not found or not Enabled" });
-    }
-
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      await prisma.loginLog.create({
-        data: {
-          userId: user.id,
-          ip,
-          userAgent,
-          status: "failed",
-          message: "Password invalid",
-        },
-      });
-
-      return res.status(400).json({ msg: "Password Invalid!!!" });
-    }
-
-    const accessToken = signAccessToken(user);
-    const refreshToken = signRefreshToken(user);
-
-    await prisma.loginLog.create({
-      data: {
-        userId: user.id,
-        ip,
-        userAgent,
-        status: "success",
-        message: "Login success",
-      },
-    });
+    const { user, accessToken, refreshToken } = await authService.login(name, password, ip, userAgent);
 
     sendRefreshToken(res, refreshToken);
 
     res.json({
-      payload: { id: user.id, name: user.name, role: user.role },
+      payload: user,
       accessToken,
     });
   } catch (e) {
+    if (e.message === "User Not found or not Enabled" || e.message === "Password Invalid!!!") {
+      return res.status(400).json({ msg: e.message });
+    }
     console.log(e);
     res.status(500).json({ msg: "server error" });
   }
@@ -199,38 +108,19 @@ exports.refreshToken = async (req, res) => {
       return res.status(401).json({ msg: "No refresh token" });
     }
 
-    let payload;
-    try {
-      payload = jwt.verify(token, process.env.REFRESH_SECRET);
-    } catch (err) {
-      clearRefreshToken(res);
-      return res.status(401).json({ msg: "Invalid refresh token" });
-    }
+    const { accessToken, refreshToken, user } = await authService.refresh(token);
 
-    const user = await prisma.user.findFirst({
-      where: { id: payload.id, enabled: true },
-    });
-
-    if (!user) {
-      clearRefreshToken(res);
-      return res.status(401).json({ msg: "User not found" });
-    }
-
-    if (user.refreshTokenVersion !== payload.tokenVersion) {
-      clearRefreshToken(res);
-      return res.status(401).json({ msg: "Token version mismatch" });
-    }
-
-    const newAccessToken = signAccessToken(user);
-    const newRefreshToken = signRefreshToken(user);
-
-    sendRefreshToken(res, newRefreshToken);
+    sendRefreshToken(res, refreshToken);
 
     res.json({
-      accessToken: newAccessToken,
-      payload: { id: user.id, name: user.name, role: user.role },
+      accessToken: accessToken,
+      payload: user,
     });
   } catch (e) {
+    clearRefreshToken(res);
+    if (e.message === "Invalid refresh token" || e.message === "User not found" || e.message === "Token version mismatch") {
+      return res.status(401).json({ msg: e.message });
+    }
     console.log(e);
     res.status(500).json({ msg: "server error" });
   }
@@ -240,30 +130,11 @@ exports.refreshToken = async (req, res) => {
 exports.logout = async (req, res) => {
   try {
     const token = req.cookies?.jid;
-    let userId = null;
+    const fallbackUserId = getUserIdFromAccessToken(req);
 
-    if (token) {
-      try {
-        const payload = jwt.verify(token, process.env.REFRESH_SECRET);
-        userId = payload?.id || null;
-      } catch {
-        userId = null;
-      }
-    }
-
-    if (!userId) {
-      userId = getUserIdFromAccessToken(req);
-    }
-
-    if (userId) {
-      await prisma.user.updateMany({
-        where: { id: userId },
-        data: { refreshTokenVersion: { increment: 1 } },
-      });
-    }
+    await authService.logout(token, fallbackUserId);
 
     clearRefreshToken(res);
-
     res.json({ msg: "Logged out" });
   } catch (e) {
     console.log(e);
@@ -275,27 +146,13 @@ exports.logout = async (req, res) => {
 exports.changePassword = async (req, res) => {
   try {
     const { oldPassword, newPassword } = req.body;
-
-    const user = await prisma.user.findFirst({ where: { id: req.user.id } });
-    if (!user) return res.status(400).json({ msg: "User not found" });
-
-    const isMatch = await bcrypt.compare(oldPassword, user.password);
-    if (!isMatch) return res.status(400).json({ msg: "Old password incorrect" });
-
-    const salt = await bcrypt.genSalt(10);
-    const hash = await bcrypt.hash(newPassword, salt);
-
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        password: hash,
-        lastPasswordChange: new Date(),
-        refreshTokenVersion: user.refreshTokenVersion + 1,
-      },
-    });
+    await authService.changePassword(req.user.id, oldPassword, newPassword);
 
     res.json({ msg: "Password changed successfully" });
   } catch (e) {
+    if (e.message === "User not found" || e.message === "Old password incorrect") {
+      return res.status(400).json({ msg: e.message });
+    }
     console.log(e);
     res.status(500).json({ msg: "server error" });
   }
@@ -304,11 +161,7 @@ exports.changePassword = async (req, res) => {
 // --------------------- Current User ---------------------
 exports.currentUser = async (req, res) => {
   try {
-    const user = await prisma.user.findFirst({
-      where: { id: req.user.id },
-      select: { id: true, name: true, role: true },
-    });
-
+    const user = await authService.getUser(req.user.id);
     res.json({ user });
   } catch (e) {
     console.log(e);
@@ -319,11 +172,7 @@ exports.currentUser = async (req, res) => {
 // --------------------- Current Admin ---------------------
 exports.currentAdmin = async (req, res) => {
   try {
-    const user = await prisma.user.findFirst({
-      where: { id: req.user.id },
-      select: { id: true, name: true, role: true },
-    });
-
+    const user = await authService.getUser(req.user.id);
     res.json({ user });
   } catch (e) {
     console.log(e);

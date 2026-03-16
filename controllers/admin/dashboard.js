@@ -52,7 +52,7 @@ const getBangkokYearRangeUtc = (year) => {
 const getSalesByDate = async (startUtc, endUtc) => {
   return prisma.$queryRaw`
     SELECT
-      (b."date" + INTERVAL '7 hour')::date AS bill_date,
+      (b."date")::date AS bill_date,
       COALESCE(SUM(b."total_sales"), 0)           AS total_payment,
       COALESCE(SUM(b."rounding"), 0)              AS rounding_sum,
       COALESCE(SUM(b."end_bill_discount"), 0)     AS discount_sum,
@@ -62,7 +62,7 @@ const getSalesByDate = async (startUtc, endUtc) => {
     FROM "Bill" b
     WHERE b."date" >= ${startUtc}
       AND b."date" <= ${endUtc}
-    GROUP BY (b."date" + INTERVAL '7 hour')::date
+    GROUP BY (b."date")::date
     ORDER BY bill_date
   `;
 };
@@ -71,7 +71,7 @@ const getSalesByDate = async (startUtc, endUtc) => {
 const getSalesByBranchAndDate = async (startUtc, endUtc) => {
   return prisma.$queryRaw`
     SELECT 
-      (b."date" + INTERVAL '7 hour')::date AS bill_date,
+      (b."date")::date AS bill_date,
       br."branch_name",
       br."branch_code",
       COALESCE(SUM(b."total_sales"), 0) AS total_payment
@@ -79,7 +79,7 @@ const getSalesByBranchAndDate = async (startUtc, endUtc) => {
     JOIN "Branch" br ON br."id" = b."branchId"
     WHERE b."date" >= ${startUtc}
       AND b."date" <= ${endUtc}
-    GROUP BY (b."date" + INTERVAL '7 hour')::date,
+    GROUP BY (b."date")::date,
              br."branch_name",
              br."branch_code"
     ORDER BY bill_date, br."branch_name"
@@ -120,14 +120,14 @@ const getSalesByChannelAndDate = async (startUtc, endUtc) => {
       GROUP BY bir.bill_id, bir.bill_dt, bir.sales_channel_id, bir.total_payment
     )
     SELECT
-      (bp."bill_dt" + INTERVAL '7 hour')::date AS bill_date,
+      (bp."bill_dt")::date AS bill_date,
       sc."channel_name",
       sc."channel_code",
       COALESCE(SUM(bp."pay_amount"), 0) AS total_payment
     FROM bill_pay bp
     JOIN "SalesChannel" sc ON sc."id" = bp."sales_channel_id"
     GROUP BY
-      (bp."bill_dt" + INTERVAL '7 hour')::date,
+      (bp."bill_dt")::date,
       sc."channel_name",
       sc."channel_code"
     ORDER BY bill_date, sc."channel_name"
@@ -174,7 +174,7 @@ const getSalesByChannelAndPaymentMethodDate = async (startUtc, endUtc) => {
         bir.total_payment
     )
     SELECT
-      (x."bill_dt" + INTERVAL '7 hour')::date AS bill_date,
+      (x."bill_dt")::date AS bill_date,
       sc."channel_name",
       sc."channel_code",
       x."payment_method",
@@ -182,7 +182,7 @@ const getSalesByChannelAndPaymentMethodDate = async (startUtc, endUtc) => {
     FROM bill_pay_method x
     JOIN "SalesChannel" sc ON sc."id" = x."sales_channel_id"
     GROUP BY
-      (x."bill_dt" + INTERVAL '7 hour')::date,
+      (x."bill_dt")::date,
       sc."channel_name",
       sc."channel_code",
       x."payment_method"

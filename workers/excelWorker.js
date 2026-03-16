@@ -205,7 +205,7 @@ const parseWithdraw = (raw) => {
                 docNumber: row["เลขที่เอกสาร"] || null,
                 date: row["วันที่"] || null,
                 docStatus: row["สถานะเอกสาร"] || null,
-                reason: row["เหตุล"] || null,
+                reason: row["เหตุผล"] || null,
                 quantity: qty,
                 value: val,
             };

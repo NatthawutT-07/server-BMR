@@ -55,6 +55,30 @@ const createPogRequest = async (req, res) => {
                 throw new Error("มีคำขอนี้อยู่ระหว่างดำเนินการ กรุณาลบคำขอเดิมก่อนหากต้องการส่งใหม่");
             }
 
+            // ✅ ป้องกันปัญหาแย่งตำแหน่งกัน (Concurrency Isuues)
+            // ถ้ามีคนจอง index นี้ไปแล้ว ให้เลื่อนลำดับไปต่อท้าย (เช่น จาก 5 เป็น 6)
+            let finalToIndex = toIndex ? Number(toIndex) : null;
+
+            if (finalToIndex !== null && (action === "add" || action === "move")) {
+                const pendingSameRow = await tx.pogRequest.findMany({
+                    where: {
+                        branchCode,
+                        toShelf: toShelf || "",
+                        toRow: toRow ? Number(toRow) : 0,
+                        status: "pending",
+                        action: { in: ["add", "move"] }
+                    },
+                    orderBy: { toIndex: "asc" }
+                });
+
+                // ตรวจสอบและดัน index ขึ้นทีละ 1 หากมีคนขอตำแหน่งนี้หรือก่อนหน้านี้ไปแล้ว
+                for (const pending of pendingSameRow) {
+                    if (pending.toIndex <= finalToIndex) {
+                        finalToIndex++;
+                    }
+                }
+            }
+
             // Create ใน transaction เดียวกัน
             return await tx.pogRequest.create({
                 data: {
@@ -67,7 +91,7 @@ const createPogRequest = async (req, res) => {
                     fromIndex: fromIndex ? Number(fromIndex) : null,
                     toShelf: toShelf || null,
                     toRow: toRow ? Number(toRow) : null,
-                    toIndex: toIndex ? Number(toIndex) : null,
+                    toIndex: finalToIndex, // ใช้ index ที่อาจถูกปรับแก้แล้ว
                     swapBarcode: swapBarcode || null,
                     swapProductName: swapProductName || null,
                     note: note || null,

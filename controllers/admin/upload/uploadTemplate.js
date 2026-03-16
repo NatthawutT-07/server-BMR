@@ -2,6 +2,8 @@ const prisma = require('../../../config/prisma');
 const XLSX = require("xlsx");
 const { initUploadJob, setUploadJob, finishUploadJob, failUploadJob } = require('./uploadJob');
 
+const BATCH_SIZE = 5000;
+
 exports.uploadTemplateXLSX = async (req, res) => {
     if (!req.file) return res.status(400).send("No file uploaded");
 
@@ -53,92 +55,61 @@ exports.uploadTemplateXLSX = async (req, res) => {
         const templateData = Array.from(uniqueMap.values());
 
         // ===============================
-        // 4) ลบข้อมูลเก่าที่ไม่อยู่ในไฟล์ใหม่
+        // 4) Swap Table Strategy
         // ===============================
-        await prisma.tamplate.deleteMany({
-            where: {
-                NOT: {
-                    OR: templateData.map(item => ({
-                        branchCode: item.branchCode,
-                        shelfCode: item.shelfCode,
-                    }))
-                }
-            }
-        });
+        setUploadJob(jobId, 45, "preparing temporary table");
 
-        // ===============================
-        // 5) โหลดข้อมูลเก่าที่ key ตรงกัน
-        // ===============================
-        const existing = await prisma.tamplate.findMany({
-            where: {
-                OR: templateData.map(item => ({
-                    branchCode: item.branchCode,
-                    shelfCode: item.shelfCode,
-                })),
-            }
-        });
+        // 4.1) ลบข้อมูลใน TempTamplate ออกก่อน
+        await prisma.tempTamplate.deleteMany({});
 
-        const existingMap = new Map();
-        existing.forEach(item => {
-            existingMap.set(`${item.branchCode}_${item.shelfCode}`, item);
-        });
+        // 4.2) Insert ข้อมูลทั้งหมดลงในตาราง TempTamplate ก่อนเพื่อตรวจสอบความถูกต้อง
+        const totalBatches = Math.ceil(templateData.length / BATCH_SIZE);
+        for (let i = 0; i < templateData.length; i += BATCH_SIZE) {
+            const chunk = templateData.slice(i, i + BATCH_SIZE);
+            const currentBatch = Math.floor(i / BATCH_SIZE) + 1;
 
-        // ===============================
-        // 6) แยก INSERT / UPDATE
-        // ===============================
-        const toInsert = [];
-        const toUpdate = [];
-
-        for (const item of templateData) {
-            const key = `${item.branchCode}_${item.shelfCode}`;
-
-            if (!existingMap.has(key)) {
-                toInsert.push(item);
-            } else {
-                const old = existingMap.get(key);
-
-                const changed =
-                    old.fullName !== item.fullName ||
-                    old.rowQty !== item.rowQty ||
-                    old.type !== item.type;
-
-                if (changed) toUpdate.push(item);
-            }
-        }
-
-        // ===============================
-        // 7) INSERT แบบ batch
-        // ===============================
-        if (toInsert.length > 0) {
-            await prisma.tamplate.createMany({
-                data: toInsert,
+            await prisma.tempTamplate.createMany({
+                data: chunk,
+                skipDuplicates: true,
             });
+
+            const progress = 45 + Math.floor((currentBatch / totalBatches) * 30);
+            setUploadJob(jobId, progress, `uploading batch ${currentBatch}/${totalBatches} to temp table`);
         }
 
-        // ===============================
-        // 8) UPDATE แบบ batch
-        // ===============================
-        for (const item of toUpdate) {
-            await prisma.tamplate.update({
-                where: {
-                    branchCode_shelfCode: {
-                        branchCode: item.branchCode,
-                        shelfCode: item.shelfCode,
-                    },
-                },
-                data: item,
-            });
-        }
+        // 4.3) หาก Insert ลง Temp ครบถ้วนโดยไม่มี error ให้ทำ Transaction เพื่อ Swap ข้อมูลเข้าตารางจริง
+        setUploadJob(jobId, 80, "swapping data to live table");
+
+        await prisma.$transaction(async (tx) => {
+            // ลบข้อมูลใน Tamplate (ตารางจริง) ออกทั้งหมด
+            await tx.tamplate.deleteMany({});
+            
+            // ใช้ Raw SQL Query เพื่อ Copy Data 
+            await tx.$executeRaw`
+                INSERT INTO "Tamplate" ("branchCode", "shelfCode", "fullName", "rowQty", "type")
+                SELECT "branchCode", "shelfCode", "fullName", "rowQty", "type"
+                FROM "TempTamplate"
+                ON CONFLICT DO NOTHING;
+            `;
+            
+            // ล้างตาราง Temp เมื่อเสร็จสิ้น
+            await tx.tempTamplate.deleteMany({});
+        });
 
         // ===============================
-        // 9) SUCCESS
+        // 5) SUCCESS
         // ===============================
-        setUploadJob(jobId, 90, "saving data");
-        finishUploadJob(jobId, "completed");
-        res.status(200).send("Template XLSX uploaded & synced successfully!");
+        setUploadJob(jobId, 95, "finalizing");
+        finishUploadJob(jobId, `completed - ${templateData.length} records synced`);
+        res.status(200).send(`Template XLSX uploaded & synced successfully! (${templateData.length} records)`);
 
     } catch (err) {
         console.error("Template XLSX Error:", err);
+        // พยายามล้างตาราง Temp หากเกิด Error
+        try {
+           await prisma.tempTamplate.deleteMany({});
+        } catch(e) {}
+        
         failUploadJob(jobId, err?.message || "failed");
         res.status(500).json({ error: err.message });
     }

@@ -20,6 +20,7 @@ const {
     uploadSKU_XLSX,
     uploadBillXLSX,
     uploadGourmetXLSX,
+    uploadSI_XLSX,
     getUploadStatus,
 } = require('../controllers/admin/upload/uploadController');
 // Upload endpoints
@@ -32,6 +33,7 @@ router.post('/upload-template', authCheck, adminCheck, upload.single('file'), up
 router.post('/upload-sku', authCheck, adminCheck, upload.single('file'), uploadSKU_XLSX)
 router.post('/upload-bill', authCheck, adminCheck, upload.single('file'), uploadBillXLSX)
 router.post('/upload-gourmets', authCheck, adminCheck, upload.single('file'), uploadGourmetXLSX)
+router.post('/upload-si', authCheck, adminCheck, upload.single('file'), uploadSI_XLSX)
 router.get('/upload-status', authCheck, adminCheck, getUploadStatus)
 
 const { downloadTemplate, downloadSKU } = require('../controllers/admin/download');
@@ -71,13 +73,16 @@ const { getStock } = require("../controllers/admin/stock");
 router.get("/stock-data", authCheck, getStock)
 
 
-//Tamplate 
+//Tamplate
+const { validate } = require("../middlewares/validate");
+const { createShelfItemSchema, deleteShelfItemSchema, updateShelfItemSchema, getSkuSchema } = require("../schemas/shelfSchema");
+
 router.get("/shelf-template", authCheck, tamplate); //Tamplate //user
 router.get("/shelf-getMasterItem", authCheck, getMasterItem);
-router.post("/shelf-sku", authCheck, sku); //Item Search //user // date , withdraw , sales
-router.delete("/shelf-delete", authCheck, itemDelete);
-router.post("/shelf-add", authCheck, itemCreate);
-router.put("/shelf-update", authCheck, itemUpdate)
+router.post("/shelf-sku", authCheck, validate(getSkuSchema), sku); //Item Search //user // date , withdraw , sales
+router.delete("/shelf-delete", authCheck, validate(deleteShelfItemSchema), itemDelete);
+router.post("/shelf-add", authCheck, validate(createShelfItemSchema), itemCreate);
+router.put("/shelf-update", authCheck, validate(updateShelfItemSchema), itemUpdate)
 router.get("/shelf-dashboard-summary", authCheck, getShelfDashboardSummary);
 router.get("/shelf-dashboard-shelf-sales", authCheck, getShelfDashboardShelfSales);
 // router.get("/shelf-summary",  summary)
@@ -100,6 +105,14 @@ router.post("/shelf-change-logs-acknowledge-all/:branchCode", authCheck, acknowl
 
 // ✅ Admin: Monitor branch acknowledgment status
 router.get("/branch-ack-status", authCheck, adminCheck, getAllBranchAckStatus);
+
+// ✅ Analysis (SKU / Brand / Store / Store Summary)
+const { getAnalysisFilters, getSkuAnalysis, getStoreAnalysis, getBrandAnalysis, getStoreSummary } = require('../controllers/admin/analysis');
+router.get("/analysis-filters", authCheck, getAnalysisFilters);
+router.post("/analysis-sku", authCheck, getSkuAnalysis);
+router.post("/analysis-store", authCheck, getStoreAnalysis);
+router.post("/analysis-brand", authCheck, getBrandAnalysis);
+router.post("/analysis-store-summary", authCheck, getStoreSummary);
 
 
 module.exports = router;
