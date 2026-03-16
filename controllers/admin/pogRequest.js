@@ -70,7 +70,6 @@ const applyPogChange = async (reqItem, insertOffset = 0) => {
                 await prisma.$transaction(updates);
             }
 
-            console.log(`✅ DELETE: Removed ${barcode} from ${fromShelf}/${fromRow}, re-indexed ${remaining.length} items`);
         } finally {
             await releaseLock(prisma, key);
         }
@@ -125,7 +124,6 @@ const applyPogChange = async (reqItem, insertOffset = 0) => {
                 await prisma.$transaction(reindexUpdates);
             }
 
-            console.log(`✅ ADD (INSERT): ${barcode} → ${toShelf}/${toRow}/index:${toIndex} (total: ${allItems.length})`);
         } finally {
             await releaseLock(prisma, key);
         }
@@ -172,7 +170,6 @@ const applyPogChange = async (reqItem, insertOffset = 0) => {
 
                 // ถ้าตำแหน่งเดิมกับใหม่เหมือนกัน ไม่ต้องทำอะไร
                 if (currentIndex === targetIndex) {
-                    console.log(`⚠️ MOVE: ${barcode} already at ${fromShelf}/${fromRow}/index:${currentIndex}, skipping`);
                     return;
                 }
 
@@ -193,7 +190,6 @@ const applyPogChange = async (reqItem, insertOffset = 0) => {
                 );
                 await prisma.$transaction(updates);
 
-                console.log(`✅ MOVE (Same Row): ${barcode} ${fromShelf}/${fromRow}/index:${currentIndex} → index:${targetIndex}, total: ${newOrder.length}`);
 
             } else {
                 // ========== CROSS ROW/SHELF MOVE ==========
@@ -219,7 +215,6 @@ const applyPogChange = async (reqItem, insertOffset = 0) => {
                     await prisma.$transaction(sourceUpdates);
                 }
 
-                console.log(`✅ MOVE Source: Removed ${barcode} from ${fromShelf}/${fromRow}, re-indexed ${sourceRemaining.length} items`);
 
                 // Step B: INSERT to Target Row at toIndex
                 // Shift items >= toIndex to the right (+1)
@@ -259,7 +254,6 @@ const applyPogChange = async (reqItem, insertOffset = 0) => {
                     await prisma.$transaction(targetUpdates);
                 }
 
-                console.log(`✅ MOVE Target: Inserted at ${toShelf}/${toRow}/index:${toIndex}, total: ${targetAll.length}`);
             }
 
 
@@ -580,7 +574,6 @@ const bulkApprove = async (req, res) => {
         const addRequests = requests.filter(r => r.action === "add").sort(sortByCreatedAt);
         const moveRequests = requests.filter(r => r.action === "move").sort(sortByCreatedAt);
 
-        console.log(`📋 Bulk Approve: DELETE=${deleteRequests.length}, ADD=${addRequests.length}, MOVE=${moveRequests.length}`);
 
         let successCount = 0;
         let errorCount = 0;
@@ -641,12 +634,11 @@ const bulkApprove = async (req, res) => {
                 await acquireLock(prisma, key);
                 try {
                     const count = await reindexRow(branchCode, shelfCode, Number(rowNo));
-                    console.log(`✅ Reindexed ${rowKey}: ${count} items`);
                 } finally {
                     await releaseLock(prisma, key);
                 }
             } catch (e) {
-                console.error(`❌ Reindex ${rowKey} failed:`, e.message);
+                // Silently handle reindex errors
             }
         }
 
@@ -677,7 +669,6 @@ const bulkApprove = async (req, res) => {
                 // ปรับ toIndex ด้วย offset ที่บันทึกไว้
                 // โดยแก้ให้ส่ง insertOffset เข้าไปใน applyPogChange แทนการแก้ req.toIndex โดยตรง
 
-                console.log(`📍 ADD ${req.barcode}: original toIndex=${toIndex}, offset=${totalOffset}, adjusted target=${Number(toIndex) + totalOffset}`);
 
                 // ส่ง offset ไปบวกข้างใน ไม่แก้ไขของเดิม
                 await applyPogChange(req, totalOffset);
@@ -722,7 +713,6 @@ const bulkApprove = async (req, res) => {
 
                 // ปรับ toIndex ด้วย offset ด้วยส่ง insertOffset เข้าระบบโดยตรง
 
-                console.log(`📍 MOVE ${req.barcode}: original toIndex=${toIndex}, offset=${totalOffset}, adjusted target=${Number(toIndex) + totalOffset}`);
 
                 await applyPogChange(req, totalOffset);
                 await prisma.pogRequest.update({

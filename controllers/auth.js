@@ -1,5 +1,6 @@
 const authService = require("../services/authService");
 const jwt = require("jsonwebtoken");
+const prisma = require("../config/prisma");
 
 // ✅ ดึง Public IP ของ client ให้เหมือนที่ใช้ใน app.js
 const getClientIp = (req) => {
@@ -70,8 +71,7 @@ exports.register = async (req, res) => {
     if (e.message === "Name and password are required" || e.message === "User already exists") {
       return res.status(400).json({ msg: e.message });
     }
-    console.log(e);
-    res.status(500).json({ msg: "Server error" });
+        res.status(500).json({ msg: "Server error" });
   }
 };
 
@@ -94,8 +94,7 @@ exports.login = async (req, res) => {
     if (e.message === "User Not found or not Enabled" || e.message === "Password Invalid!!!") {
       return res.status(400).json({ msg: e.message });
     }
-    console.log(e);
-    res.status(500).json({ msg: "server error" });
+        res.status(500).json({ msg: "server error" });
   }
 };
 
@@ -121,8 +120,7 @@ exports.refreshToken = async (req, res) => {
     if (e.message === "Invalid refresh token" || e.message === "User not found" || e.message === "Token version mismatch") {
       return res.status(401).json({ msg: e.message });
     }
-    console.log(e);
-    res.status(500).json({ msg: "server error" });
+        res.status(500).json({ msg: "server error" });
   }
 };
 
@@ -137,8 +135,7 @@ exports.logout = async (req, res) => {
     clearRefreshToken(res);
     res.json({ msg: "Logged out" });
   } catch (e) {
-    console.log(e);
-    res.status(500).json({ msg: "server error" });
+        res.status(500).json({ msg: "server error" });
   }
 };
 
@@ -153,8 +150,7 @@ exports.changePassword = async (req, res) => {
     if (e.message === "User not found" || e.message === "Old password incorrect") {
       return res.status(400).json({ msg: e.message });
     }
-    console.log(e);
-    res.status(500).json({ msg: "server error" });
+        res.status(500).json({ msg: "server error" });
   }
 };
 
@@ -164,8 +160,7 @@ exports.currentUser = async (req, res) => {
     const user = await authService.getUser(req.user.id);
     res.json({ user });
   } catch (e) {
-    console.log(e);
-    res.status(500).json({ message: "server error" });
+        res.status(500).json({ message: "server error" });
   }
 };
 
@@ -174,8 +169,59 @@ exports.currentAdmin = async (req, res) => {
   try {
     const user = await authService.getUser(req.user.id);
     res.json({ user });
-  } catch (e) {
-    console.log(e);
-    res.status(500).json({ message: "Server error" });
+  } catch (err) {
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// --------------------- Get Active Branches ---------------------
+exports.getActiveBranches = async (req, res) => {
+  try {
+    // 1. หา user ทั้งหมดที่มี role="user" และ enabled=true
+    const activeUsers = await prisma.user.findMany({
+      where: {
+        role: "user",
+        enabled: true,
+      },
+      select: {
+        name: true, // name คือ branchCode เช่น "ST002"
+      },
+    });
+
+    if (!activeUsers || activeUsers.length === 0) {
+      return res.json([]);
+    }
+
+    const branchCodes = activeUsers.map((u) => u.name);
+
+    // 2. ไปหาข้อมูลจากตาราง Branch เพื่อเอา branch_name
+    const branchesInfo = await prisma.branch.findMany({
+      where: {
+        branch_code: {
+          in: branchCodes,
+        },
+      },
+      select: {
+        branch_code: true,
+        branch_name: true,
+      },
+    });
+
+    // 3. Map ข้อมูลส่งกลับไปหน้าบ้าน
+    // ถ้าหา branch_name ไม่เจอ ให้แสดงแค่รหัส
+    const result = activeUsers.map((u) => {
+      const branchInfo = branchesInfo.find((b) => b.branch_code === u.name);
+      return {
+        code: u.name,
+        label: branchInfo ? `${u.name} - ${branchInfo.branch_name}` : u.name,
+      };
+    });
+
+    // 4. เรียงลำดับตามรหัสสาขา
+    result.sort((a, b) => a.code.localeCompare(b.code));
+
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ message: "Server Error" });
   }
 };

@@ -57,118 +57,14 @@ app.use(
       // Allowed origins list
       if (allowedOrigins.includes(origin)) return cb(null, true);
 
-      // Production: log blocked origins for debugging
-      console.warn(`CORS blocked: ${origin}`);
       return cb(new Error(`CORS blocked: ${origin}`));
     },
     credentials: true,
   })
 );
 
-/* =========================
-   Helpers: Client IP + User
-========================= */
-
-// ✅ ดึง Public IP ของ client ให้ “ถูกตัวจริงที่สุด” เมื่ออยู่หลัง Cloudflare/Proxy
-const getClientIp = (req) => {
-  const cfIp = req.headers["cf-connecting-ip"];
-  const trueClientIp = req.headers["true-client-ip"];
-  const xRealIp = req.headers["x-real-ip"];
-  const xff = req.headers["x-forwarded-for"];
-
-  let ip =
-    (Array.isArray(cfIp) ? cfIp[0] : cfIp) ||
-    (Array.isArray(trueClientIp) ? trueClientIp[0] : trueClientIp) ||
-    (Array.isArray(xRealIp) ? xRealIp[0] : xRealIp) ||
-    (Array.isArray(xff) ? xff[0] : xff);
-
-  if (ip && typeof ip === "string") {
-    ip = ip.split(",")[0].trim();
-  }
-
-  ip = ip || req.socket?.remoteAddress || req.ip || "-";
-  if (typeof ip === "string" && ip.startsWith("::ffff:")) ip = ip.slice(7);
-  return ip;
-};
-
-//  อ่าน user จาก access token แบบ “เบาๆ” เพื่อให้ morgan เห็น user ได้ทันที
-const attachUserFromAccessToken = (req, res, next) => {
-  try {
-    const auth = req.headers.authorization;
-    if (!auth) return next();
-
-    const [bearer, token] = auth.split(" ");
-    if (bearer !== "Bearer" || !token) return next();
-
-    const decoded = jwt.verify(token, process.env.SECRET);
-    req.user = { id: decoded.id, name: decoded.name, role: decoded.role };
-    return next();
-  } catch (err) {
-    return next();
-  }
-};
-
-/* =========================
-   Morgan tokens
-========================= */
-
-morgan.token("th-time", () => {
-  return new Date().toLocaleString("th-TH", {
-    timeZone: "Asia/Bangkok",
-    hour12: false,
-  });
-});
-
-morgan.token("real-ip", (req) => getClientIp(req));
-morgan.token("user", (req) => req.user?.name || req.user?.username || "-");
-morgan.token("agent", (req) => req.headers["user-agent"] || "-");
-
-/* =========================
-   ✅ Colored status (console only)
-========================= */
-const ANSI = {
-  reset: "\x1b[0m",
-  dim: "\x1b[2m",
-  bold: "\x1b[1m",
-
-  green: "\x1b[32m",
-  cyan: "\x1b[36m",
-  yellow: "\x1b[33m",
-  red: "\x1b[31m",
-  gray: "\x1b[90m",
-};
-
-const colorStatus = (status) => {
-  const s = Number(status);
-  if (s >= 200 && s < 300) return `${ANSI.green}${s}${ANSI.reset}`; // 2xx
-  if (s >= 300 && s < 400) return `${ANSI.cyan}${s}${ANSI.reset}`;  // 3xx
-  if (s >= 400 && s < 500) return `${ANSI.yellow}${s}${ANSI.reset}`; // 4xx
-  if (s >= 500) return `${ANSI.red}${s}${ANSI.reset}`;              // 5xx
-  return `${ANSI.gray}${status}${ANSI.reset}`;
-};
-
-// token ที่ "คืน status แบบมีสี"
-morgan.token("status-color", (req, res) => colorStatus(res.statusCode));
-
-// (เสริม) สี method ให้อ่านง่าย
-const colorMethod = (method) => {
-  if (method === "GET") return `${ANSI.cyan}${method}${ANSI.reset}`;
-  if (method === "POST") return `${ANSI.green}${method}${ANSI.reset}`;
-  if (method === "PUT" || method === "PATCH") return `${ANSI.yellow}${method}${ANSI.reset}`;
-  if (method === "DELETE") return `${ANSI.red}${method}${ANSI.reset}`;
-  return `${ANSI.gray}${method}${ANSI.reset}`;
-};
-morgan.token("method-color", (req) => colorMethod(req.method));
-
-// ✅ สำคัญ: attachUserFromAccessToken ต้องมาก่อน morgan
-app.use(attachUserFromAccessToken);
-
-// ---------- log ลง console (ใส่สี) ----------
-app.use(
-  morgan(
-    ':th-time | user=:user | ip=:real-ip | :method-color :url | :status-color | :response-time ms'
-  )
-);
+// ✅ Console-only logging (no file output)
+app.use(morgan('dev'));
 
 /* =========================
    Middlewares

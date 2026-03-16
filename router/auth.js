@@ -9,6 +9,7 @@ const {
   refreshToken,
   logout,
   changePassword,
+  getActiveBranches,
 } = require("../controllers/auth");
 
 const { authCheck, adminCheck } = require("../middlewares/authCheck");
@@ -21,6 +22,10 @@ const { registerSchema, loginSchema, changePasswordSchema } = require("../schema
 
 router.post("/register", validate(registerSchema), register);
 router.post("/login", loginLimiter, validate(loginSchema), login);
+
+// @ENDPOINT  GET /api/active-branches (Public route for login page)
+router.get("/active-branches", getActiveBranches);
+
 router.get("/csrf-token", (req, res) => {
   res.json({ csrfToken: req.csrfToken || null });
 });

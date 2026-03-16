@@ -1,13 +1,23 @@
 const express = require("express");
 const router = express.Router();
 const { authCheck, adminCheck } = require('../middlewares/authCheck')
-const { listUser, changeStatus, changeRole } = require('../controllers/admin/admin');
 const { tamplate, sku, itemDelete, itemCreate, itemUpdate, getMasterItem, getShelfDashboardSummary, getShelfDashboardShelfSales } = require("../controllers/admin/shelf");
 
 // //Manege
-// router.get("/users", authCheck, adminCheck, listUser);
-// router.post("/change-status", authCheck, adminCheck, changeStatus);
-// router.post("/change-role", authCheck, adminCheck, changeRole);
+// User Management
+const { listUser, changeStatus, changeRole, createUser, deleteUser } = require("../controllers/admin/admin");
+router.get("/users", authCheck, adminCheck, listUser);
+router.post("/users", authCheck, adminCheck, createUser);
+router.delete("/users/:id", authCheck, adminCheck, deleteUser);
+router.post("/change-status", authCheck, adminCheck, changeStatus);
+router.post("/change-role", authCheck, adminCheck, changeRole);
+
+// Branch Management
+const { listBranches, createBranch, updateBranch, deleteBranch } = require("../controllers/admin/branch");
+router.get("/branches", authCheck, adminCheck, listBranches);
+router.post("/branches", authCheck, adminCheck, createBranch);
+router.put("/branches/:id", authCheck, adminCheck, updateBranch);
+router.delete("/branches/:id", authCheck, adminCheck, deleteBranch);
 
 // CSV
 const upload = require('../config/multerConfig');
