@@ -624,7 +624,7 @@ exports.uploadBillXLSX = async (req, res) => {
 
         finishUploadJob(jobId, "completed");
         return res.json({
-            message: "✅ Import สำเร็จ (OPTIMIZED: batch insert + no individual upserts)",
+            message: "Import สำเร็จ (OPTIMIZED: batch insert + no individual upserts)",
             raw_rows: rows.length,
             parsed_rows: results.length,
             bills_created: newBills.length,

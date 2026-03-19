@@ -1,6 +1,6 @@
 const prisma = require('../../../config/prisma');
 const XLSX = require("xlsx");
-const { initUploadJob, setUploadJob, finishUploadJob, failUploadJob } = require('./uploadJob');
+const { initUploadJob, setUploadJob, finishUploadJob, failUploadJob, touchDataSync } = require('./uploadJob');
 
 exports.uploadGourmetXLSX = async (req, res) => {
     if (!req.file) return res.status(400).send("No file uploaded");
@@ -125,6 +125,9 @@ exports.uploadGourmetXLSX = async (req, res) => {
             data: mapped,
             skipDuplicates: true
         });
+
+        // ✅ บันทึกเวลาอัปเดตล่าสุด
+        await touchDataSync('gourmet', result.count);
 
         finishUploadJob(jobId, "completed");
         return res.status(200).json({

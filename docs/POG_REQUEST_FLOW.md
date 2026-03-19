@@ -61,7 +61,7 @@ flowchart TD
     SHIFT --> INSERT[แทรกสินค้าที่ตำแหน่ง]
     INSERT --> REINDEX[จัด index ใหม่ 1,2,3...]
     REINDEX --> RELEASE[ปลดล็อค]
-    RELEASE --> SUCCESS([✅ เพิ่มสำเร็จ])
+    RELEASE --> SUCCESS([เพิ่มสำเร็จ])
 ```
 
 ### ตัวอย่าง: เพิ่มหลายตัวที่ตำแหน่งเดียวกัน
@@ -105,7 +105,7 @@ flowchart TD
     SR1 --> SR2 --> SR3 --> SR4 --> SR5 --> SUCCESS
     CR1 --> CR2 --> CR3 --> CR4 --> CR5 --> SUCCESS
     
-    SUCCESS([✅ ย้ายสำเร็จ])
+    SUCCESS([ย้ายสำเร็จ])
 ```
 
 ### ตัวอย่าง 1: ย้ายใน Row เดียวกัน

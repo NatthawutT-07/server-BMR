@@ -14,7 +14,7 @@ const getCodeProduct = async (barcode) => {
 };
 
 // Helper: Apply Change to SKU Table
-const applyPogChange = async (reqItem, insertOffset = 0) => {
+const applyPogChange = async (reqItem) => {
     const { branchCode, action, barcode, swapBarcode } = reqItem;
     // Position Info
     const fromShelf = reqItem.fromShelf;
@@ -24,8 +24,7 @@ const applyPogChange = async (reqItem, insertOffset = 0) => {
     const toShelf = reqItem.toShelf;
     const toRow = Number(reqItem.toRow || 0);
 
-    // ✅ บวก insertOffset เข้าไปกับ toIndex เพื่อเลื่อนลำดับถ้ามีของมาต่อท้าย
-    const toIndex = Number(reqItem.toIndex || 0) + insertOffset;
+    const toIndex = Number(reqItem.toIndex || 0);
 
     // 1. DELETE (ค้นหาด้วย barcode แทน index เพื่อป้องกัน index เพี้ยน)
     if (action === "delete") {
@@ -341,6 +340,27 @@ const getAllPogRequests = async (req, res) => {
             }
         });
 
+        // 4. Get branch-level pending stats
+        const branchStatsGroup = await prisma.pogRequest.groupBy({
+            by: ['branchCode', 'action'],
+            where: { status: 'pending' },
+            _count: {
+                id: true
+            }
+        });
+
+        // Format branch stats: { "ST002": { add: 5, move: 2, delete: 1, total: 8 } }
+        const branchStats = {};
+        branchStatsGroup.forEach(g => {
+            if (!branchStats[g.branchCode]) {
+                branchStats[g.branchCode] = { add: 0, move: 0, delete: 0, total: 0 };
+            }
+            if (['add', 'move', 'delete'].includes(g.action)) {
+                branchStats[g.branchCode][g.action] += g._count.id;
+                branchStats[g.branchCode].total += g._count.id;
+            }
+        });
+
         return res.json({
             ok: true,
             data: requests,
@@ -349,6 +369,7 @@ const getAllPogRequests = async (req, res) => {
             page: pageNum,
             totalPages: Math.ceil(totalFiltered / limitNum),
             stats,
+            branchStats,
         });
     } catch (error) {
         console.error("getAllPogRequests error:", error);
@@ -546,7 +567,6 @@ const reindexRow = async (branchCode, shelfCode, rowNo) => {
 const bulkApprove = async (req, res) => {
     try {
         const { ids } = req.body;
-
         if (!Array.isArray(ids) || ids.length === 0) {
             return res.status(400).json({
                 ok: false,
@@ -567,170 +587,84 @@ const bulkApprove = async (req, res) => {
             });
         }
 
-        // 2. แยกตามประเภท action และเรียงจากเก่าไปใหม่ (createdAt asc)
-        const sortByCreatedAt = (a, b) => new Date(a.createdAt) - new Date(b.createdAt);
-
-        const deleteRequests = requests.filter(r => r.action === "delete").sort(sortByCreatedAt);
-        const addRequests = requests.filter(r => r.action === "add").sort(sortByCreatedAt);
-        const moveRequests = requests.filter(r => r.action === "move").sort(sortByCreatedAt);
-
-
         let successCount = 0;
         let errorCount = 0;
         const errors = [];
         const affectedRows = new Set(); // เก็บ shelf/row ที่ต้อง re-index
 
-        // ========== 3. ลบทั้งหมดก่อน (ค้นหาด้วย codeProduct แทน index) ==========
-        for (const req of deleteRequests) {
-            try {
-                const { branchCode, barcode, fromShelf, fromRow } = req;
+        // ตัวแปรสำหรับคำนวณการเลื่อนของ Index (Offset Tracking)
+        // key: "branchCode|shelfCode|rowNo" -> array of changes { type: 'add'|'delete', originalIndex: number }
+        const rowChanges = {};
 
-                if (!fromShelf || !fromRow) {
-                    throw new Error("Missing fromLocation for delete");
+        // Helper function สำหรับคำนวณ Index ปัจจุบันที่ถูกชดเชยแล้ว
+        const calculateActualIndex = (branch, shelf, row, originalIndex) => {
+            const key = `${branch}|${shelf}|${row}`;
+            const changes = rowChanges[key] || [];
+            let actualIndex = Number(originalIndex);
+
+            for (const change of changes) {
+                if (change.type === 'add' && change.originalIndex <= originalIndex) {
+                    actualIndex++;
+                } else if (change.type === 'delete' && change.originalIndex < originalIndex) {
+                    actualIndex--;
                 }
-
-                // Get codeProduct from barcode
-                const code = await getCodeProduct(barcode);
-                if (!code) {
-                    throw new Error(`Product not found: ${barcode}`);
-                }
-
-                const key = lockKey(branchCode, fromShelf);
-                await acquireLock(prisma, key);
-                try {
-                    const deleted = await prisma.sku.deleteMany({
-                        where: {
-                            branchCode,
-                            shelfCode: fromShelf,
-                            rowNo: Number(fromRow),
-                            codeProduct: code
-                        }
-                    });
-
-                    // บันทึก row ที่ต้อง re-index
-                    affectedRows.add(`${branchCode}|${fromShelf}|${fromRow}`);
-
-                    // อัปเดต status
-                    await prisma.pogRequest.update({
-                        where: { id: req.id },
-                        data: { status: "completed" }
-                    });
-
-                    successCount++;
-                } finally {
-                    await releaseLock(prisma, key);
-                }
-            } catch (e) {
-                errorCount++;
-                errors.push(`Delete ${req.barcode}: ${e.message}`);
             }
-        }
+            return actualIndex;
+        };
 
-        // ========== 4. Re-index เฉพาะ rows ที่ถูกกระทบ (ทีเดียว) ==========
-        for (const rowKey of affectedRows) {
-            const [branchCode, shelfCode, rowNo] = rowKey.split("|");
+        // Helper function สำหรับบันทึกประวัติการเปลี่ยนแปลง
+        const recordChange = (branch, shelf, row, type, originalIndex) => {
+            const key = `${branch}|${shelf}|${row}`;
+            if (!rowChanges[key]) rowChanges[key] = [];
+            rowChanges[key].push({ type, originalIndex: Number(originalIndex) });
+        };
+
+        // 2. ประมวลผลทีละรายการตามลำดับเวลาเป๊ะๆ
+        for (const req of requests) {
             try {
-                const key = lockKey(branchCode, shelfCode);
-                await acquireLock(prisma, key);
-                try {
-                    const count = await reindexRow(branchCode, shelfCode, Number(rowNo));
-                } finally {
-                    await releaseLock(prisma, key);
-                }
-            } catch (e) {
-                // Silently handle reindex errors
-            }
-        }
+                // บันทึก original values ก่อนจะถูกแก้ไข
+                const originalFromIndex = req.fromIndex;
+                const originalToIndex = req.toIndex;
 
-        // ========== 5. ADD ตามลำดับ createdAt พร้อม offset tracking ==========
-        // Track offset สำหรับแต่ละ target position เพื่อป้องกันลำดับกลับด้าน
-        // เมื่อ ADD หลายตัวที่ตำแหน่งเดียวกัน ต้องปรับ toIndex ให้เลื่อนตามจำนวนที่ insert ไปแล้ว
-        const addOffsets = {}; // key: "branchCode|toShelf|toRow|originalToIndex" -> offset count
-
-        for (const req of addRequests) {
-            try {
-                const { branchCode, toShelf, toRow, toIndex } = req;
-
-                // สร้าง key สำหรับ target position
-                const targetKey = `${branchCode}|${toShelf}|${toRow}|${toIndex}`;
-
-                // หา offset ปัจจุบัน (กี่ตัวที่ insert ไปก่อนหน้าที่ตำแหน่งนี้หรือก่อนหน้า)
-                let totalOffset = 0;
-                for (const [key, count] of Object.entries(addOffsets)) {
-                    const [kb, ks, kr, ki] = key.split("|");
-                    if (kb === branchCode && ks === toShelf && kr === String(toRow)) {
-                        // ถ้าเป็น shelf/row เดียวกัน และ index <= toIndex ของเรา
-                        if (Number(ki) <= Number(toIndex)) {
-                            totalOffset += count;
-                        }
-                    }
+                if (req.action === "delete") {
+                    await applyPogChange(req);
+                    affectedRows.add(`${req.branchCode}|${req.fromShelf}|${req.fromRow}`);
+                    recordChange(req.branchCode, req.fromShelf, req.fromRow, 'delete', originalFromIndex);
+                    
+                } else if (req.action === "add") {
+                    // คำนวณ index ใหม่ที่ชดเชยการไหลของตำแหน่งแล้ว
+                    req.toIndex = calculateActualIndex(req.branchCode, req.toShelf, req.toRow, originalToIndex);
+                    await applyPogChange(req);
+                    affectedRows.add(`${req.branchCode}|${req.toShelf}|${req.toRow}`);
+                    recordChange(req.branchCode, req.toShelf, req.toRow, 'add', originalToIndex);
+                    
+                } else if (req.action === "move") {
+                    // คำนวณเฉพาะ toIndex เพราะ fromIndex ระบบหลังบ้านใช้ codeProduct ในการค้นหา (แม่นยำอยู่แล้ว)
+                    req.toIndex = calculateActualIndex(req.branchCode, req.toShelf, req.toRow, originalToIndex);
+                    await applyPogChange(req);
+                    
+                    affectedRows.add(`${req.branchCode}|${req.fromShelf}|${req.fromRow}`);
+                    affectedRows.add(`${req.branchCode}|${req.toShelf}|${req.toRow}`);
+                    
+                    recordChange(req.branchCode, req.fromShelf, req.fromRow, 'delete', originalFromIndex);
+                    recordChange(req.branchCode, req.toShelf, req.toRow, 'add', originalToIndex);
                 }
 
-                // ปรับ toIndex ด้วย offset ที่บันทึกไว้
-                // โดยแก้ให้ส่ง insertOffset เข้าไปใน applyPogChange แทนการแก้ req.toIndex โดยตรง
-
-
-                // ส่ง offset ไปบวกข้างใน ไม่แก้ไขของเดิม
-                await applyPogChange(req, totalOffset);
+                // อัปเดตสถานะเมื่อสำเร็จ
                 await prisma.pogRequest.update({
                     where: { id: req.id },
                     data: { status: "completed" }
                 });
 
-                // บันทึก offset สำหรับ position นี้
-                addOffsets[targetKey] = (addOffsets[targetKey] || 0) + 1;
-
                 successCount++;
             } catch (e) {
                 errorCount++;
-                errors.push(`Add ${req.barcode}: ${e.message}`);
+                errors.push(`${req.action.toUpperCase()} ${req.barcode}: ${e.message}`);
             }
         }
 
-        // ========== 6. MOVE ตามลำดับ createdAt พร้อม offset tracking ==========
-        // Track offset สำหรับแต่ละ target position เพื่อป้องกันลำดับกลับด้าน
-        // เมื่อ MOVE หลายตัวไป target เดียวกัน ต้องปรับ toIndex ให้เลื่อนตามจำนวนที่ insert ไปแล้ว
-        const moveOffsets = {}; // key: "branchCode|toShelf|toRow|originalToIndex" -> offset count
-
-        for (const req of moveRequests) {
-            try {
-                const { branchCode, toShelf, toRow, toIndex } = req;
-
-                // สร้าง key สำหรับ target position
-                const targetKey = `${branchCode}|${toShelf}|${toRow}|${toIndex}`;
-
-                // หา offset ปัจจุบัน (กี่ตัวที่ insert ไปก่อนหน้าที่ตำแหน่งนี้หรือก่อนหน้า)
-                let totalOffset = 0;
-                for (const [key, count] of Object.entries(moveOffsets)) {
-                    const [kb, ks, kr, ki] = key.split("|");
-                    if (kb === branchCode && ks === toShelf && kr === String(toRow)) {
-                        // ถ้าเป็น shelf/row เดียวกัน และ index <= toIndex ของเรา
-                        if (Number(ki) <= Number(toIndex)) {
-                            totalOffset += count;
-                        }
-                    }
-                }
-
-                // ปรับ toIndex ด้วย offset ด้วยส่ง insertOffset เข้าระบบโดยตรง
-
-
-                await applyPogChange(req, totalOffset);
-                await prisma.pogRequest.update({
-                    where: { id: req.id },
-                    data: { status: "completed" }
-                });
-
-                // บันทึก offset สำหรับ position นี้
-                moveOffsets[targetKey] = (moveOffsets[targetKey] || 0) + 1;
-
-                successCount++;
-            } catch (e) {
-                errorCount++;
-                errors.push(`Move ${req.barcode}: ${e.message}`);
-            }
-        }
-
-
+        // 3. (Optional) ถ้าระบบ applyPogChange ทำ Re-index อยู่แล้ว affectedRows อาจไม่จำเป็นต้องทำซ้ำ
+        // แต่ถ้าต้องการชัวร์ สามารถเก็บไว้เรียกฟังก์ชัน reindexRow ได้ (ในที่นี้ applyPogChange มีการ reindex ในตัวแล้ว)
 
         return res.json({
             ok: true,

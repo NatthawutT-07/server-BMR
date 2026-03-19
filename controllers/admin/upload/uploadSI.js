@@ -1,6 +1,6 @@
 const prisma = require('../../../config/prisma');
 const XLSX = require("xlsx");
-const { initUploadJob, setUploadJob, finishUploadJob, failUploadJob } = require('./uploadJob');
+const { initUploadJob, setUploadJob, finishUploadJob, failUploadJob, touchDataSync } = require('./uploadJob');
 
 const BATCH_SIZE = 5000;
 
@@ -195,6 +195,10 @@ exports.uploadSI_XLSX = async (req, res) => {
         }
 
         const skipped = mapped.length - totalInserted;
+        
+        // ✅ บันทึกเวลาอัปเดตล่าสุด
+        await touchDataSync('si', totalInserted);
+        
         setUploadJob(jobId, 95, "finalizing");
         finishUploadJob(jobId, `completed - ${totalInserted} inserted, ${skipped} duplicates skipped`);
         res.status(200).json({

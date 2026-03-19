@@ -92,11 +92,29 @@ const getUploadStatus = async (req, res) => {
     }
 };
 
+const getAllSyncDates = async (req, res) => {
+    try {
+        const syncs = await prisma.dataSync.findMany();
+        const result = {};
+        syncs.forEach(s => {
+            result[s.key] = {
+                updatedAt: s.updatedAt.toISOString(),
+                rowCount: s.rowCount
+            };
+        });
+        return res.json(result);
+    } catch (err) {
+        console.error("getAllSyncDates error:", err);
+        return res.status(500).json({ message: "error fetching sync dates" });
+    }
+};
+
 module.exports = {
     initUploadJob,
     setUploadJob,
     finishUploadJob,
     failUploadJob,
     getUploadStatus,
+    getAllSyncDates,
     touchDataSync
 };

@@ -32,6 +32,7 @@ const {
     uploadGourmetXLSX,
     uploadSI_XLSX,
     getUploadStatus,
+    getAllSyncDates,
 } = require('../controllers/admin/upload/uploadController');
 // Upload endpoints
 router.post('/upload-minmax', authCheck, adminCheck, upload.single('file'), uploadItemMinMaxXLSX);
@@ -45,6 +46,7 @@ router.post('/upload-bill', authCheck, adminCheck, upload.single('file'), upload
 router.post('/upload-gourmets', authCheck, adminCheck, upload.single('file'), uploadGourmetXLSX)
 router.post('/upload-si', authCheck, adminCheck, upload.single('file'), uploadSI_XLSX)
 router.get('/upload-status', authCheck, adminCheck, getUploadStatus)
+router.get('/sync-dates', authCheck, adminCheck, getAllSyncDates)
 
 const { downloadTemplate, downloadSKU } = require('../controllers/admin/download');
 //download

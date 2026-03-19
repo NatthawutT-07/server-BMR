@@ -1,7 +1,7 @@
 const prisma = require('../../../config/prisma');
 const { Prisma } = require("@prisma/client");
 const { runExcelWorker } = require("../../../workers/workerHelper");
-const { initUploadJob, setUploadJob, finishUploadJob, failUploadJob } = require('./uploadJob');
+const { initUploadJob, setUploadJob, finishUploadJob, failUploadJob, touchDataSync } = require('./uploadJob');
 
 // ✅ ใช้ Worker Thread สำหรับ Parse Excel (ไม่ Block Event Loop)
 exports.uploadWithdrawXLSX = async (req, res) => {
@@ -96,6 +96,9 @@ exports.uploadWithdrawXLSX = async (req, res) => {
             const progress = 85 + Math.floor((currentBatch / totalBatches) * 10);
             setUploadJob(jobId, progress, `saving batch ${currentBatch}/${totalBatches}`);
         }
+
+        // ✅ บันทึกเวลาอัปเดตล่าสุด
+        await touchDataSync('withdraw', mapped.length);
 
         finishUploadJob(jobId, "completed");
         return res.status(200).json({

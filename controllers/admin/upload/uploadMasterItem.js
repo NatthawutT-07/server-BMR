@@ -1,7 +1,7 @@
 const prisma = require('../../../config/prisma');
 const { Prisma } = require("@prisma/client");
 const { runExcelWorker } = require("../../../workers/workerHelper");
-const { initUploadJob, setUploadJob, finishUploadJob, failUploadJob } = require('./uploadJob');
+const { initUploadJob, setUploadJob, finishUploadJob, failUploadJob, touchDataSync } = require('./uploadJob');
 
 // ✅ ใช้ Worker Thread สำหรับ Parse Excel (ไม่ Block Event Loop)
 exports.uploadMasterItemXLSX = async (req, res) => {
@@ -204,6 +204,9 @@ exports.uploadMasterItemXLSX = async (req, res) => {
                 setUploadJob(jobId, progress, `updating ${Math.min(i + UPDATE_BATCH_SIZE, toUpdate.length)}/${toUpdate.length}`);
             }
         }
+
+        // ✅ บันทึกเวลาอัปเดตล่าสุด
+        await touchDataSync('masterItem', toInsert.length + toUpdate.length);
 
         //------------------------------------------
         // Done

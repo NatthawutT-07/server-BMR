@@ -208,7 +208,6 @@ exports.getActiveBranches = async (req, res) => {
     });
 
     // 3. Map ข้อมูลส่งกลับไปหน้าบ้าน
-    // ถ้าหา branch_name ไม่เจอ ให้แสดงแค่รหัส
     const result = activeUsers.map((u) => {
       const branchInfo = branchesInfo.find((b) => b.branch_code === u.name);
       return {

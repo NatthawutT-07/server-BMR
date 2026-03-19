@@ -119,10 +119,10 @@ model Sku {
   codeProduct Int
   index       Int
 
-  @@unique([branchCode, shelfCode, rowNo, codeProduct])
+  @@unique([branchCode, codeProduct])
   @@index([branchCode, shelfCode, rowNo, index])
   @@index([branchCode, shelfCode, index])
-  @@index([branchCode, codeProduct]) // ✅  UserTemplateItem ไวขึ้น
+  @@index([branchCode, codeProduct]) //   UserTemplateItem ไวขึ้น
 }
 
 model Branch {
@@ -268,7 +268,7 @@ model ShelfUpdate {
   @@index([branchCode])
 }
 
-// ✅ เก็บยอดขายของกรูเม่ (Gourmet)
+//  เก็บยอดขายของกรูเม่ (Gourmet)
 model Gourmet {
   id           Int      @id @default(autoincrement())
   date         DateTime
@@ -286,7 +286,7 @@ model Gourmet {
   @@index([product_code])
 }
 
-// ✅ เก็บ log รายละเอียดการเปลี่ยนแปลง shelf (add/delete/move)
+// เก็บ log รายละเอียดการเปลี่ยนแปลง shelf (add/delete/move)
 model ShelfChangeLog {
   id          Int     @id @default(autoincrement())
   branchCode  String
