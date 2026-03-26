@@ -125,12 +125,13 @@ exports.sku = async (req, res) => {
         barcode: r.barcode ?? null,
         minStore: r.minStore !== null && r.minStore !== undefined ? Number(r.minStore) : null,
         maxStore: r.maxStore !== null && r.maxStore !== undefined ? Number(r.maxStore) : null,
+        groupName: r.groupName ?? null,
         stockQuantity: Number(r.stockQuantity ?? 0),
         withdrawQuantity: Number(r.withdrawQuantity ?? 0),
         withdrawValue: Number(r.withdrawValue ?? 0),
         salesQuantity: Number(r.salesQuantity ?? 0),
         salesTotalPrice: Number(r.salesTotalPrice ?? 0),
-        salesCurrentMonthQty: Number(r.salesCurrentMonthQty ?? 0),
+        dayOff: r.dayOff !== null && r.dayOff !== undefined ? Number(r.dayOff) : null,
       };
     });
 

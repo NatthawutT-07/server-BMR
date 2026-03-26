@@ -279,19 +279,23 @@ exports.getTemplates = async () => {
 
 exports.getSkuData = async (branchCode) => {
   const { startUtc, endUtc, startDateStr, endDateStr } = get90DaysRangeUtc();
-  const { currentMonthStartUtc, currentMonthEndUtc } = getMonthMetaUtc();
 
   const rawResult = await prisma.$queryRaw`
         SELECT 
             s."branchCode", s."codeProduct", s."shelfCode", s."rowNo", s."index",
-            p."nameProduct", p."nameBrand", p."purchasePriceExcVAT", p."salesPriceIncVAT", p."shelfLife", p."barcode", 
+            p."nameProduct", p."nameBrand", p."purchasePriceExcVAT", p."salesPriceIncVAT", p."shelfLife", p."barcode",
+            p."groupName",
             im."minStore", im."maxStore",
             COALESCE(st."stockQuantity", 0)::int AS "stockQuantity",
             COALESCE(wd."withdrawQuantity", 0)::int   AS "withdrawQuantity",
             COALESCE(wd."withdrawValue", 0)::float8   AS "withdrawValue",
             COALESCE(bs."quantity_total", 0)::int     AS "salesQuantity",
             COALESCE(bs."net_sales_total", 0)::float8 AS "salesTotalPrice",
-            COALESCE(cm."salesCurrentMonthQty", 0)::int AS "salesCurrentMonthQty"
+            CASE
+              WHEN ls."lastSaleDate" IS NOT NULL THEN
+                GREATEST(((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Bangkok')::date - 1) - (ls."lastSaleDate" AT TIME ZONE 'Asia/Bangkok')::date, 0)
+              ELSE NULL
+            END AS "dayOff"
         FROM "Sku" s
         LEFT JOIN (
             SELECT "branchCode", "codeProduct", SUM("quantity")::int AS "stockQuantity"
@@ -314,14 +318,14 @@ exports.getSkuData = async (branchCode) => {
             GROUP BY br."branch_code", (p."product_code")::int
         ) bs ON s."branchCode" = bs."branchCode" AND s."codeProduct" = bs."codeProduct"
         LEFT JOIN (
-            SELECT br."branch_code" AS "branchCode", (prod."product_code")::int AS "codeProduct", SUM(bi."quantity")::int AS "salesCurrentMonthQty"
+            SELECT br."branch_code" AS "branchCode", (prod."product_code")::int AS "codeProduct", MAX(b."date") AS "lastSaleDate"
             FROM "BillItem" bi
             JOIN "Bill" b ON bi."billId" = b."id"
             JOIN "Branch" br ON b."branchId" = br."id"
             JOIN "Product" prod ON bi."productId" = prod."id"
-            WHERE br."branch_code" = ${branchCode} AND b."date" >= ${currentMonthStartUtc} AND b."date" <= ${currentMonthEndUtc}
+            WHERE br."branch_code" = ${branchCode} AND b."date" >= ${startUtc} AND b."date" <= ${endUtc}
             GROUP BY br."branch_code", (prod."product_code")::int
-        ) cm ON s."branchCode" = cm."branchCode" AND s."codeProduct" = cm."codeProduct"
+        ) ls ON s."branchCode" = ls."branchCode" AND s."codeProduct" = ls."codeProduct"
         LEFT JOIN "ListOfItemHold" p ON s."codeProduct" = p."codeProduct"
         LEFT JOIN "ItemMinMax" im ON s."branchCode" = im."branchCode" AND s."codeProduct" = im."codeProduct"
         WHERE s."branchCode" = ${branchCode}
