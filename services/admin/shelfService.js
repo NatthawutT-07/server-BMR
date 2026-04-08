@@ -285,7 +285,7 @@ exports.getSkuData = async (branchCode) => {
             s."branchCode", s."codeProduct", s."shelfCode", s."rowNo", s."index",
             p."nameProduct", p."nameBrand", p."purchasePriceExcVAT", p."salesPriceIncVAT", p."shelfLife", p."barcode",
             p."groupName",
-            im."minStore", im."maxStore",
+            im."minStore", im."maxStore", im."packOrder",
             COALESCE(st."stockQuantity", 0)::int AS "stockQuantity",
             COALESCE(wd."withdrawQuantity", 0)::int   AS "withdrawQuantity",
             COALESCE(wd."withdrawValue", 0)::float8   AS "withdrawValue",
@@ -358,7 +358,7 @@ exports.getDashboardSummary = async () => {
           GROUP BY br."branch_code", (pr."product_code")::int
       ),
       branch_sums AS (
-          SELECT sr."branchCode" AS branch_code, COUNT(DISTINCT sr."shelfCode")::int AS shelf_count, COUNT(*)::int AS product_count,
+          SELECT sr."branchCode" AS branch_code, COUNT(DISTINCT sr."shelfCode")::int AS shelf_count, COUNT(DISTINCT sr."codeProduct")::int AS product_count,
               SUM(CASE WHEN COALESCE(sm.stock_qty, 0) > 0 THEN COALESCE(sm.stock_qty, 0) * COALESCE(p."purchasePriceExcVAT", 0) ELSE 0 END)::float8 AS stock_cost,
               SUM(COALESCE(wm.withdraw_value, 0))::float8 AS withdraw_value, SUM(COALESCE(sa.sales_total, 0))::float8 AS sales_total
           FROM sku_rows sr
@@ -374,7 +374,38 @@ exports.getDashboardSummary = async () => {
       FROM "Branch" b LEFT JOIN branch_sums bs ON bs.branch_code = b."branch_code" ORDER BY b."branch_code" ASC
   `;
 
-  return { rows, startUtc, endUtc };
+  // Query for the overall unique SKU count across the entire system
+  const overallSkuResult = await prisma.$queryRaw`
+      SELECT COUNT(DISTINCT "codeProduct")::int AS "overallUniqueSkus"
+      FROM "Sku"
+  `;
+  const overallUniqueSkus = overallSkuResult[0]?.overallUniqueSkus || 0;
+
+  // Query to find days within the date range (startUtc to endUtc) that have NO sales in any branch
+  // We generate a series of dates and LEFT JOIN with the actual sales dates
+  const missingSalesDatesResult = await prisma.$queryRaw`
+      WITH RECURSIVE date_series AS (
+          SELECT ${startUtc}::date AS d
+          UNION ALL
+          SELECT (d + interval '1 day')::date
+          FROM date_series
+          WHERE d < ${endUtc}::date
+      ),
+      sales_dates AS (
+          SELECT DISTINCT b."date"::date AS sale_date
+          FROM "Bill" b
+          WHERE b."date" >= ${startUtc} AND b."date" <= ${endUtc}
+      )
+      SELECT ds.d::text AS missing_date
+      FROM date_series ds
+      LEFT JOIN sales_dates sd ON ds.d = sd.sale_date
+      WHERE sd.sale_date IS NULL
+      ORDER BY ds.d ASC
+  `;
+  
+  const missingSalesDates = missingSalesDatesResult.map(r => r.missing_date);
+
+  return { rows, startUtc, endUtc, overallUniqueSkus, missingSalesDates };
 };
 
 exports.getShelfSales = async (branchCode) => {
@@ -398,7 +429,7 @@ exports.getShelfSales = async (branchCode) => {
           GROUP BY br."branch_code", (pr."product_code")::int
       ),
       shelf_sums AS (
-          SELECT sr."branchCode" AS branch_code, sr."shelfCode" AS shelf_code, COUNT(*)::int AS sku_count,
+          SELECT sr."branchCode" AS branch_code, sr."shelfCode" AS shelf_code, COUNT(DISTINCT sr."codeProduct")::int AS sku_count,
               SUM(CASE WHEN COALESCE(sm.stock_qty, 0) > 0 THEN COALESCE(sm.stock_qty, 0) * COALESCE(p."purchasePriceExcVAT", 0) ELSE 0 END)::float8 AS stock_cost,
               SUM(COALESCE(wm.withdraw_value, 0))::float8 AS withdraw_value, SUM(COALESCE(sa.sales_total, 0))::float8 AS sales_total
           FROM sku_rows sr

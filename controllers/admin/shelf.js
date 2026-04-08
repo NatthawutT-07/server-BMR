@@ -125,6 +125,7 @@ exports.sku = async (req, res) => {
         barcode: r.barcode ?? null,
         minStore: r.minStore !== null && r.minStore !== undefined ? Number(r.minStore) : null,
         maxStore: r.maxStore !== null && r.maxStore !== undefined ? Number(r.maxStore) : null,
+        packOrder: r.packOrder !== null && r.packOrder !== undefined ? Number(r.packOrder) : null,
         groupName: r.groupName ?? null,
         stockQuantity: Number(r.stockQuantity ?? 0),
         withdrawQuantity: Number(r.withdrawQuantity ?? 0),
@@ -145,26 +146,20 @@ exports.sku = async (req, res) => {
 
 exports.getShelfDashboardSummary = async (req, res) => {
   try {
-    const { rows, startUtc, endUtc } = await shelfService.getDashboardSummary();
-
-    const mapped = rows.map((r) => {
-      return {
-        branchCode: r.branchCode,
-        branchName: r.branchName,
-        shelfCount: Number(r.shelfCount || 0),
-        productCount: Number(r.productCount || 0),
-        stockCost: Number(r.stockCost || 0),
-        withdrawValue: Number(r.withdrawValue || 0),
-        salesTotal: Number(r.salesTotal || 0),
-      };
-    });
+    const { rows, startUtc, endUtc, overallUniqueSkus, missingSalesDates } = await shelfService.getDashboardSummary();
 
     const payload = {
+      rows: JSON.parse(
+        JSON.stringify(rows, (_, value) =>
+          typeof value === "bigint" ? Number(value) : value
+        )
+      ),
       range: {
-        start: toBkkDateStr(startUtc),
-        end: toBkkDateStr(endUtc),
+        start: startUtc.toISOString().slice(0, 10),
+        end: endUtc.toISOString().slice(0, 10),
       },
-      rows: mapped,
+      overallUniqueSkus,
+      missingSalesDates
     };
 
     return res.json(payload);

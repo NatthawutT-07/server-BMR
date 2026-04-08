@@ -226,6 +226,7 @@ exports.UserTemplateItem = async (req, res) => {
           p."barcode",
           im."minStore",
           im."maxStore",
+          im."packOrder",
 
           -- 🟢 Stock ปัจจุบัน
           COALESCE(st."stockQuantity", 0)::int AS "stockQuantity"
@@ -286,6 +287,7 @@ exports.UserTemplateItem = async (req, res) => {
 
       minStore: r.minStore !== null && r.minStore !== undefined ? Number(r.minStore) : null,
       maxStore: r.maxStore !== null && r.maxStore !== undefined ? Number(r.maxStore) : null,
+      packOrder: r.packOrder !== null && r.packOrder !== undefined ? Number(r.packOrder) : null,
 
       stockQuantity: Number(r.stockQuantity ?? 0),
     }));

@@ -9,4 +9,8 @@ module.exports = {
     ...require('./uploadSKU'),
     ...require('./uploadBill'),
     ...require('./uploadSI'),
+    ...require('./clearStock'),
+    ...require('./clearSku'),
+    ...require('./clearTemplate'),
+    ...require('./clearMinMax'),
 };

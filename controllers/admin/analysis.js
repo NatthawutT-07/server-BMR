@@ -582,6 +582,7 @@ exports.getStoreAnalysis = async (req, res) => {
                     status: master?.status || "",
                     minStore: mm?.minStore ?? null,
                     maxStore: mm?.maxStore ?? null,
+                    packOrder: mm?.packOrder ?? null,
                     months: monthData,
                     stock_quantity: 0,
                     si_quantity: 0,
@@ -602,6 +603,7 @@ exports.getStoreAnalysis = async (req, res) => {
             if (!entry) continue; // ไม่อยู่ใน ListOfItemHold → skip
             entry.minStore = row.minStore;
             entry.maxStore = row.maxStore;
+            entry.packOrder = row.packOrder ?? null;
         }
 
         // Sales
@@ -702,6 +704,7 @@ exports.getStoreAnalysis = async (req, res) => {
                 if (entry) {
                     entry.minStore = row.minStore;
                     entry.maxStore = row.maxStore;
+                    entry.packOrder = row.packOrder ?? null;
                 }
             }
         }

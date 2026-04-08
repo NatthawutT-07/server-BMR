@@ -33,6 +33,10 @@ const {
     uploadSI_XLSX,
     getUploadStatus,
     getAllSyncDates,
+    clearStock,
+    clearSku,
+    clearTemplate,
+    clearMinMax,
 } = require('../controllers/admin/upload/uploadController');
 // Upload endpoints
 router.post('/upload-minmax', authCheck, adminCheck, upload.single('file'), uploadItemMinMaxXLSX);
@@ -45,6 +49,10 @@ router.post('/upload-sku', authCheck, adminCheck, upload.single('file'), uploadS
 router.post('/upload-bill', authCheck, adminCheck, upload.single('file'), uploadBillXLSX)
 router.post('/upload-gourmets', authCheck, adminCheck, upload.single('file'), uploadGourmetXLSX)
 router.post('/upload-si', authCheck, adminCheck, upload.single('file'), uploadSI_XLSX)
+router.delete('/clear-stock', authCheck, adminCheck, clearStock)
+router.delete('/clear-sku', authCheck, adminCheck, clearSku)
+router.delete('/clear-template', authCheck, adminCheck, clearTemplate)
+router.delete('/clear-minmax', authCheck, adminCheck, clearMinMax)
 router.get('/upload-status', authCheck, adminCheck, getUploadStatus)
 router.get('/sync-dates', authCheck, adminCheck, getAllSyncDates)
 

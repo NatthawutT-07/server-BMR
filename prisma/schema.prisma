@@ -41,6 +41,7 @@ model ItemMinMax {
   codeProduct Int
   minStore    Int
   maxStore    Int
+  packOrder   Int?
 
   @@unique([branchCode, codeProduct])
   @@index([branchCode, codeProduct])
