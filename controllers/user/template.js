@@ -228,7 +228,7 @@ exports.UserTemplateItem = async (req, res) => {
           im."maxStore",
           im."packOrder",
 
-          -- 🟢 Stock ปัจจุบัน
+          --  Stock ปัจจุบัน
           COALESCE(st."stockQuantity", 0)::int AS "stockQuantity"
 
       FROM "Sku" s
@@ -345,16 +345,16 @@ exports.UserTemplateItem = async (req, res) => {
 //           im."minStore",
 //           im."maxStore",
 
-//           -- 🟢 Stock ปัจจุบัน
+//           --  Stock ปัจจุบัน
 //           COALESCE(st."stockQuantity", 0)::int AS "stockQuantity",
 
-//           -- 🟢 ยอดขาย 3 เดือนก่อนหน้า (ตามเดือนเวลาไทย)
+//           --  ยอดขาย 3 เดือนก่อนหน้า (ตามเดือนเวลาไทย)
 //           COALESCE(p3."sales3mQty", 0)::int AS "sales3mQty",
 
-//           -- 🟢 ยอดขายเดือนปัจจุบันเท่านั้น (ตามเดือนเวลาไทย)
+//           --  ยอดขายเดือนปัจจุบันเท่านั้น (ตามเดือนเวลาไทย)
 //           COALESCE(cm."salesCurrentMonthQty", 0)::int AS "salesCurrentMonthQty",
 
-//           -- 🟢 Withdraw (เฉพาะ docStatus = 'อนุมัติแล้ว')
+//           --  Withdraw (เฉพาะ docStatus = 'อนุมัติแล้ว')
 //           COALESCE(wd."withdrawQuantity", 0)::int AS "withdrawQuantity"
 
 //       FROM "Sku" s
@@ -370,7 +370,7 @@ exports.UserTemplateItem = async (req, res) => {
 //       ON s."branchCode" = st."branchCode"
 //       AND s."codeProduct" = st."codeProduct"
 
-//       -- 🟢 Sales 3 เดือนก่อนหน้า จาก Bill / BillItem (รวมทุก channel)
+//       --  Sales 3 เดือนก่อนหน้า จาก Bill / BillItem (รวมทุก channel)
 //       LEFT JOIN (
 //           SELECT
 //               br."branch_code"            AS "branchCode",
@@ -407,7 +407,7 @@ exports.UserTemplateItem = async (req, res) => {
 //       ON s."branchCode" = p3."branchCode"
 //       AND s."codeProduct" = p3."codeProduct"
 
-//       -- 🟢 Sales เดือนปัจจุบัน จาก Bill / BillItem
+//       --  Sales เดือนปัจจุบัน จาก Bill / BillItem
 //       LEFT JOIN (
 //           SELECT
 //               br."branch_code"            AS "branchCode",
@@ -430,7 +430,7 @@ exports.UserTemplateItem = async (req, res) => {
 //       ON s."branchCode" = cm."branchCode"
 //       AND s."codeProduct" = cm."codeProduct"
 
-//       -- 🟢 Withdraw: เฉพาะ docStatus = 'อนุมัติแล้ว'
+//       --  Withdraw: เฉพาะ docStatus = 'อนุมัติแล้ว'
 //       LEFT JOIN (
 //           SELECT
 //               "branchCode",

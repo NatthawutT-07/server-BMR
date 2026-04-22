@@ -35,6 +35,25 @@ exports.getSkuAnalysis = async (req, res) => {
             return res.status(400).json({ error: "startDate and endDate are required" });
         }
 
+        // Validate max 5 months
+        const sDate = new Date(startDate);
+        const eDate = new Date(endDate);
+        const diffMonths = (eDate.getFullYear() - sDate.getFullYear()) * 12 + (eDate.getMonth() - sDate.getMonth());
+        if (diffMonths > 4) {
+            return res.status(400).json({ error: "ช่วงเวลาสูงสุด 5 เดือน" });
+        }
+
+        // Build month buckets
+        const months = [];
+        let cursor = new Date(sDate.getFullYear(), sDate.getMonth(), 1);
+        const lastMonth = new Date(eDate.getFullYear(), eDate.getMonth(), 1);
+        while (cursor <= lastMonth) {
+            const y = cursor.getFullYear();
+            const m = String(cursor.getMonth() + 1).padStart(2, "0");
+            months.push(`${y}-${m}`);
+            cursor.setMonth(cursor.getMonth() + 1);
+        }
+
         const getBangkokUtcRange = (startStr, endStr) => {
             const start = new Date(startStr + "T00:00:00+07:00");
             const end = new Date(endStr + "T23:59:59.999+07:00");
@@ -68,13 +87,14 @@ exports.getSkuAnalysis = async (req, res) => {
         }
 
         // ====================================================
-        // 1) SALES: BillItem → Bill → Product
+        // 1) SALES: BillItem → Bill → Product (per month)
         // ====================================================
         const salesRows = await prisma.$queryRawUnsafe(`
             SELECT
                 p."product_code",
                 p."product_name",
                 p."product_brand",
+                TO_CHAR(b."date", 'YYYY-MM') AS month,
                 COALESCE(SUM(
                     CASE WHEN b."doc_type" = 'เอกสารขาย' THEN bi."quantity" ELSE 0 END
                 ), 0) + COALESCE(SUM(
@@ -91,12 +111,12 @@ exports.getSkuAnalysis = async (req, res) => {
             WHERE b."date" >= $1
               AND b."date" <= $2
               ${branchCodes?.length ? `AND br."branch_code" IN (${branchCodes.map(bc => `'${bc.replace(/'/g, "''")}'`).join(",")})` : ""}
-            GROUP BY p."product_code", p."product_name", p."product_brand"
-            ORDER BY p."product_code"
+            GROUP BY p."product_code", p."product_name", p."product_brand", TO_CHAR(b."date", 'YYYY-MM')
+            ORDER BY p."product_code", month
         `, startUtc, endUtc);
 
         // ====================================================
-        // 2) WITHDRAW
+        // 2) WITHDRAW (per month)
         // ====================================================
         let withdrawReasonFilter = "AND \"reason\" != 'เบิกเพื่อขาย'";
         if (reasons?.length > 0) {
@@ -106,6 +126,7 @@ exports.getSkuAnalysis = async (req, res) => {
         const withdrawRows = await prisma.$queryRawUnsafe(`
             SELECT
                 "codeProduct",
+                TO_CHAR(to_date("date", 'DD/MM/YYYY'), 'YYYY-MM') AS month,
                 COALESCE(SUM("quantity"), 0) AS withdraw_quantity,
                 COALESCE(SUM("value"), 0) AS withdraw_value
             FROM "withdraw"
@@ -114,8 +135,8 @@ exports.getSkuAnalysis = async (req, res) => {
               AND to_date("date", 'DD/MM/YYYY') >= to_date('${startDate}', 'YYYY-MM-DD')
               AND to_date("date", 'DD/MM/YYYY') <= to_date('${endDate}', 'YYYY-MM-DD')
               ${branchCodes?.length ? `AND "branchCode" IN (${branchCodes.map(b => `'${b.replace(/'/g, "''")}'`).join(",")})` : ""}
-            GROUP BY "codeProduct"
-            ORDER BY "codeProduct"
+            GROUP BY "codeProduct", TO_CHAR(to_date("date", 'DD/MM/YYYY'), 'YYYY-MM')
+            ORDER BY "codeProduct", month
         `);
 
         // ====================================================
@@ -152,22 +173,21 @@ exports.getSkuAnalysis = async (req, res) => {
                 productCode: true,
                 siNo: true,
                 quantity: true,
+                deliveryDate: true,
             },
         });
 
-        // console.log(`=== OrderSI filtered: ${siRaw.length} records in date range ===`);
-        if (siRaw.length > 0) {
-            // console.log("=== SI sample (first 3):", JSON.stringify(siRaw.slice(0, 3)));
-        }
-
-        // Aggregate SI vs SIA by productCode (int)
+        // Aggregate SI vs SIA by productCode (int) + month
         const siAggMap = new Map();
         for (const row of siRaw) {
             const intCode = toInt(row.productCode);
-            if (!siAggMap.has(intCode)) {
-                siAggMap.set(intCode, { si_quantity: 0, sia_quantity: 0 });
+            const m = row.deliveryDate ? row.deliveryDate.toISOString().substring(0, 7) : "";
+            if (!m) continue;
+            const key = `${intCode}|${m}`;
+            if (!siAggMap.has(key)) {
+                siAggMap.set(key, { si_quantity: 0, sia_quantity: 0 });
             }
-            const agg = siAggMap.get(intCode);
+            const agg = siAggMap.get(key);
             const siNo = String(row.siNo || "").toUpperCase();
             if (siNo.startsWith("SIA")) {
                 agg.sia_quantity += row.quantity || 0;
@@ -179,25 +199,30 @@ exports.getSkuAnalysis = async (req, res) => {
         // console.log(`=== Analysis: ${salesRows.length} sales, ${withdrawRows.length} withdraw, ${siRaw.length} SI records (${siAggMap.size} unique products) ===`);
 
         // ====================================================
-        // 3.5) GOURMET SALES
+        // 3.5) GOURMET SALES (per month)
         // ====================================================
-        const gourmetWhere = {
-            date: { gte: startUtc, lte: endUtc },
-        };
-        if (branchCodes?.length) {
-            gourmetWhere.branch_code = { in: branchCodes.map(expandBranchCode) };
+        let gourmetRows = [];
+        try {
+            gourmetRows = await prisma.$queryRawUnsafe(`
+                SELECT
+                    "product_code",
+                    TO_CHAR("date", 'YYYY-MM') AS month,
+                    COALESCE(SUM("quantity"), 0) AS sale_quantity,
+                    COALESCE(SUM("sales"), 0) AS net_sales
+                FROM "gourmet"
+                WHERE "date" >= $1
+                  AND "date" <= $2
+                  ${branchCodes?.length ? `AND "branch_code" IN (${branchCodes.map(bc => `'${bc.replace(/'/g, "''")}'`).join(",")})` : ""}
+                GROUP BY "product_code", TO_CHAR("date", 'YYYY-MM')
+                ORDER BY "product_code", month
+            `, startUtc, endUtc);
+        } catch (err) {
+            console.log("Gourmet table not found or query failed, skipping gourmet data");
+            gourmetRows = [];
         }
-        const gourmetRows = await prisma.gourmet.groupBy({
-            by: ['product_code'],
-            where: gourmetWhere,
-            _sum: {
-                quantity: true,
-                sales: true,
-            },
-        });
 
         // ====================================================
-        // 4) MERGE all data by product_code (int key)
+        // 4) MERGE all data by product_code (int key) with monthly breakdown
         // ====================================================
         const mergedMap = new Map();
 
@@ -206,6 +231,17 @@ exports.getSkuAnalysis = async (req, res) => {
             if (!masterMap.has(intCode)) return null; // ไม่อยู่ใน master → skip
             if (!mergedMap.has(intCode)) {
                 const master = masterMap.get(intCode);
+                const monthsData = {};
+                for (const m of months) {
+                    monthsData[m] = {
+                        sale_quantity: 0,
+                        net_sales: 0,
+                        withdraw_quantity: 0,
+                        withdraw_value: 0,
+                        si_quantity: 0,
+                        sia_quantity: 0,
+                    };
+                }
                 mergedMap.set(intCode, {
                     product_code: pad5(intCode),
                     product_name: master?.nameProduct || "",
@@ -221,48 +257,72 @@ exports.getSkuAnalysis = async (req, res) => {
                     si_quantity: 0,
                     sia_quantity: 0,
                     stock_quantity: 0,
+                    months: monthsData,
                 });
             }
             return mergedMap.get(intCode);
         };
 
-        // Sales data
+        // Sales data (per month)
         for (const row of salesRows) {
             const intCode = toInt(row.product_code);
             const entry = ensureEntry(intCode);
-            if (!entry) continue; // ไม่อยู่ใน ListOfItemHold → skip
-            // ถ้ามีชื่อจาก Product table ใช้แทน (fallback)
+            if (!entry) continue;
             if (row.product_name && !entry.product_name) entry.product_name = row.product_name;
             if (row.product_brand && !entry.product_brand) entry.product_brand = row.product_brand;
-            entry.sale_quantity = Number(row.sale_quantity || 0);
-            entry.return_quantity = Number(row.return_quantity || 0);
-            entry.net_sales = Number(row.net_sales || 0);
+            
+            const m = row.month;
+            if (entry.months[m]) {
+                entry.months[m].sale_quantity += Number(row.sale_quantity || 0);
+                entry.months[m].net_sales += Number(row.net_sales || 0);
+            }
+            entry.sale_quantity += Number(row.sale_quantity || 0);
+            entry.return_quantity += Number(row.return_quantity || 0);
+            entry.net_sales += Number(row.net_sales || 0);
         }
 
-        // Gourmet data
+        // Gourmet data (per month)
         for (const row of gourmetRows) {
             const intCode = toInt(row.product_code);
             const entry = ensureEntry(intCode);
-            if (!entry) continue; // ไม่อยู่ใน ListOfItemHold → skip
-            entry.sale_quantity += Number(row._sum.quantity || 0);
-            entry.net_sales += Number(row._sum.sales || 0);
+            if (!entry) continue;
+            
+            const m = row.month;
+            if (entry.months[m]) {
+                entry.months[m].sale_quantity += Number(row.sale_quantity || 0);
+                entry.months[m].net_sales += Number(row.net_sales || 0);
+            }
+            entry.sale_quantity += Number(row.sale_quantity || 0);
+            entry.net_sales += Number(row.net_sales || 0);
         }
 
-        // Withdraw data
+        // Withdraw data (per month)
         for (const row of withdrawRows) {
             const intCode = Number(row.codeProduct);
             const entry = ensureEntry(intCode);
-            if (!entry) continue; // ไม่อยู่ใน ListOfItemHold → skip
-            entry.withdraw_quantity = Number(row.withdraw_quantity || 0);
-            entry.withdraw_value = Number(row.withdraw_value || 0);
+            if (!entry) continue;
+            
+            const m = row.month;
+            if (entry.months[m]) {
+                entry.months[m].withdraw_quantity += Number(row.withdraw_quantity || 0);
+                entry.months[m].withdraw_value += Number(row.withdraw_value || 0);
+            }
+            entry.withdraw_quantity += Number(row.withdraw_quantity || 0);
+            entry.withdraw_value += Number(row.withdraw_value || 0);
         }
 
-        // OrderSI data
-        for (const [intCode, agg] of siAggMap) {
-            const entry = ensureEntry(intCode);
-            if (!entry) continue; // ไม่อยู่ใน ListOfItemHold → skip
-            entry.si_quantity = agg.si_quantity;
-            entry.sia_quantity = agg.sia_quantity;
+        // OrderSI data (per month)
+        for (const [key, agg] of siAggMap) {
+            const [intCode, m] = key.split('|');
+            const entry = ensureEntry(Number(intCode));
+            if (!entry) continue;
+            
+            if (entry.months[m]) {
+                entry.months[m].si_quantity += agg.si_quantity;
+                entry.months[m].sia_quantity += agg.sia_quantity;
+            }
+            entry.si_quantity += agg.si_quantity;
+            entry.sia_quantity += agg.sia_quantity;
         }
 
         // ====================================================
@@ -326,6 +386,7 @@ exports.getSkuAnalysis = async (req, res) => {
             range: { start: startDate, end: endDate },
             total: result.length,
             rows: result,
+            months: months,
         });
 
     } catch (err) {
@@ -402,6 +463,25 @@ exports.getStoreAnalysis = async (req, res) => {
             minMaxWhere.branchCode = { in: branchCodes };
         }
         const minMaxRows = await prisma.itemMinMax.findMany({ where: minMaxWhere });
+
+        // Fetch Branch names
+        const branches = await prisma.branch.findMany({
+            select: { branch_code: true, branch_name: true }
+        });
+        const branchMap = new Map();
+        for (const b of branches) {
+            branchMap.set(b.branch_code, b.branch_name);
+            // Also map expanded codes just in case (e.g. ST001 -> ST0001)
+            if (b.branch_code.length === 5) {
+                const expanded = b.branch_code.slice(0, 2) + "0" + b.branch_code.slice(2);
+                branchMap.set(expanded, b.branch_name);
+            }
+            // And normalized codes (e.g. ST0001 -> ST001)
+            if (b.branch_code.length === 6) {
+                const normalized = b.branch_code.slice(0, 2) + b.branch_code.slice(3);
+                branchMap.set(normalized, b.branch_name);
+            }
+        }
 
         // Build a lookup map for quick min/max access
         const minMaxMap = new Map();
@@ -574,6 +654,7 @@ exports.getStoreAnalysis = async (req, res) => {
                 }
                 mergedMap.set(key, {
                     branch_code: branchCode,
+                    branch_name: branchMap.get(branchCode) || branchCode,
                     product_code: pad5(intCode),
                     product_name: master?.nameProduct || "",
                     brand: master?.nameBrand || "",
@@ -1008,6 +1089,16 @@ exports.getStoreSummary = async (req, res) => {
         const branchNameMap = new Map();
         for (const b of branches) {
             branchNameMap.set(b.branch_code, b.branch_name);
+            // Also map expanded codes just in case (e.g. ST001 -> ST0001)
+            if (b.branch_code.length === 5) {
+                const expanded = b.branch_code.slice(0, 2) + "0" + b.branch_code.slice(2);
+                branchNameMap.set(expanded, b.branch_name);
+            }
+            // And normalized codes (e.g. ST0001 -> ST001)
+            if (b.branch_code.length === 6) {
+                const normalized = b.branch_code.slice(0, 2) + b.branch_code.slice(3);
+                branchNameMap.set(normalized, b.branch_name);
+            }
         }
 
         // ====================================================

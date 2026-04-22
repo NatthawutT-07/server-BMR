@@ -169,6 +169,9 @@ app.use((req, res, next) => {
 
 
 
+// Serve uploaded files statically
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+
 // Health check endpoint for Docker/Kubernetes
 app.get("/health", (req, res) => {
   res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
@@ -179,6 +182,7 @@ app.use("/api", require("./router/auth"));
 app.use("/api", require("./router/admin"));
 app.use("/api", require("./router/user"));
 app.use("/api", require("./router/userMobile"));
+app.use("/api", require("./router/hq"));
 
 // Error handler: response format สั้น/สม่ำเสมอ
 app.use((err, req, res, next) => {

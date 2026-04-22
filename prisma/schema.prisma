@@ -74,7 +74,7 @@ model withdraw {
   quantity    Int
   value       Float
 
-  @@unique([docNumber, branchCode, codeProduct,quantity,value])
+  @@unique([docNumber, branchCode, codeProduct, quantity, value])
   @@index([branchCode, codeProduct])
   @@index([branchCode, docStatus, codeProduct])
 }
@@ -365,4 +365,66 @@ model TempTamplate {
   fullName   String?
   rowQty     Int
   type       String?
+}
+
+// ========== HQ System Models ==========
+
+model employee_hq {
+  id                  Int     @id @default(autoincrement())
+  employee_code       String  @unique
+  nickname            String
+  position            String
+  organizational_unit String
+  point_earned        Int     @default(0)
+  point_redeemed      Int     @default(0)
+  role                String  @default("user")
+  password            String?
+
+  logs log_hq[]
+
+  @@index([employee_code])
+  @@index([role])
+}
+
+model reward_hq {
+  id           Int     @id @default(autoincrement())
+  title        String
+  point_reward Int
+  image_url    String?
+
+  @@index([point_reward])
+}
+
+model branch_hq {
+  id          Int    @id @default(autoincrement())
+  branch_code String
+  branch_name String
+  month       Int
+  day         Int
+  target      Float
+  avg_target  Float
+
+  @@unique([branch_code, month])
+  @@index([branch_code])
+  @@index([month])
+}
+
+model log_hq {
+  id            Int         @id @default(autoincrement())
+  employee_code String
+  employee      employee_hq @relation(fields: [employee_code], references: [employee_code])
+  branch_code   String?
+  branch_name   String?
+  date          DateTime
+  action        String
+  target        Float?
+  sales         Float?
+  point         Int?
+  reward        String?
+  created_at    DateTime    @default(now())
+
+  @@index([employee_code])
+  @@index([branch_code])
+  @@index([date])
+  @@index([action])
 }
