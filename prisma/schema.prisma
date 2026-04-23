@@ -404,6 +404,7 @@ model branch_hq {
   day         Int
   target      Float
   avg_target  Float
+  status      String @default("active")
 
   @@unique([branch_code, month])
   @@index([branch_code])

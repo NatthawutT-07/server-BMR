@@ -40,7 +40,7 @@ const getBranchById = async (req, res) => {
 
 const createBranch = async (req, res) => {
   try {
-    const { branch_code, branch_name, month, day, target } = req.body;
+    const { branch_code, branch_name, month, day, target, status = "active" } = req.body;
 
     if (!branch_code || !branch_name || month === undefined || day === undefined || target === undefined) {
       return res.status(400).json({ ok: false, message: "Missing required fields" });
@@ -58,6 +58,7 @@ const createBranch = async (req, res) => {
         day: dayNum,
         target: targetNum,
         avg_target: avg_target,
+        status,
       },
     });
 
@@ -74,7 +75,7 @@ const createBranch = async (req, res) => {
 const updateBranch = async (req, res) => {
   try {
     const { id } = req.params;
-    const { branch_code, branch_name, month, day, target } = req.body;
+    const { branch_code, branch_name, month, day, target, status } = req.body;
 
     const updateData = {};
     if (branch_code !== undefined) updateData.branch_code = branch_code;
@@ -82,6 +83,7 @@ const updateBranch = async (req, res) => {
     if (month !== undefined) updateData.month = parseInt(month);
     if (day !== undefined) updateData.day = parseInt(day);
     if (target !== undefined) updateData.target = parseFloat(target);
+    if (status !== undefined) updateData.status = status;
 
     if (day !== undefined && target !== undefined) {
       const dayNum = parseInt(day);
