@@ -49,6 +49,7 @@ router.get("/hq/employees/:id", hqAuthCheck, employeeController.getEmployeeById)
 router.get("/hq/employees/:id/stats", hqAuthCheck, employeeController.getEmployeeStats);
 router.post("/hq/employees", hqAuthCheck, hqAdminCheck, employeeController.createEmployee);
 router.post("/hq/employees/bulk", hqAuthCheck, hqAdminCheck, employeeController.bulkCreateEmployees);
+router.post("/hq/employees/reset-all-points", hqAuthCheck, hqAdminCheck, employeeController.resetAllPoints);
 router.put("/hq/employees/:id", hqAuthCheck, hqAdminCheck, employeeController.updateEmployee);
 router.delete("/hq/employees/:id", hqAuthCheck, hqAdminCheck, employeeController.deleteEmployee);
 

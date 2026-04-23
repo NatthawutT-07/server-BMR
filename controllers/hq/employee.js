@@ -3,30 +3,58 @@ const bcrypt = require("bcrypt");
 
 const getAllEmployees = async (req, res) => {
   try {
-    const { role, organizational_unit, employee_code } = req.query;
+    const { 
+      role, 
+      organizational_unit, 
+      employee_code,
+      search,
+      limit = 10,
+      offset = 0
+    } = req.query;
     
     const where = {};
     if (role) where.role = role;
     if (organizational_unit) where.organizational_unit = organizational_unit;
-    if (employee_code) where.employee_code = { contains: employee_code };
+    
+    if (search) {
+      where.OR = [
+        { employee_code: { contains: search, mode: 'insensitive' } },
+        { nickname: { contains: search, mode: 'insensitive' } }
+      ];
+    } else if (employee_code) {
+      where.employee_code = { contains: employee_code, mode: 'insensitive' };
+    }
 
-    const employees = await prisma.employee_hq.findMany({
-      where,
-      select: {
-        id: true,
-        employee_code: true,
-        nickname: true,
-        position: true,
-        organizational_unit: true,
-        point_earned: true,
-        point_redeemed: true,
-        role: true,
-        password: false,
-      },
-      orderBy: { employee_code: "asc" },
+    const [employees, total] = await Promise.all([
+      prisma.employee_hq.findMany({
+        where,
+        select: {
+          id: true,
+          employee_code: true,
+          nickname: true,
+          position: true,
+          organizational_unit: true,
+          point_earned: true,
+          point_redeemed: true,
+          role: true,
+          password: false,
+        },
+        orderBy: { employee_code: "asc" },
+        take: parseInt(limit),
+        skip: parseInt(offset),
+      }),
+      prisma.employee_hq.count({ where }),
+    ]);
+
+    res.json({ 
+      ok: true, 
+      data: employees,
+      pagination: {
+        total,
+        limit: parseInt(limit),
+        offset: parseInt(offset),
+      }
     });
-
-    res.json({ ok: true, data: employees });
   } catch (error) {
     console.error("Get employees error:", error);
     res.status(500).json({ ok: false, message: error.message });
@@ -294,6 +322,21 @@ const getEmployeeStats = async (req, res) => {
   }
 };
 
+const resetAllPoints = async (req, res) => {
+  try {
+    await prisma.employee_hq.updateMany({
+      data: {
+        point_earned: 0,
+        point_redeemed: 0,
+      },
+    });
+    res.json({ ok: true, message: "Reset all employee points successfully" });
+  } catch (error) {
+    console.error("Reset all points error:", error);
+    res.status(500).json({ ok: false, message: error.message });
+  }
+};
+
 const bulkCreateEmployees = async (req, res) => {
   try {
     const { employees } = req.body;
@@ -360,5 +403,6 @@ module.exports = {
   updateEmployee,
   deleteEmployee,
   getEmployeeStats,
+  resetAllPoints,
   bulkCreateEmployees,
 };

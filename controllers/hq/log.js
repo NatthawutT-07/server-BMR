@@ -8,6 +8,7 @@ const getAllLogs = async (req, res) => {
       action, 
       start_date, 
       end_date,
+      search,
       limit = 100,
       offset = 0 
     } = req.query;
@@ -16,6 +17,13 @@ const getAllLogs = async (req, res) => {
     if (employee_code) where.employee_code = employee_code;
     if (branch_code) where.branch_code = branch_code;
     if (action) where.action = action;
+    if (search) {
+      where.OR = [
+        { employee_code: { contains: search, mode: 'insensitive' } },
+        { branch_code: { contains: search, mode: 'insensitive' } },
+        { branch_name: { contains: search, mode: 'insensitive' } }
+      ];
+    }
     if (start_date || end_date) {
       where.date = {};
       if (start_date) where.date.gte = new Date(start_date);

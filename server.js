@@ -20,6 +20,7 @@ app.set("trust proxy", 1);
 const allowedOrigins = [
   // Production
   "https://bmrpog.com",
+  "https://hq.bmrpog.com",
 
   // Development - Web
   "http://localhost:5173",
@@ -69,22 +70,22 @@ app.use(morgan('dev'));
 // Custom API logging middleware
 app.use((req, res, next) => {
   const startTime = Date.now();
-  
+
   // Store original res.end to capture response time
   const originalEnd = res.end;
-  res.end = function(...args) {
+  res.end = function (...args) {
     const duration = Date.now() - startTime;
     const status = res.statusCode;
     const method = req.method;
     const url = req.originalUrl || req.url;
-    
+
     // Log API requests with time and status
     console.log(`🔹 API ${method} ${url} - Status: ${status} - ${duration}ms`);
-    
+
     // Call original end
     originalEnd.apply(this, args);
   };
-  
+
   next();
 });
 
@@ -171,6 +172,7 @@ app.use((req, res, next) => {
 
 // Serve uploaded files statically
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+app.use("/api/uploads", express.static(path.join(__dirname, "uploads")));
 
 // Health check endpoint for Docker/Kubernetes
 app.get("/health", (req, res) => {
