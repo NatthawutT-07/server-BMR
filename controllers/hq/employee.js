@@ -37,6 +37,7 @@ const getAllEmployees = async (req, res) => {
           point_earned: true,
           point_redeemed: true,
           role: true,
+          status: true,
           password: false,
         },
         orderBy: { employee_code: "asc" },
@@ -75,6 +76,7 @@ const getEmployeeById = async (req, res) => {
         point_earned: true,
         point_redeemed: true,
         role: true,
+        status: true,
         password: false,
       },
     });
@@ -104,6 +106,7 @@ const getEmployeeByCode = async (req, res) => {
         point_earned: true,
         point_redeemed: true,
         role: true,
+        status: true,
         password: false,
       },
     });
@@ -140,6 +143,7 @@ const createEmployee = async (req, res) => {
       position,
       organizational_unit,
       role,
+      status: "active",
       point_earned: 0,
       point_redeemed: 0,
     };
@@ -160,6 +164,7 @@ const createEmployee = async (req, res) => {
         point_earned: true,
         point_redeemed: true,
         role: true,
+        status: true,
         password: false,
       },
     });
@@ -185,7 +190,8 @@ const updateEmployee = async (req, res) => {
       role,
       password,
       point_earned,
-      point_redeemed
+      point_redeemed,
+      status
     } = req.body;
 
     const updateData = {};
@@ -196,6 +202,7 @@ const updateEmployee = async (req, res) => {
     if (role !== undefined) updateData.role = role;
     if (point_earned !== undefined) updateData.point_earned = parseInt(point_earned);
     if (point_redeemed !== undefined) updateData.point_redeemed = parseInt(point_redeemed);
+    if (status !== undefined) updateData.status = status;
 
     if (password && role === "admin") {
       const hashedPassword = await bcrypt.hash(password, 10);
@@ -214,6 +221,7 @@ const updateEmployee = async (req, res) => {
         point_earned: true,
         point_redeemed: true,
         role: true,
+        status: true,
         password: false,
       },
     });

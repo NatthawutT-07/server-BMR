@@ -379,6 +379,7 @@ model employee_hq {
   point_redeemed      Int     @default(0)
   role                String  @default("user")
   password            String?
+  status              String  @default("active")
 
   logs log_hq[]
 

@@ -64,6 +64,13 @@ exports.login = async (req, res) => {
       });
     }
 
+    if (employee.status === 'inactive') {
+      return res.status(401).json({
+        ok: false,
+        message: "รหัสพนักงานนี้ถูกระงับการใช้งาน",
+      });
+    }
+
     if (employee.role !== "admin") {
       return res.status(401).json({
         ok: false,
@@ -126,6 +133,7 @@ exports.getCurrentUser = async (req, res) => {
         point_earned: true,
         point_redeemed: true,
         role: true,
+        status: true,
       },
     });
 
@@ -134,6 +142,10 @@ exports.getCurrentUser = async (req, res) => {
         ok: false,
         message: "ไม่พบข้อมูลพนักงาน",
       });
+    }
+
+    if (employee.status === "inactive") {
+      return res.status(403).json("รหัสพนักงานนี้ถูกระงับการใช้งาน");
     }
 
     res.json({
