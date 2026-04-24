@@ -1,7 +1,11 @@
 const prisma = require("../../config/prisma");
+const response = require("../../utils/responseHelper");
 const fs = require("fs");
 const path = require("path");
 
+/**
+ * GET /api/hq/rewards
+ */
 const getAllRewards = async (req, res) => {
   try {
     const { min_points, max_points } = req.query;
@@ -18,13 +22,16 @@ const getAllRewards = async (req, res) => {
       orderBy: { point_reward: "asc" },
     });
 
-    res.json({ ok: true, data: rewards });
+    return response.success(res, rewards);
   } catch (error) {
     console.error("Get rewards error:", error);
-    res.status(500).json({ ok: false, message: error.message });
+    return response.error(res, "ไม่สามารถดึงข้อมูลรางวัลได้", "FETCH_ERROR", 500, error.message);
   }
 };
 
+/**
+ * GET /api/hq/rewards/:id
+ */
 const getRewardById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -33,23 +40,26 @@ const getRewardById = async (req, res) => {
     });
 
     if (!reward) {
-      return res.status(404).json({ ok: false, message: "Reward not found" });
+      return response.error(res, "ไม่พบข้อมูลรางวัล", "NOT_FOUND", 404);
     }
 
-    res.json({ ok: true, data: reward });
+    return response.success(res, reward);
   } catch (error) {
     console.error("Get reward error:", error);
-    res.status(500).json({ ok: false, message: error.message });
+    return response.error(res, "เกิดข้อผิดพลาดในการดึงข้อมูล", "FETCH_ERROR", 500, error.message);
   }
 };
 
+/**
+ * POST /api/hq/rewards
+ */
 const createReward = async (req, res) => {
   try {
     const { title, point_reward } = req.body;
 
     if (!title || point_reward === undefined) {
       if (req.file) fs.unlinkSync(req.file.path);
-      return res.status(400).json({ ok: false, message: "Missing required fields" });
+      return response.error(res, "กรุณากรอกข้อมูลให้ครบถ้วน", "BAD_REQUEST", 400);
     }
 
     const data = {
@@ -65,14 +75,17 @@ const createReward = async (req, res) => {
       data,
     });
 
-    res.status(201).json({ ok: true, data: reward });
+    return response.success(res, reward, null, "เพิ่มรางวัลสำเร็จ", 201);
   } catch (error) {
     console.error("Create reward error:", error);
     if (req.file) fs.unlinkSync(req.file.path);
-    res.status(500).json({ ok: false, message: error.message });
+    return response.error(res, "ไม่สามารถสร้างรางวัลได้", "CREATE_ERROR", 500, error.message);
   }
 };
 
+/**
+ * PUT /api/hq/rewards/:id
+ */
 const updateReward = async (req, res) => {
   try {
     const { id } = req.params;
@@ -84,7 +97,7 @@ const updateReward = async (req, res) => {
 
     if (!existingReward) {
       if (req.file) fs.unlinkSync(req.file.path);
-      return res.status(404).json({ ok: false, message: "Reward not found" });
+      return response.error(res, "ไม่พบข้อมูลรางวัล", "NOT_FOUND", 404);
     }
 
     const updateData = {};
@@ -107,17 +120,20 @@ const updateReward = async (req, res) => {
       data: updateData,
     });
 
-    res.json({ ok: true, data: reward });
+    return response.success(res, reward, null, "อัปเดตข้อมูลรางวัลสำเร็จ");
   } catch (error) {
     console.error("Update reward error:", error);
     if (req.file) fs.unlinkSync(req.file.path);
     if (error.code === "P2025") {
-      return res.status(404).json({ ok: false, message: "Reward not found" });
+      return response.error(res, "ไม่พบข้อมูลรางวัล", "NOT_FOUND", 404);
     }
-    res.status(500).json({ ok: false, message: error.message });
+    return response.error(res, "ไม่สามารถอัปเดตข้อมูลได้", "UPDATE_ERROR", 500, error.message);
   }
 };
 
+/**
+ * DELETE /api/hq/rewards/:id
+ */
 const deleteReward = async (req, res) => {
   try {
     const { id } = req.params;
@@ -127,7 +143,7 @@ const deleteReward = async (req, res) => {
     });
 
     if (!existingReward) {
-      return res.status(404).json({ ok: false, message: "Reward not found" });
+      return response.error(res, "ไม่พบข้อมูลรางวัลที่ต้องการลบ", "NOT_FOUND", 404);
     }
 
     await prisma.reward_hq.delete({
@@ -142,13 +158,13 @@ const deleteReward = async (req, res) => {
       }
     }
 
-    res.json({ ok: true, message: "Reward deleted successfully" });
+    return response.success(res, null, null, "ลบรางวัลสำเร็จ");
   } catch (error) {
     console.error("Delete reward error:", error);
     if (error.code === "P2025") {
-      return res.status(404).json({ ok: false, message: "Reward not found" });
+      return response.error(res, "ไม่พบข้อมูลรางวัล", "NOT_FOUND", 404);
     }
-    res.status(500).json({ ok: false, message: error.message });
+    return response.error(res, "ไม่สามารถลบข้อมูลได้", "DELETE_ERROR", 500, error.message);
   }
 };
 

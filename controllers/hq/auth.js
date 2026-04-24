@@ -1,7 +1,11 @@
 const prisma = require("../../config/prisma");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const response = require("../../utils/responseHelper");
 
+/**
+ * POST /api/hq/auth/register
+ */
 exports.register = async (req, res) => {
   try {
     const { employee_code, nickname, position, organizational_unit, password, role } = req.body;
@@ -11,10 +15,7 @@ exports.register = async (req, res) => {
     });
 
     if (existingEmployee) {
-      return res.status(400).json({
-        ok: false,
-        message: "รหัสพนักงานนี้มีอยู่ในระบบแล้ว",
-      });
+      return response.error(res, "รหัสพนักงานนี้มีอยู่ในระบบแล้ว", "CONFLICT", 400);
     }
 
     let hashedPassword = null;
@@ -35,20 +36,16 @@ exports.register = async (req, res) => {
 
     const { password: _, ...employeeData } = employee;
 
-    res.status(201).json({
-      ok: true,
-      message: "ลงทะเบียนสำเร็จ",
-      data: employeeData,
-    });
+    return response.success(res, employeeData, null, "ลงทะเบียนสำเร็จ", 201);
   } catch (error) {
     console.error("Register error:", error);
-    res.status(500).json({
-      ok: false,
-      message: "เกิดข้อผิดพลาดในการลงทะเบียน",
-    });
+    return response.error(res, "เกิดข้อผิดพลาดในการลงทะเบียน", "REGISTER_ERROR");
   }
 };
 
+/**
+ * POST /api/hq/auth/login
+ */
 exports.login = async (req, res) => {
   try {
     const { employee_code, password } = req.body;
@@ -58,39 +55,24 @@ exports.login = async (req, res) => {
     });
 
     if (!employee) {
-      return res.status(401).json({
-        ok: false,
-        message: "ไม่พบรหัสพนักงานในระบบ",
-      });
+      return response.error(res, "ไม่พบรหัสพนักงานในระบบ", "UNAUTHORIZED", 401);
     }
 
     if (employee.status === 'inactive') {
-      return res.status(401).json({
-        ok: false,
-        message: "รหัสพนักงานนี้ถูกระงับการใช้งาน",
-      });
+      return response.error(res, "รหัสพนักงานนี้ถูกระงับการใช้งาน", "FORBIDDEN", 401);
     }
 
     if (employee.role !== "admin") {
-      return res.status(401).json({
-        ok: false,
-        message: "ระบบนี้สงวนสิทธิ์การเข้าใช้งานเฉพาะ Admin เท่านั้น",
-      });
+      return response.error(res, "ระบบนี้สงวนสิทธิ์การเข้าใช้งานเฉพาะ Admin เท่านั้น", "FORBIDDEN", 401);
     }
 
     if (!password) {
-      return res.status(401).json({
-        ok: false,
-        message: "กรุณากรอกรหัสผ่าน",
-      });
+      return response.error(res, "กรุณากรอกรหัสผ่าน", "BAD_REQUEST", 401);
     }
 
     const isPasswordValid = await bcrypt.compare(password, employee.password);
     if (!isPasswordValid) {
-      return res.status(401).json({
-        ok: false,
-        message: "รหัสผ่านไม่ถูกต้อง",
-      });
+      return response.error(res, "รหัสผ่านไม่ถูกต้อง", "UNAUTHORIZED", 401);
     }
 
     const token = jwt.sign(
@@ -105,21 +87,16 @@ exports.login = async (req, res) => {
 
     const { password: _, ...userData } = employee;
 
-    res.json({
-      ok: true,
-      message: "เข้าสู่ระบบสำเร็จ",
-      token,
-      user: userData,
-    });
+    return response.success(res, { token, user: userData }, null, "เข้าสู่ระบบสำเร็จ");
   } catch (error) {
     console.error("Login error:", error);
-    res.status(500).json({
-      ok: false,
-      message: "เกิดข้อผิดพลาดในการเข้าสู่ระบบ",
-    });
+    return response.error(res, "เกิดข้อผิดพลาดในการเข้าสู่ระบบ", "LOGIN_ERROR");
   }
 };
 
+/**
+ * GET /api/hq/auth/me
+ */
 exports.getCurrentUser = async (req, res) => {
   try {
     const employee = await prisma.employee_hq.findUnique({
@@ -138,25 +115,16 @@ exports.getCurrentUser = async (req, res) => {
     });
 
     if (!employee) {
-      return res.status(404).json({
-        ok: false,
-        message: "ไม่พบข้อมูลพนักงาน",
-      });
+      return response.error(res, "ไม่พบข้อมูลพนักงาน", "NOT_FOUND", 404);
     }
 
     if (employee.status === "inactive") {
-      return res.status(403).json("รหัสพนักงานนี้ถูกระงับการใช้งาน");
+      return response.error(res, "รหัสพนักงานนี้ถูกระงับการใช้งาน", "FORBIDDEN", 403);
     }
 
-    res.json({
-      ok: true,
-      data: employee,
-    });
+    return response.success(res, employee);
   } catch (error) {
     console.error("Get current user error:", error);
-    res.status(500).json({
-      ok: false,
-      message: "เกิดข้อผิดพลาด",
-    });
+    return response.error(res, "เกิดข้อผิดพลาดในการดึงข้อมูลผู้ใช้", "FETCH_ERROR");
   }
 };

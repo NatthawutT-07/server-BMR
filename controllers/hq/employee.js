@@ -1,21 +1,39 @@
 const prisma = require("../../config/prisma");
 const bcrypt = require("bcrypt");
+const response = require("../../utils/responseHelper");
+const cacheManager = require("../../utils/cacheManager");
 
+// Create a cache instance for employees
+const employeeCache = cacheManager.getCache("employees", { stdTTL: 1 });
+
+/**
+ * GET /api/hq/employees
+ */
 const getAllEmployees = async (req, res) => {
   try {
-    const { 
-      role, 
-      organizational_unit, 
+    const {
+      role,
+      organizational_unit,
       employee_code,
       search,
       limit = 10,
       offset = 0
     } = req.query;
-    
+
+    // Generate a unique cache key based on query parameters
+    const cacheKey = `list_${JSON.stringify(req.query)}`;
+
+    // Check cache first
+    const cachedData = employeeCache.get(cacheKey);
+    if (cachedData) {
+      console.log(`[Cache] Serving employees from cache: ${cacheKey}`);
+      return response.success(res, cachedData.employees, cachedData.meta);
+    }
+
     const where = {};
     if (role) where.role = role;
     if (organizational_unit) where.organizational_unit = organizational_unit;
-    
+
     if (search) {
       where.OR = [
         { employee_code: { contains: search, mode: 'insensitive' } },
@@ -38,7 +56,6 @@ const getAllEmployees = async (req, res) => {
           point_redeemed: true,
           role: true,
           status: true,
-          password: false,
         },
         orderBy: { employee_code: "asc" },
         take: parseInt(limit),
@@ -47,21 +64,25 @@ const getAllEmployees = async (req, res) => {
       prisma.employee_hq.count({ where }),
     ]);
 
-    res.json({ 
-      ok: true, 
-      data: employees,
-      pagination: {
-        total,
-        limit: parseInt(limit),
-        offset: parseInt(offset),
-      }
-    });
+    const meta = {
+      total,
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+    };
+
+    // Store in cache
+    employeeCache.set(cacheKey, { employees, meta });
+
+    return response.success(res, employees, meta);
   } catch (error) {
     console.error("Get employees error:", error);
-    res.status(500).json({ ok: false, message: error.message });
+    return response.error(res, "ไม่สามารถดึงข้อมูลพนักงานได้", "FETCH_ERROR", 500, error.message);
   }
 };
 
+/**
+ * GET /api/hq/employees/:id
+ */
 const getEmployeeById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -77,21 +98,23 @@ const getEmployeeById = async (req, res) => {
         point_redeemed: true,
         role: true,
         status: true,
-        password: false,
       },
     });
 
     if (!employee) {
-      return res.status(404).json({ ok: false, message: "Employee not found" });
+      return response.error(res, "ไม่พบข้อมูลพนักงาน", "NOT_FOUND", 404);
     }
 
-    res.json({ ok: true, data: employee });
+    return response.success(res, employee);
   } catch (error) {
     console.error("Get employee error:", error);
-    res.status(500).json({ ok: false, message: error.message });
+    return response.error(res, "เกิดข้อผิดพลาดในการดึงข้อมูล", "FETCH_ERROR", 500, error.message);
   }
 };
 
+/**
+ * GET /api/hq/employees/code/:employee_code
+ */
 const getEmployeeByCode = async (req, res) => {
   try {
     const { employee_code } = req.params;
@@ -107,34 +130,36 @@ const getEmployeeByCode = async (req, res) => {
         point_redeemed: true,
         role: true,
         status: true,
-        password: false,
       },
     });
 
     if (!employee) {
-      return res.status(404).json({ ok: false, message: "Employee not found" });
+      return response.error(res, "ไม่พบข้อมูลพนักงาน", "NOT_FOUND", 404);
     }
 
-    res.json({ ok: true, data: employee });
+    return response.success(res, employee);
   } catch (error) {
     console.error("Get employee by code error:", error);
-    res.status(500).json({ ok: false, message: error.message });
+    return response.error(res, "เกิดข้อผิดพลาดในการดึงข้อมูล", "FETCH_ERROR", 500, error.message);
   }
 };
 
+/**
+ * POST /api/hq/employees
+ */
 const createEmployee = async (req, res) => {
   try {
-    const { 
-      employee_code, 
-      nickname, 
-      position, 
-      organizational_unit, 
+    const {
+      employee_code,
+      nickname,
+      position,
+      organizational_unit,
       role = "user",
-      password 
+      password
     } = req.body;
 
     if (!employee_code || !nickname || !position || !organizational_unit) {
-      return res.status(400).json({ ok: false, message: "Missing required fields" });
+      return response.error(res, "กรุณากรอกข้อมูลให้ครบถ้วน", "BAD_REQUEST", 400);
     }
 
     const data = {
@@ -165,28 +190,33 @@ const createEmployee = async (req, res) => {
         point_redeemed: true,
         role: true,
         status: true,
-        password: false,
       },
     });
 
-    res.status(201).json({ ok: true, data: employee });
+    // Clear cache
+    employeeCache.flushAll();
+
+    return response.success(res, employee, null, "เพิ่มพนักงานสำเร็จ", 201);
   } catch (error) {
     console.error("Create employee error:", error);
     if (error.code === "P2002") {
-      return res.status(409).json({ ok: false, message: "Employee code already exists" });
+      return response.error(res, "รหัสพนักงานนี้มีอยู่ในระบบแล้ว", "CONFLICT", 409);
     }
-    res.status(500).json({ ok: false, message: error.message });
+    return response.error(res, "ไม่สามารถสร้างพนักงานได้", "CREATE_ERROR", 500, error.message);
   }
 };
 
+/**
+ * PUT /api/hq/employees/:id
+ */
 const updateEmployee = async (req, res) => {
   try {
     const { id } = req.params;
-    const { 
+    const {
       employee_code,
-      nickname, 
-      position, 
-      organizational_unit, 
+      nickname,
+      position,
+      organizational_unit,
       role,
       password,
       point_earned,
@@ -222,23 +252,28 @@ const updateEmployee = async (req, res) => {
         point_redeemed: true,
         role: true,
         status: true,
-        password: false,
       },
     });
 
-    res.json({ ok: true, data: employee });
+    // Clear cache
+    employeeCache.flushAll();
+
+    return response.success(res, employee, null, "อัปเดตข้อมูลพนักงานสำเร็จ");
   } catch (error) {
     console.error("Update employee error:", error);
     if (error.code === "P2025") {
-      return res.status(404).json({ ok: false, message: "Employee not found" });
+      return response.error(res, "ไม่พบข้อมูลพนักงาน", "NOT_FOUND", 404);
     }
     if (error.code === "P2002") {
-      return res.status(409).json({ ok: false, message: "Employee code already exists" });
+      return response.error(res, "รหัสพนักงานนี้มีอยู่ในระบบแล้ว", "CONFLICT", 409);
     }
-    res.status(500).json({ ok: false, message: error.message });
+    return response.error(res, "ไม่สามารถอัปเดตข้อมูลได้", "UPDATE_ERROR", 500, error.message);
   }
 };
 
+/**
+ * DELETE /api/hq/employees/:id
+ */
 const deleteEmployee = async (req, res) => {
   try {
     const { id } = req.params;
@@ -247,20 +282,26 @@ const deleteEmployee = async (req, res) => {
       where: { id: parseInt(id) },
     });
 
-    res.json({ ok: true, message: "Employee deleted successfully" });
+    // Clear cache
+    employeeCache.flushAll();
+
+    return response.success(res, null, null, "ลบพนักงานสำเร็จ");
   } catch (error) {
     console.error("Delete employee error:", error);
     if (error.code === "P2025") {
-      return res.status(404).json({ ok: false, message: "Employee not found" });
+      return response.error(res, "ไม่พบข้อมูลพนักงานที่ต้องการลบ", "NOT_FOUND", 404);
     }
-    res.status(500).json({ ok: false, message: error.message });
+    return response.error(res, "ไม่สามารถลบข้อมูลได้", "DELETE_ERROR", 500, error.message);
   }
 };
 
+/**
+ * GET /api/hq/employees/:id/stats
+ */
 const getEmployeeStats = async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     const employee = await prisma.employee_hq.findUnique({
       where: { id: parseInt(id) },
       include: {
@@ -272,19 +313,19 @@ const getEmployeeStats = async (req, res) => {
     });
 
     if (!employee) {
-      return res.status(404).json({ ok: false, message: "Employee not found" });
+      return response.error(res, "ไม่พบข้อมูลพนักงาน", "NOT_FOUND", 404);
     }
 
     const availablePoints = employee.point_earned - employee.point_redeemed;
 
-    const salesLogs = await prisma.log_hq.count({
+    const salesLogsCount = await prisma.log_hq.count({
       where: {
         employee_code: employee.employee_code,
         action: "ยอดขาย",
       },
     });
 
-    const rewardLogs = await prisma.log_hq.count({
+    const rewardLogsCount = await prisma.log_hq.count({
       where: {
         employee_code: employee.employee_code,
         action: "แลกรางวัล",
@@ -301,35 +342,37 @@ const getEmployeeStats = async (req, res) => {
       },
     });
 
-    res.json({ 
-      ok: true, 
-      data: {
-        employee: {
-          id: employee.id,
-          employee_code: employee.employee_code,
-          nickname: employee.nickname,
-          position: employee.position,
-          organizational_unit: employee.organizational_unit,
-        },
-        points: {
-          earned: employee.point_earned,
-          redeemed: employee.point_redeemed,
-          available: availablePoints,
-        },
-        activity: {
-          total_sales_logs: salesLogs,
-          total_reward_logs: rewardLogs,
-          total_sales_amount: totalSales._sum.sales || 0,
-        },
-        recent_logs: employee.logs,
-      }
-    });
+    const stats = {
+      employee: {
+        id: employee.id,
+        employee_code: employee.employee_code,
+        nickname: employee.nickname,
+        position: employee.position,
+        organizational_unit: employee.organizational_unit,
+      },
+      points: {
+        earned: employee.point_earned,
+        redeemed: employee.point_redeemed,
+        available: availablePoints,
+      },
+      activity: {
+        total_sales_logs: salesLogsCount,
+        total_reward_logs: rewardLogsCount,
+        total_sales_amount: totalSales._sum.sales || 0,
+      },
+      recent_logs: employee.logs,
+    };
+
+    return response.success(res, stats);
   } catch (error) {
     console.error("Get employee stats error:", error);
-    res.status(500).json({ ok: false, message: error.message });
+    return response.error(res, "ไม่สามารถดึงข้อมูลสถิติได้", "FETCH_ERROR", 500, error.message);
   }
 };
 
+/**
+ * POST /api/hq/employees/reset-all-points
+ */
 const resetAllPoints = async (req, res) => {
   try {
     await prisma.employee_hq.updateMany({
@@ -338,19 +381,25 @@ const resetAllPoints = async (req, res) => {
         point_redeemed: 0,
       },
     });
-    res.json({ ok: true, message: "Reset all employee points successfully" });
+    // Clear cache
+    employeeCache.flushAll();
+
+    return response.success(res, null, null, "ล้างแต้มพนักงานทุกคนสำเร็จ");
   } catch (error) {
     console.error("Reset all points error:", error);
-    res.status(500).json({ ok: false, message: error.message });
+    return response.error(res, "ไม่สามารถล้างแต้มได้", "RESET_ERROR", 500, error.message);
   }
 };
 
+/**
+ * POST /api/hq/employees/bulk
+ */
 const bulkCreateEmployees = async (req, res) => {
   try {
     const { employees } = req.body;
 
     if (!Array.isArray(employees) || employees.length === 0) {
-      return res.status(400).json({ ok: false, message: "Invalid employees array" });
+      return response.error(res, "ข้อมูลพนักงานไม่ถูกต้อง", "BAD_REQUEST", 400);
     }
 
     const results = {
@@ -363,7 +412,7 @@ const bulkCreateEmployees = async (req, res) => {
         const { employee_code, nickname, position, organizational_unit, role = "user", password } = emp;
 
         if (!employee_code || !nickname || !position || !organizational_unit) {
-          results.failed.push({ employee_code, reason: "Missing required fields" });
+          results.failed.push({ employee_code, reason: "ข้อมูลไม่ครบถ้วน" });
           continue;
         }
 
@@ -385,21 +434,17 @@ const bulkCreateEmployees = async (req, res) => {
         const created = await prisma.employee_hq.create({ data });
         results.success.push(created.employee_code);
       } catch (error) {
-        results.failed.push({ 
-          employee_code: emp.employee_code, 
-          reason: error.code === "P2002" ? "Duplicate employee code" : error.message 
+        results.failed.push({
+          employee_code: emp.employee_code,
+          reason: error.code === "P2002" ? "รหัสพนักงานซ้ำ" : error.message
         });
       }
     }
 
-    res.json({ 
-      ok: true, 
-      data: results,
-      message: `Created ${results.success.length} employees, ${results.failed.length} failed`
-    });
+    return response.success(res, results, null, `สร้างพนักงานสำเร็จ ${results.success.length} รายการ, ล้มเหลว ${results.failed.length} รายการ`);
   } catch (error) {
     console.error("Bulk create employees error:", error);
-    res.status(500).json({ ok: false, message: error.message });
+    return response.error(res, "เกิดข้อผิดพลาดในการสร้างข้อมูลแบบกลุ่ม", "BULK_ERROR", 500, error.message);
   }
 };
 

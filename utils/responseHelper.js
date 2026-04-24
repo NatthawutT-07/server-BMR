@@ -11,13 +11,13 @@
  * @param {Number} status - HTTP status code (default 200)
  */
 exports.success = (res, data, meta = null, message = "Success", status = 200) => {
-    return res.status(status).json({
-        success: true,
-        ok: true, // Legacy support
-        message,
-        data,
-        meta
-    });
+  return res.status(status).json({
+    success: true,
+    ok: true, // Legacy support
+    message,
+    data,
+    meta
+  });
 };
 
 /**
@@ -29,10 +29,10 @@ exports.success = (res, data, meta = null, message = "Success", status = 200) =>
  * @param {Object} details - Optional error details
  */
 exports.error = (res, message = "Internal Server Error", error = "INTERNAL_ERROR", status = 500, details = null) => {
-    return res.status(status).json({
-        success: false,
-        message,
-        error,
-        details
-    });
+  return res.status(status).json({
+    success: false,
+    message,
+    error,
+    details
+  });
 };

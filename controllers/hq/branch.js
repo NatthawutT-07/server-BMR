@@ -1,5 +1,9 @@
 const prisma = require("../../config/prisma");
+const response = require("../../utils/responseHelper");
 
+/**
+ * GET /api/hq/branches
+ */
 const getAllBranches = async (req, res) => {
   try {
     const { month, branch_code } = req.query;
@@ -13,13 +17,16 @@ const getAllBranches = async (req, res) => {
       orderBy: [{ branch_code: "asc" }, { month: "asc" }],
     });
 
-    res.json({ ok: true, data: branches });
+    return response.success(res, branches);
   } catch (error) {
     console.error("Get branches error:", error);
-    res.status(500).json({ ok: false, message: error.message });
+    return response.error(res, "ไม่สามารถดึงข้อมูลสาขาได้", "FETCH_ERROR", 500, error.message);
   }
 };
 
+/**
+ * GET /api/hq/branches/:id
+ */
 const getBranchById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -28,22 +35,25 @@ const getBranchById = async (req, res) => {
     });
 
     if (!branch) {
-      return res.status(404).json({ ok: false, message: "Branch not found" });
+      return response.error(res, "ไม่พบข้อมูลสาขา", "NOT_FOUND", 404);
     }
 
-    res.json({ ok: true, data: branch });
+    return response.success(res, branch);
   } catch (error) {
     console.error("Get branch error:", error);
-    res.status(500).json({ ok: false, message: error.message });
+    return response.error(res, "เกิดข้อผิดพลาดในการดึงข้อมูล", "FETCH_ERROR", 500, error.message);
   }
 };
 
+/**
+ * POST /api/hq/branches
+ */
 const createBranch = async (req, res) => {
   try {
     const { branch_code, branch_name, month, day, target, status = "active" } = req.body;
 
     if (!branch_code || !branch_name || month === undefined || day === undefined || target === undefined) {
-      return res.status(400).json({ ok: false, message: "Missing required fields" });
+      return response.error(res, "กรุณากรอกข้อมูลให้ครบถ้วน", "BAD_REQUEST", 400);
     }
 
     const dayNum = parseInt(day);
@@ -62,16 +72,19 @@ const createBranch = async (req, res) => {
       },
     });
 
-    res.status(201).json({ ok: true, data: branch });
+    return response.success(res, branch, null, "เพิ่มสาขาสำเร็จ", 201);
   } catch (error) {
     console.error("Create branch error:", error);
     if (error.code === "P2002") {
-      return res.status(409).json({ ok: false, message: "Branch with this code and month already exists" });
+      return response.error(res, "สาขานี้ในเดือนที่ระบุมีอยู่ในระบบแล้ว", "CONFLICT", 409);
     }
-    res.status(500).json({ ok: false, message: error.message });
+    return response.error(res, "ไม่สามารถสร้างข้อมูลสาขาได้", "CREATE_ERROR", 500, error.message);
   }
 };
 
+/**
+ * PUT /api/hq/branches/:id
+ */
 const updateBranch = async (req, res) => {
   try {
     const { id } = req.params;
@@ -103,19 +116,22 @@ const updateBranch = async (req, res) => {
       data: updateData,
     });
 
-    res.json({ ok: true, data: branch });
+    return response.success(res, branch, null, "อัปเดตข้อมูลสาขาสำเร็จ");
   } catch (error) {
     console.error("Update branch error:", error);
     if (error.code === "P2025") {
-      return res.status(404).json({ ok: false, message: "Branch not found" });
+      return response.error(res, "ไม่พบข้อมูลสาขา", "NOT_FOUND", 404);
     }
     if (error.code === "P2002") {
-      return res.status(409).json({ ok: false, message: "Branch with this code and month already exists" });
+      return response.error(res, "สาขานี้ในเดือนที่ระบุมีอยู่ในระบบแล้ว", "CONFLICT", 409);
     }
-    res.status(500).json({ ok: false, message: error.message });
+    return response.error(res, "ไม่สามารถอัปเดตข้อมูลได้", "UPDATE_ERROR", 500, error.message);
   }
 };
 
+/**
+ * DELETE /api/hq/branches/:id
+ */
 const deleteBranch = async (req, res) => {
   try {
     const { id } = req.params;
@@ -124,13 +140,13 @@ const deleteBranch = async (req, res) => {
       where: { id: parseInt(id) },
     });
 
-    res.json({ ok: true, message: "Branch deleted successfully" });
+    return response.success(res, null, null, "ลบสาขาสำเร็จ");
   } catch (error) {
     console.error("Delete branch error:", error);
     if (error.code === "P2025") {
-      return res.status(404).json({ ok: false, message: "Branch not found" });
+      return response.error(res, "ไม่พบข้อมูลสาขาที่ต้องการลบ", "NOT_FOUND", 404);
     }
-    res.status(500).json({ ok: false, message: error.message });
+    return response.error(res, "ไม่สามารถลบข้อมูลได้", "DELETE_ERROR", 500, error.message);
   }
 };
 

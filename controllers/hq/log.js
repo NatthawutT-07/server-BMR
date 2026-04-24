@@ -1,28 +1,28 @@
 const prisma = require("../../config/prisma");
+const response = require("../../utils/responseHelper");
 
+/**
+ * GET /api/hq/logs
+ */
 const getAllLogs = async (req, res) => {
   try {
-    const { 
-      employee_code, 
-      branch_code, 
-      action, 
-      start_date, 
+    const {
+      employee_code,
+      branch_code,
+      action,
+      start_date,
       end_date,
       search,
       limit = 100,
-      offset = 0 
+      offset = 0
     } = req.query;
-    
+
     const where = {};
     if (employee_code) where.employee_code = employee_code;
     if (branch_code) where.branch_code = branch_code;
     if (action) where.action = action;
     if (search) {
-      where.OR = [
-        { employee_code: { contains: search, mode: 'insensitive' } },
-        { branch_code: { contains: search, mode: 'insensitive' } },
-        { branch_name: { contains: search, mode: 'insensitive' } }
-      ];
+      where.employee_code = { contains: search, mode: 'insensitive' };
     }
     if (start_date || end_date) {
       where.date = {};
@@ -49,21 +49,20 @@ const getAllLogs = async (req, res) => {
       prisma.log_hq.count({ where }),
     ]);
 
-    res.json({ 
-      ok: true, 
-      data: logs,
-      pagination: {
-        total,
-        limit: parseInt(limit),
-        offset: parseInt(offset),
-      }
+    return response.success(res, logs, {
+      total,
+      limit: parseInt(limit),
+      offset: parseInt(offset),
     });
   } catch (error) {
     console.error("Get logs error:", error);
-    res.status(500).json({ ok: false, message: error.message });
+    return response.error(res, "ไม่สามารถดึงข้อมูลบันทึกกิจกรรมได้", "FETCH_ERROR", 500, error.message);
   }
 };
 
+/**
+ * GET /api/hq/logs/:id
+ */
 const getLogById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -81,19 +80,22 @@ const getLogById = async (req, res) => {
     });
 
     if (!log) {
-      return res.status(404).json({ ok: false, message: "Log not found" });
+      return response.error(res, "ไม่พบข้อมูลบันทึกกิจกรรม", "NOT_FOUND", 404);
     }
 
-    res.json({ ok: true, data: log });
+    return response.success(res, log);
   } catch (error) {
     console.error("Get log error:", error);
-    res.status(500).json({ ok: false, message: error.message });
+    return response.error(res, "เกิดข้อผิดพลาดในการดึงข้อมูล", "FETCH_ERROR", 500, error.message);
   }
 };
 
+/**
+ * POST /api/hq/logs
+ */
 const createLog = async (req, res) => {
   try {
-    const { 
+    const {
       employee_code,
       branch_code,
       branch_name,
@@ -106,11 +108,11 @@ const createLog = async (req, res) => {
     } = req.body;
 
     if (!employee_code || !date || !action) {
-      return res.status(400).json({ ok: false, message: "Missing required fields" });
+      return response.error(res, "กรุณากรอกข้อมูลให้ครบถ้วน", "BAD_REQUEST", 400);
     }
 
-    if (action !== "แลกรางวัล" && (!branch_code || !branch_name)) {
-      return res.status(400).json({ ok: false, message: "Branch information required for sales logs" });
+    if (action !== "แลกรางวัล" && action !== "หักคะแนน" && (!branch_code || !branch_name)) {
+      return response.error(res, "กรุณาระบุข้อมูลสาขา", "BAD_REQUEST", 400);
     }
 
     const employeeExists = await prisma.employee_hq.findUnique({
@@ -118,7 +120,7 @@ const createLog = async (req, res) => {
     });
 
     if (!employeeExists) {
-      return res.status(404).json({ ok: false, message: "Employee not found" });
+      return response.error(res, "ไม่พบข้อมูลพนักงาน", "NOT_FOUND", 404);
     }
 
     // Check for existing sales log for the same employee and day (limit once per day)
@@ -139,10 +141,7 @@ const createLog = async (req, res) => {
       });
 
       if (existingSalesLog) {
-        return res.status(400).json({ 
-          ok: false, 
-          message: "วันนี้คุณได้บันทึกยอดขายไปแล้ว กรุณาทำรายการใหม่ในวันพรุ่งนี้" 
-        });
+        return response.error(res, "วันนี้คุณได้บันทึกยอดขายไปแล้ว กรุณาทำรายการใหม่ในวันพรุ่งนี้", "DUPLICATE_ENTRY", 400);
       }
     }
 
@@ -175,49 +174,41 @@ const createLog = async (req, res) => {
       },
     });
 
+    // Update employee points
     if (action === "ยอดขาย" && point !== undefined && point !== null) {
       await prisma.employee_hq.update({
         where: { employee_code },
-        data: {
-          point_earned: {
-            increment: parseInt(point),
-          },
-        },
+        data: { point_earned: { increment: parseInt(point) } },
       });
     } else if (action === "ขาย" && point !== undefined && point !== null && parseInt(point) > 0) {
       await prisma.employee_hq.update({
         where: { employee_code },
         data: {
-          point_earned: {
-            increment: parseInt(point),
-          },
-          point_redeemed: {
-            increment: parseInt(point),
-          },
+          point_earned: { increment: parseInt(point) },
+          point_redeemed: { increment: parseInt(point) },
         },
       });
     } else if (action === "แลกรางวัล" && point !== undefined && point !== null) {
       await prisma.employee_hq.update({
         where: { employee_code },
-        data: {
-          point_redeemed: {
-            increment: parseInt(point), // Negative point will deduct from usable balance
-          },
-        },
+        data: { point_redeemed: { increment: parseInt(point) } },
       });
     }
 
-    res.status(201).json({ ok: true, data: log });
+    return response.success(res, log, null, "บันทึกข้อมูลสำเร็จ", 201);
   } catch (error) {
     console.error("Create log error:", error);
-    res.status(500).json({ ok: false, message: error.message });
+    return response.error(res, "ไม่สามารถบันทึกข้อมูลได้", "CREATE_ERROR", 500, error.message);
   }
 };
 
+/**
+ * PUT /api/hq/logs/:id
+ */
 const updateLog = async (req, res) => {
   try {
     const { id } = req.params;
-    const { 
+    const {
       branch_code,
       branch_name,
       date,
@@ -254,16 +245,19 @@ const updateLog = async (req, res) => {
       },
     });
 
-    res.json({ ok: true, data: log });
+    return response.success(res, log, null, "อัปเดตข้อมูลสำเร็จ");
   } catch (error) {
     console.error("Update log error:", error);
     if (error.code === "P2025") {
-      return res.status(404).json({ ok: false, message: "Log not found" });
+      return response.error(res, "ไม่พบข้อมูลที่ต้องการอัปเดต", "NOT_FOUND", 404);
     }
-    res.status(500).json({ ok: false, message: error.message });
+    return response.error(res, "ไม่สามารถอัปเดตข้อมูลได้", "UPDATE_ERROR", 500, error.message);
   }
 };
 
+/**
+ * DELETE /api/hq/logs/:id
+ */
 const deleteLog = async (req, res) => {
   try {
     const { id } = req.params;
@@ -272,13 +266,13 @@ const deleteLog = async (req, res) => {
       where: { id: parseInt(id) },
     });
 
-    res.json({ ok: true, message: "Log deleted successfully" });
+    return response.success(res, null, null, "ลบข้อมูลสำเร็จ");
   } catch (error) {
     console.error("Delete log error:", error);
     if (error.code === "P2025") {
-      return res.status(404).json({ ok: false, message: "Log not found" });
+      return response.error(res, "ไม่พบข้อมูลที่ต้องการลบ", "NOT_FOUND", 404);
     }
-    res.status(500).json({ ok: false, message: error.message });
+    return response.error(res, "ไม่สามารถลบข้อมูลได้", "DELETE_ERROR", 500, error.message);
   }
 };
 
