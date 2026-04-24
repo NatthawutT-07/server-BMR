@@ -1,13 +1,12 @@
-// controllers/admin/dashboard.js
 const prisma = require("../../config/prisma");
 const cacheManager = require("../../utils/cacheManager");
 const cache = cacheManager.getCache("dashboard");
 const response = require("../../utils/responseHelper");
+const dateHelper = require("../../utils/dateHelper");
 
 // คำนวณ TTL เหลือจนถึงเที่ยงคืนตามเวลาไทย
 const getMidnightTTL = () => {
-  const now = new Date();
-  const bangkokNow = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Bangkok" }));
+  const bangkokNow = dateHelper.getBangkokDate();
   const midnight = new Date(bangkokNow);
   midnight.setHours(24, 0, 0, 0); // ไปเที่ยงคืนของวันถัดไป
   const ttlSeconds = Math.floor((midnight - bangkokNow) / 1000);
@@ -31,16 +30,7 @@ const getDashboardCacheVersion = async () => {
 const onlyISODate = (v) => String(v || "").slice(0, 10);
 const isISODate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ""));
 
-/**
- * ================================
- *   Helper: แปลงช่วงวันไทย → ช่วงเวลา UTC
- * ================================
- */
-const getBangkokUtcRange = (startStr, endStr) => {
-  const start = new Date(startStr + "T00:00:00+07:00"); // ตี 0 เวลาไทย
-  const end = new Date(endStr + "T23:59:59.999+07:00"); // สิ้นวันไทย
-  return { start, end };
-};
+// Using dateHelper.getBangkokUtcRange instead of local duplicate
 
 const getBangkokYearRangeUtc = (year) => {
   const start = new Date(`${year}-01-01T00:00:00.000+07:00`);
@@ -209,7 +199,7 @@ exports.getDashboardData = async (req, res) => {
     const cached = cache.get(cacheKey);
     if (cached) return response.success(res, cached);
 
-    const { start: startUtc, end: endUtc } = getBangkokUtcRange(start, end);
+    const { startUtc, endUtc } = dateHelper.getBangkokUtcRange(start, end);
 
     const [
       salesByDateRaw,
@@ -324,7 +314,7 @@ exports.getDashboardProductList = async (req, res) => {
     const cached = cache.get(cacheKey);
     if (cached) return response.success(res, cached);
 
-    const { start: startDate, end: endDate } = getBangkokUtcRange(start, end);
+    const { startUtc: startDate, endUtc: endDate } = dateHelper.getBangkokUtcRange(start, end);
 
     if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
       return response.error(res, "รูปแบบวันที่ไม่ถูกต้อง (ต้องเป็น YYYY-MM-DD)", "BAD_REQUEST", 400);

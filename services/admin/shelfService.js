@@ -19,16 +19,16 @@ const getMonthRangeUtc = (year, month) => {
 };
 
 const getMonthMetaUtc = () => {
-  const now = new Date();
-  const currentYear = now.getUTCFullYear();
-  const currentMonth = now.getUTCMonth() + 1;
+  const bangkokNow = getBangkokDate();
+  const currentYear = bangkokNow.getFullYear();
+  const currentMonth = bangkokNow.getMonth() + 1;
 
   const prevMonths = [];
   for (let i = 1; i <= 3; i++) {
-    const d = new Date(now);
-    d.setUTCMonth(d.getUTCMonth() - i);
-    const y = d.getUTCFullYear();
-    const m = d.getUTCMonth() + 1;
+    const d = new Date(bangkokNow);
+    d.setMonth(d.getMonth() - i);
+    const y = d.getFullYear();
+    const m = d.getMonth() + 1;
 
     const { startUtc, endUtc } = getMonthRangeUtc(y, m);
     prevMonths.push({ year: y, month: m, startUtc, endUtc });

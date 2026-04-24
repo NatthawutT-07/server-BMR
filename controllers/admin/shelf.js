@@ -6,15 +6,9 @@ const shelfService = require("../../services/admin/shelfService");
 const { serialize } = require("../../utils/serializer");
 const response = require("../../utils/responseHelper");
 
-const safeStr = (v) => (v == null ? "" : String(v));
+const dateHelper = require("../../utils/dateHelper");
 
-const toBkkDateStr = (dateObj) =>
-  new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Bangkok",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(dateObj);
+const safeStr = (v) => (v == null ? "" : String(v));
 
 exports.getMasterItem = async (req, res) => {
   try {

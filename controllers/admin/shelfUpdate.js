@@ -1,5 +1,6 @@
 const prisma = require("../../config/prisma");
 const response = require("../../utils/responseHelper");
+const dateHelper = require("../../utils/dateHelper");
 
 // ตรวจสอบว่าสาขามี shelf update หรือไม่
 exports.checkShelfUpdate = async (req, res) => {
@@ -136,7 +137,7 @@ exports.acknowledgeChangeLog = async (req, res) => {
 
         await prisma.shelfChangeLog.update({
             where: { id: Number(id) },
-            data: { acknowledged: true, acknowledgedAt: new Date() },
+            data: { acknowledged: true, acknowledgedAt: dateHelper.getBangkokDate() },
         });
 
         return response.success(res, null, null, "Acknowledged successfully");
@@ -157,7 +158,7 @@ exports.acknowledgeAllChangeLogs = async (req, res) => {
 
         const result = await prisma.shelfChangeLog.updateMany({
             where: { branchCode, acknowledged: false },
-            data: { acknowledged: true, acknowledgedAt: new Date() },
+            data: { acknowledged: true, acknowledgedAt: dateHelper.getBangkokDate() },
         });
 
         return response.success(res, null, null, `Acknowledged ${result.count} logs`);

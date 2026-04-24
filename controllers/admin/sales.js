@@ -2,6 +2,7 @@ const prisma = require("../../config/prisma");
 const response = require("../../utils/responseHelper");
 const cacheManager = require("../../utils/cacheManager");
 const salesCache = cacheManager.getCache("sales-search", { stdTTL: 3600 });
+const dateHelper = require("../../utils/dateHelper");
 
 
 exports.getBranchListSales = async (req, res) => {
@@ -688,42 +689,7 @@ exports.getProductSalesDetail = async (req, res) => {
 
 // controllers/admin/member.js
 
-/** -----------------------------
- * Bangkok-safe date helpers
- * ------------------------------*/
-const toBangkokUtcRange = (startStr, endStr) => {
-    const start = new Date(`${startStr}T00:00:00+07:00`);
-    const end = new Date(`${endStr}T23:59:59.999+07:00`);
-    return { start, end };
-};
-
-const toBkkDayStart = (iso) => new Date(`${iso}T00:00:00+07:00`);
-
-const diffDays = (endISO, startISO) => {
-    const end = toBkkDayStart(endISO);
-    const start = toBkkDayStart(startISO);
-    return Math.max(0, Math.floor((end - start) / 86400000));
-};
-
-// DateTime -> YYYY-MM-DD ในเวลา Bangkok
-const toISODateBkk = (dateObj) => {
-    if (!dateObj) return null;
-    const d = new Date(dateObj);
-    if (Number.isNaN(d.getTime())) return null;
-
-    const parts = new Intl.DateTimeFormat("en-CA", {
-        timeZone: "Asia/Bangkok",
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-    }).formatToParts(d);
-
-    const y = parts.find((p) => p.type === "year")?.value;
-    const m = parts.find((p) => p.type === "month")?.value;
-    const dd = parts.find((p) => p.type === "day")?.value;
-    if (!y || !m || !dd) return null;
-    return `${y}-${m}-${dd}`;
-};
+// Using dateHelper instead of local duplicates
 
 const safeDiv = (a, b) => {
     const x = Number(a || 0);
@@ -756,7 +722,7 @@ exports.getCustomers = async (req, res) => {
             });
         }
 
-        const { start, end } = toBangkokUtcRange(startDate, endDate);
+        const { startUtc: start, endUtc: end } = dateHelper.getBangkokUtcRange(startDate, endDate);
 
         // =========================
         // DETAIL MODE (เฉพาะช่วงที่เลือก)
@@ -840,9 +806,9 @@ exports.getCustomers = async (req, res) => {
             // absentDays:
             // - ถ้ามี lastVisitInRange: end - lastVisitInRange (ไม่รวมวันล่าสุด)
             // - ถ้าไม่มีเลยในช่วง: end - start + 1 (ขาดทั้งช่วง)
-            const lastInRangeISO = toISODateBkk(lastVisitInRange);
+            const lastInRangeISO = dateHelper.toBkkDateStr(lastVisitInRange);
             const absentDays =
-                lastInRangeISO ? diffDays(endDate, lastInRangeISO) : diffDays(endDate, startDate) + 1;
+                lastInRangeISO ? dateHelper.diffDays(endDate, lastInRangeISO) : dateHelper.diffDays(endDate, startDate) + 1;
 
             return res.json({
                 ok: true,
@@ -953,9 +919,9 @@ exports.getCustomers = async (req, res) => {
             const visits = Number(r.visits || 0);
             const netAmount = Number(r.netAmount || 0);
 
-            const lastInRangeISO = toISODateBkk(r.lastVisitInRange);
+            const lastInRangeISO = dateHelper.toBkkDateStr(r.lastVisitInRange);
             // ใน summary จะมี lastVisitInRange อยู่แล้ว (เพราะมีบิลในช่วง)
-            const absentDays = lastInRangeISO ? diffDays(endDate, lastInRangeISO) : diffDays(endDate, startDate) + 1;
+            const absentDays = lastInRangeISO ? dateHelper.diffDays(endDate, lastInRangeISO) : dateHelper.diffDays(endDate, startDate) + 1;
 
             return {
                 customerId: Number(r.customerId),

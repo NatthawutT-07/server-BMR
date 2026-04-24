@@ -2,6 +2,9 @@ const express = require("express");
 const app = express();
 app.disable("x-powered-by");
 
+// Enforce Bangkok Timezone globally
+process.env.TZ = "Asia/Bangkok";
+
 const morgan = require("morgan");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");

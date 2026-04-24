@@ -1,5 +1,6 @@
 const prisma = require("../../config/prisma");
 const response = require("../../utils/responseHelper");
+const dateHelper = require("../../utils/dateHelper");
 
 /**
  * GET /api/hq/logs
@@ -153,7 +154,7 @@ const createLog = async (req, res) => {
       branch_name: branch_name || null,
       date: new Date(date.length === 10 ? date + "T00:00:00+07:00" : (date.length === 16 ? date + ":00+07:00" : date)),
       action,
-      created_at: new Date(),
+      created_at: dateHelper.getBangkokDate(),
     };
 
     if (target !== undefined && target !== null) logData.target = parseFloat(target);
