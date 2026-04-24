@@ -1,4 +1,5 @@
 const prisma = require("../../config/prisma");
+const response = require("../../utils/responseHelper");
 
 // ตรวจสอบว่าสาขามี shelf update หรือไม่
 exports.checkShelfUpdate = async (req, res) => {
@@ -6,22 +7,21 @@ exports.checkShelfUpdate = async (req, res) => {
         const { branchCode } = req.params;
 
         if (!branchCode) {
-            return res.status(400).json({ ok: false, message: "Missing branchCode" });
+            return response.error(res, "Missing branchCode", "BAD_REQUEST", 400);
         }
 
         const record = await prisma.shelfUpdate.findUnique({
             where: { branchCode }
         });
 
-        return res.json({
-            ok: true,
+        return response.success(res, {
             hasUpdate: record?.hasUpdate || false,
             updatedAt: record?.updatedAt || null,
             updatedBy: record?.updatedBy || null,
         });
     } catch (error) {
         console.error("checkShelfUpdate error:", error);
-        return res.status(500).json({ ok: false, message: "Server error" });
+        return response.error(res, "Server error");
     }
 };
 
@@ -31,7 +31,7 @@ exports.acknowledgeShelfUpdate = async (req, res) => {
         const { branchCode } = req.params;
 
         if (!branchCode) {
-            return res.status(400).json({ ok: false, message: "Missing branchCode" });
+            return response.error(res, "Missing branchCode", "BAD_REQUEST", 400);
         }
 
         await prisma.shelfUpdate.upsert({
@@ -40,10 +40,10 @@ exports.acknowledgeShelfUpdate = async (req, res) => {
             update: { hasUpdate: false },
         });
 
-        return res.json({ ok: true, message: "Acknowledged successfully" });
+        return response.success(res, null, null, "Acknowledged successfully");
     } catch (error) {
         console.error("acknowledgeShelfUpdate error:", error);
-        return res.status(500).json({ ok: false, message: "Server error" });
+        return response.error(res, "Server error");
     }
 };
 
@@ -71,7 +71,7 @@ exports.getShelfChangeLogs = async (req, res) => {
         const skip = (page - 1) * limit;
 
         if (!branchCode) {
-            return res.status(400).json({ ok: false, message: "Missing branchCode" });
+            return response.error(res, "Missing branchCode", "BAD_REQUEST", 400);
         }
 
         const whereClause = {
@@ -110,9 +110,7 @@ exports.getShelfChangeLogs = async (req, res) => {
             where: { branchCode, acknowledged: false },
         });
 
-        return res.json({
-            ok: true,
-            logs,
+        return response.success(res, logs, {
             unacknowledgedCount,
             pagination: {
                 page,
@@ -123,7 +121,7 @@ exports.getShelfChangeLogs = async (req, res) => {
         });
     } catch (error) {
         console.error("getShelfChangeLogs error:", error);
-        return res.status(500).json({ ok: false, message: "Server error" });
+        return response.error(res, "Server error");
     }
 };
 
@@ -133,7 +131,7 @@ exports.acknowledgeChangeLog = async (req, res) => {
         const { id } = req.params;
 
         if (!id) {
-            return res.status(400).json({ ok: false, message: "Missing log id" });
+            return response.error(res, "Missing log id", "BAD_REQUEST", 400);
         }
 
         await prisma.shelfChangeLog.update({
@@ -141,10 +139,10 @@ exports.acknowledgeChangeLog = async (req, res) => {
             data: { acknowledged: true, acknowledgedAt: new Date() },
         });
 
-        return res.json({ ok: true, message: "Acknowledged successfully" });
+        return response.success(res, null, null, "Acknowledged successfully");
     } catch (error) {
         console.error("acknowledgeChangeLog error:", error);
-        return res.status(500).json({ ok: false, message: "Server error" });
+        return response.error(res, "Server error");
     }
 };
 
@@ -154,7 +152,7 @@ exports.acknowledgeAllChangeLogs = async (req, res) => {
         const { branchCode } = req.params;
 
         if (!branchCode) {
-            return res.status(400).json({ ok: false, message: "Missing branchCode" });
+            return response.error(res, "Missing branchCode", "BAD_REQUEST", 400);
         }
 
         const result = await prisma.shelfChangeLog.updateMany({
@@ -162,10 +160,10 @@ exports.acknowledgeAllChangeLogs = async (req, res) => {
             data: { acknowledged: true, acknowledgedAt: new Date() },
         });
 
-        return res.json({ ok: true, message: `Acknowledged ${result.count} logs` });
+        return response.success(res, null, null, `Acknowledged ${result.count} logs`);
     } catch (error) {
         console.error("acknowledgeAllChangeLogs error:", error);
-        return res.status(500).json({ ok: false, message: "Server error" });
+        return response.error(res, "Server error");
     }
 };
 
@@ -197,8 +195,7 @@ exports.getAllBranchAckStatus = async (req, res) => {
             status: Number(row.pending) > 0 ? 'pending' : 'completed',
         }));
 
-        return res.json({
-            ok: true,
+        return response.success(res, {
             branches: result,
             summary: {
                 totalBranches: result.length,
@@ -208,7 +205,7 @@ exports.getAllBranchAckStatus = async (req, res) => {
         });
     } catch (error) {
         console.error("getAllBranchAckStatus error:", error);
-        return res.status(500).json({ ok: false, message: "Server error" });
+        return response.error(res, "Server error");
     }
 };
 
@@ -245,7 +242,6 @@ exports.createSingleChangeLog = async (branchCode, shelfCode, action, items, cre
 
         if (logs.length > 0) {
             await prisma.shelfChangeLog.createMany({ data: logs });
-            // console.log(`📝 Created ${logs.length} ${action} change logs for ${branchCode}/${shelfCode}`);
         }
 
         return logs.length;
@@ -349,7 +345,6 @@ exports.createShelfChangeLogs = async (branchCode, shelfCode, oldItems, newItems
         // บันทึก logs ถ้ามี
         if (logs.length > 0) {
             await prisma.shelfChangeLog.createMany({ data: logs });
-            // console.log(`📝 Created ${logs.length} shelf change logs for ${branchCode}/${shelfCode}`);
         }
 
         return logs.length;

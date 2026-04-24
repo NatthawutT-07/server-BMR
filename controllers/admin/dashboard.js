@@ -1,6 +1,8 @@
 // controllers/admin/dashboard.js
 const prisma = require("../../config/prisma");
-const NodeCache = require("node-cache");
+const cacheManager = require("../../utils/cacheManager");
+const cache = cacheManager.getCache("dashboard");
+const response = require("../../utils/responseHelper");
 
 // คำนวณ TTL เหลือจนถึงเที่ยงคืนตามเวลาไทย
 const getMidnightTTL = () => {
@@ -11,8 +13,6 @@ const getMidnightTTL = () => {
   const ttlSeconds = Math.floor((midnight - bangkokNow) / 1000);
   return ttlSeconds;
 };
-
-const cache = new NodeCache();
 
 const convertBigInt = (data) =>
   JSON.parse(JSON.stringify(data, (_, value) => (typeof value === "bigint" ? Number(value) : value)));
@@ -52,7 +52,7 @@ const getBangkokYearRangeUtc = (year) => {
 const getSalesByDate = async (startUtc, endUtc) => {
   return prisma.$queryRaw`
     SELECT
-      (b."date")::date AS bill_date,
+      (b."date" AT TIME ZONE 'Asia/Bangkok')::date AS bill_date,
       COALESCE(SUM(b."total_sales"), 0)           AS total_payment,
       COALESCE(SUM(b."rounding"), 0)              AS rounding_sum,
       COALESCE(SUM(b."end_bill_discount"), 0)     AS discount_sum,
@@ -62,7 +62,7 @@ const getSalesByDate = async (startUtc, endUtc) => {
     FROM "Bill" b
     WHERE b."date" >= ${startUtc}
       AND b."date" <= ${endUtc}
-    GROUP BY (b."date")::date
+    GROUP BY (b."date" AT TIME ZONE 'Asia/Bangkok')::date
     ORDER BY bill_date
   `;
 };
@@ -71,7 +71,7 @@ const getSalesByDate = async (startUtc, endUtc) => {
 const getSalesByBranchAndDate = async (startUtc, endUtc) => {
   return prisma.$queryRaw`
     SELECT 
-      (b."date")::date AS bill_date,
+      (b."date" AT TIME ZONE 'Asia/Bangkok')::date AS bill_date,
       br."branch_name",
       br."branch_code",
       COALESCE(SUM(b."total_sales"), 0) AS total_payment
@@ -79,7 +79,7 @@ const getSalesByBranchAndDate = async (startUtc, endUtc) => {
     JOIN "Branch" br ON br."id" = b."branchId"
     WHERE b."date" >= ${startUtc}
       AND b."date" <= ${endUtc}
-    GROUP BY (b."date")::date,
+    GROUP BY (b."date" AT TIME ZONE 'Asia/Bangkok')::date,
              br."branch_name",
              br."branch_code"
     ORDER BY bill_date, br."branch_name"
@@ -120,14 +120,14 @@ const getSalesByChannelAndDate = async (startUtc, endUtc) => {
       GROUP BY bir.bill_id, bir.bill_dt, bir.sales_channel_id, bir.total_payment
     )
     SELECT
-      (bp."bill_dt")::date AS bill_date,
+      (bp."bill_dt" AT TIME ZONE 'Asia/Bangkok')::date AS bill_date,
       sc."channel_name",
       sc."channel_code",
       COALESCE(SUM(bp."pay_amount"), 0) AS total_payment
     FROM bill_pay bp
     JOIN "SalesChannel" sc ON sc."id" = bp."sales_channel_id"
     GROUP BY
-      (bp."bill_dt")::date,
+      (bp."bill_dt" AT TIME ZONE 'Asia/Bangkok')::date,
       sc."channel_name",
       sc."channel_code"
     ORDER BY bill_date, sc."channel_name"
@@ -174,7 +174,7 @@ const getSalesByChannelAndPaymentMethodDate = async (startUtc, endUtc) => {
         bir.total_payment
     )
     SELECT
-      (x."bill_dt")::date AS bill_date,
+      (x."bill_dt" AT TIME ZONE 'Asia/Bangkok')::date AS bill_date,
       sc."channel_name",
       sc."channel_code",
       x."payment_method",
@@ -182,7 +182,7 @@ const getSalesByChannelAndPaymentMethodDate = async (startUtc, endUtc) => {
     FROM bill_pay_method x
     JOIN "SalesChannel" sc ON sc."id" = x."sales_channel_id"
     GROUP BY
-      (x."bill_dt")::date,
+      (x."bill_dt" AT TIME ZONE 'Asia/Bangkok')::date,
       sc."channel_name",
       sc."channel_code",
       x."payment_method"
@@ -201,15 +201,13 @@ exports.getDashboardData = async (req, res) => {
     end = onlyISODate(end);
 
     if (!isISODate(start) || !isISODate(end)) {
-      return res.status(400).json({
-        error: "รูปแบบวันที่ไม่ถูกต้อง (ต้องเป็น YYYY-MM-DD)",
-      });
+      return response.error(res, "รูปแบบวันที่ไม่ถูกต้อง (ต้องเป็น YYYY-MM-DD)", "BAD_REQUEST", 400);
     }
 
     const version = await getDashboardCacheVersion();
     const cacheKey = `dashboard:${start}:${end}:${version}`;
     const cached = cache.get(cacheKey);
-    if (cached) return res.json(cached);
+    if (cached) return response.success(res, cached);
 
     const { start: startUtc, end: endUtc } = getBangkokUtcRange(start, end);
 
@@ -271,10 +269,10 @@ exports.getDashboardData = async (req, res) => {
     };
 
     cache.set(cacheKey, result, getMidnightTTL());
-    return res.json(result);
+    return response.success(res, result);
   } catch (err) {
     console.error("Dashboard error:", err);
-    res.status(500).json({ error: "dashboard error" });
+    return response.error(res, "dashboard error");
   }
 };
 
@@ -318,22 +316,18 @@ exports.getDashboardProductList = async (req, res) => {
     end = onlyISODate(end);
 
     if (!isISODate(start) || !isISODate(end)) {
-      return res.status(400).json({
-        error: "รูปแบบวันที่ไม่ถูกต้อง (ต้องเป็น YYYY-MM-DD)",
-      });
+      return response.error(res, "รูปแบบวันที่ไม่ถูกต้อง (ต้องเป็น YYYY-MM-DD)", "BAD_REQUEST", 400);
     }
 
     const version = await getDashboardCacheVersion();
     const cacheKey = `dashboard:product:${start}:${end}:${version}`;
     const cached = cache.get(cacheKey);
-    if (cached) return res.json(cached);
+    if (cached) return response.success(res, cached);
 
     const { start: startDate, end: endDate } = getBangkokUtcRange(start, end);
 
     if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
-      return res.status(400).json({
-        error: "รูปแบบวันที่ไม่ถูกต้อง (ต้องเป็น YYYY-MM-DD)",
-      });
+      return response.error(res, "รูปแบบวันที่ไม่ถูกต้อง (ต้องเป็น YYYY-MM-DD)", "BAD_REQUEST", 400);
     }
 
     const currentYear = Number(end.slice(0, 4));
@@ -491,9 +485,9 @@ exports.getDashboardProductList = async (req, res) => {
     const payload = { summary, rows: mergedRows };
 
     cache.set(cacheKey, payload, getMidnightTTL());
-    return res.json(payload);
+    return response.success(res, payload.rows, payload.summary);
   } catch (err) {
     console.error("Dashboard product list error:", err);
-    res.status(500).json({ error: "dashboard product list error" });
+    return response.error(res, "dashboard product list error");
   }
 };

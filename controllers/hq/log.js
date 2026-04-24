@@ -124,8 +124,8 @@ const createLog = async (req, res) => {
     // Check for existing sales log for the same employee and day (limit once per day)
     if (action === "ขาย") {
       const dateStr = date.substring(0, 10); // YYYY-MM-DD
-      const todayStart = new Date(dateStr + "T00:00:00.000Z");
-      const todayEnd = new Date(dateStr + "T23:59:59.999Z");
+      const todayStart = new Date(dateStr + "T00:00:00.000+07:00");
+      const todayEnd = new Date(dateStr + "T23:59:59.999+07:00");
 
       const existingSalesLog = await prisma.log_hq.findFirst({
         where: {
@@ -152,9 +152,9 @@ const createLog = async (req, res) => {
       },
       branch_code: branch_code || null,
       branch_name: branch_name || null,
-      date: new Date(date.length === 10 ? date + "T00:00:00Z" : (date.length === 16 ? date + ":00Z" : date)),
+      date: new Date(date.length === 10 ? date + "T00:00:00+07:00" : (date.length === 16 ? date + ":00+07:00" : date)),
       action,
-      created_at: new Date(Date.now() + 7 * 60 * 60 * 1000),
+      created_at: new Date(),
     };
 
     if (target !== undefined && target !== null) logData.target = parseFloat(target);
@@ -232,7 +232,7 @@ const updateLog = async (req, res) => {
     if (branch_code !== undefined) updateData.branch_code = branch_code;
     if (branch_name !== undefined) updateData.branch_name = branch_name;
     if (date !== undefined) {
-      updateData.date = new Date(date.length === 10 ? date + "T00:00:00Z" : (date.length === 16 ? date + ":00Z" : date));
+      updateData.date = new Date(date.length === 10 ? date + "T00:00:00+07:00" : (date.length === 16 ? date + ":00+07:00" : date));
     }
     if (action !== undefined) updateData.action = action;
     if (target !== undefined) updateData.target = parseFloat(target);

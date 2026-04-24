@@ -74,21 +74,23 @@ const failUploadJob = (jobId, message) => {
     });
 };
 
+const response = require("../../../utils/responseHelper");
+
 const getUploadStatus = async (req, res) => {
     try {
         cleanupOldJobs();
         const { jobId } = req.query;
         if (!jobId) {
-            return res.status(400).json({ message: "jobId is required" });
+            return response.error(res, "jobId is required", "BAD_REQUEST", 400);
         }
         const job = uploadJobs.get(String(jobId));
         if (!job) {
-            return res.status(404).json({ message: "job not found" });
+            return response.error(res, "job not found", "NOT_FOUND", 404);
         }
-        return res.json(job);
+        return response.success(res, job);
     } catch (err) {
         console.error("getUploadStatus error:", err);
-        return res.status(500).json({ message: "status error" });
+        return response.error(res, "status error");
     }
 };
 
@@ -102,10 +104,10 @@ const getAllSyncDates = async (req, res) => {
                 rowCount: s.rowCount
             };
         });
-        return res.json(result);
+        return response.success(res, result);
     } catch (err) {
         console.error("getAllSyncDates error:", err);
-        return res.status(500).json({ message: "error fetching sync dates" });
+        return response.error(res, "error fetching sync dates");
     }
 };
 

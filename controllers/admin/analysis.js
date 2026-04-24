@@ -1,5 +1,27 @@
 const prisma = require("../../config/prisma");
 const { Prisma } = require("@prisma/client");
+const { getBangkokUtcRange } = require("../../utils/dateHelper");
+const response = require("../../utils/responseHelper");
+
+// Common Helpers
+const pad5 = (code) => String(code).padStart(5, "0");
+const toInt = (code) => parseInt(String(code).replace(/^0+/, ""), 10) || 0;
+
+const normalizeBranchCode = (bc) => {
+    // "ST0001" -> "ST001", "BT0001" -> "BT001"
+    if (bc && String(bc).length === 6) {
+        return bc.slice(0, 2) + bc.slice(3);
+    }
+    return bc;
+};
+
+const expandBranchCode = (bc) => {
+    // "ST001" -> "ST0001", "BT001" -> "BT0001"
+    if (bc && String(bc).length === 5) {
+        return bc.slice(0, 2) + "0" + bc.slice(2);
+    }
+    return bc;
+};
 // ============================================================
 // GET /analysis-filters
 // ดึงค่า filter ที่มีอยู่จริงใน DB
@@ -12,14 +34,14 @@ exports.getAnalysisFilters = async (req, res) => {
             prisma.$queryRaw`SELECT DISTINCT "reason" FROM "withdraw" WHERE "reason" IS NOT NULL AND "reason" != '' ORDER BY "reason"`,
         ]);
 
-        res.json({
+        return response.success(res, {
             branchCodes: branchCodes.map(r => r.branchCode),
             brands: brands.map(r => r.nameBrand),
             reasons: reasons.map(r => r.reason),
         });
     } catch (err) {
         console.error("getAnalysisFilters error:", err);
-        res.status(500).json({ error: err.message });
+        return response.error(res, err.message);
     }
 };
 
@@ -32,7 +54,7 @@ exports.getSkuAnalysis = async (req, res) => {
         const { startDate, endDate, branchCodes, brands, reasons, shelfLifeFilter } = req.body;
 
         if (!startDate || !endDate) {
-            return res.status(400).json({ error: "startDate and endDate are required" });
+            return response.error(res, "startDate and endDate are required", "BAD_REQUEST", 400);
         }
 
         // Validate max 5 months
@@ -40,7 +62,7 @@ exports.getSkuAnalysis = async (req, res) => {
         const eDate = new Date(endDate);
         const diffMonths = (eDate.getFullYear() - sDate.getFullYear()) * 12 + (eDate.getMonth() - sDate.getMonth());
         if (diffMonths > 4) {
-            return res.status(400).json({ error: "ช่วงเวลาสูงสุด 5 เดือน" });
+            return response.error(res, "ช่วงเวลาสูงสุด 5 เดือน", "BAD_REQUEST", 400);
         }
 
         // Build month buckets
@@ -54,17 +76,9 @@ exports.getSkuAnalysis = async (req, res) => {
             cursor.setMonth(cursor.getMonth() + 1);
         }
 
-        const getBangkokUtcRange = (startStr, endStr) => {
-            const start = new Date(startStr + "T00:00:00+07:00");
-            const end = new Date(endStr + "T23:59:59.999+07:00");
-            return { startUtc: start, endUtc: end };
-        };
 
         const { startUtc, endUtc } = getBangkokUtcRange(startDate, endDate);
 
-        // Helpers
-        const pad5 = (code) => String(code).padStart(5, "0");
-        const toInt = (code) => parseInt(String(code).replace(/^0+/, ""), 10) || 0;
 
         // ====================================================
         // 0) ListOfItemHold — ข้อมูล master สินค้า
@@ -94,7 +108,7 @@ exports.getSkuAnalysis = async (req, res) => {
                 p."product_code",
                 p."product_name",
                 p."product_brand",
-                TO_CHAR(b."date", 'YYYY-MM') AS month,
+                TO_CHAR(b."date" AT TIME ZONE 'Asia/Bangkok', 'YYYY-MM') AS month,
                 COALESCE(SUM(
                     CASE WHEN b."doc_type" = 'เอกสารขาย' THEN bi."quantity" ELSE 0 END
                 ), 0) + COALESCE(SUM(
@@ -111,7 +125,7 @@ exports.getSkuAnalysis = async (req, res) => {
             WHERE b."date" >= $1
               AND b."date" <= $2
               ${branchCodes?.length ? `AND br."branch_code" IN (${branchCodes.map(bc => `'${bc.replace(/'/g, "''")}'`).join(",")})` : ""}
-            GROUP BY p."product_code", p."product_name", p."product_brand", TO_CHAR(b."date", 'YYYY-MM')
+            GROUP BY p."product_code", p."product_name", p."product_brand", TO_CHAR(b."date" AT TIME ZONE 'Asia/Bangkok', 'YYYY-MM')
             ORDER BY p."product_code", month
         `, startUtc, endUtc);
 
@@ -142,12 +156,6 @@ exports.getSkuAnalysis = async (req, res) => {
         // ====================================================
         // 3) ORDER SI — ใช้ Prisma findMany
         // ====================================================
-        const expandBranchCode = (bc) => {
-            if (bc && String(bc).length === 5) {
-                return bc.slice(0, 2) + "0" + bc.slice(2);
-            }
-            return bc;
-        };
 
         // Debug: นับจำนวน record ทั้งหมดใน OrderSI ก่อน
         const siTotal = await prisma.orderSI.count();
@@ -206,14 +214,14 @@ exports.getSkuAnalysis = async (req, res) => {
             gourmetRows = await prisma.$queryRawUnsafe(`
                 SELECT
                     "product_code",
-                    TO_CHAR("date", 'YYYY-MM') AS month,
+                    TO_CHAR("date" AT TIME ZONE 'Asia/Bangkok', 'YYYY-MM') AS month,
                     COALESCE(SUM("quantity"), 0) AS sale_quantity,
                     COALESCE(SUM("sales"), 0) AS net_sales
                 FROM "gourmet"
                 WHERE "date" >= $1
                   AND "date" <= $2
                   ${branchCodes?.length ? `AND "branch_code" IN (${branchCodes.map(bc => `'${bc.replace(/'/g, "''")}'`).join(",")})` : ""}
-                GROUP BY "product_code", TO_CHAR("date", 'YYYY-MM')
+                GROUP BY "product_code", TO_CHAR("date" AT TIME ZONE 'Asia/Bangkok', 'YYYY-MM')
                 ORDER BY "product_code", month
             `, startUtc, endUtc);
         } catch (err) {
@@ -382,16 +390,15 @@ exports.getSkuAnalysis = async (req, res) => {
 
         result.sort((a, b) => a.product_code.localeCompare(b.product_code));
 
-        res.json({
+        return response.success(res, result, {
             range: { start: startDate, end: endDate },
             total: result.length,
-            rows: result,
             months: months,
         });
 
     } catch (err) {
         console.error("getSkuAnalysis error:", err);
-        res.status(500).json({ error: err.message });
+        return response.error(res, err.message);
     }
 };
 
@@ -405,7 +412,7 @@ exports.getStoreAnalysis = async (req, res) => {
         const { startDate, endDate, branchCodes, brands, reasons, shelfLifeFilter } = req.body;
 
         if (!startDate || !endDate) {
-            return res.status(400).json({ error: "startDate and endDate are required" });
+            return response.error(res, "startDate and endDate are required", "BAD_REQUEST", 400);
         }
 
         // Validate max 5 months
@@ -413,7 +420,7 @@ exports.getStoreAnalysis = async (req, res) => {
         const eDate = new Date(endDate);
         const diffMonths = (eDate.getFullYear() - sDate.getFullYear()) * 12 + (eDate.getMonth() - sDate.getMonth());
         if (diffMonths > 4) {
-            return res.status(400).json({ error: "ช่วงเวลาสูงสุด 5 เดือน" });
+            return response.error(res, "ช่วงเวลาสูงสุด 5 เดือน", "BAD_REQUEST", 400);
         }
 
         // Build month buckets
@@ -427,15 +434,8 @@ exports.getStoreAnalysis = async (req, res) => {
             cursor.setMonth(cursor.getMonth() + 1);
         }
 
-        const getBangkokUtcRange = (startStr, endStr) => {
-            const start = new Date(startStr + "T00:00:00+07:00");
-            const end = new Date(endStr + "T23:59:59.999+07:00");
-            return { startUtc: start, endUtc: end };
-        };
 
         const { startUtc, endUtc } = getBangkokUtcRange(startDate, endDate);
-        const pad5 = (code) => String(code).padStart(5, "0");
-        const toInt = (code) => parseInt(String(code).replace(/^0+/, ""), 10) || 0;
 
         // ====================================================
         // 0) ListOfItemHold — master สินค้า
@@ -496,7 +496,7 @@ exports.getStoreAnalysis = async (req, res) => {
             SELECT
                 br."branch_code",
                 p."product_code",
-                TO_CHAR(b."date", 'YYYY-MM') AS month,
+                TO_CHAR(b."date" AT TIME ZONE 'Asia/Bangkok', 'YYYY-MM') AS month,
                 COALESCE(SUM(
                     CASE WHEN b."doc_type" = 'เอกสารขาย' THEN bi."quantity" ELSE 0 END
                 ), 0) + COALESCE(SUM(
@@ -510,7 +510,7 @@ exports.getStoreAnalysis = async (req, res) => {
             WHERE b."date" >= $1
               AND b."date" <= $2
               ${branchCodes?.length ? `AND br."branch_code" IN (${branchCodes.map(bc => `'${bc.replace(/'/g, "''")}'`).join(",")})` : ""}
-            GROUP BY br."branch_code", p."product_code", TO_CHAR(b."date", 'YYYY-MM')
+            GROUP BY br."branch_code", p."product_code", TO_CHAR(b."date" AT TIME ZONE 'Asia/Bangkok', 'YYYY-MM')
         `, startUtc, endUtc);
 
         // ====================================================
@@ -540,20 +540,6 @@ exports.getStoreAnalysis = async (req, res) => {
         // ====================================================
         // 4) OrderSI per branch+product
         // ====================================================
-        const normalizeBranchCode = (bc) => {
-            // "ST0001" -> "ST001", "BT0001" -> "BT001"
-            if (bc && String(bc).length === 6) {
-                return bc.slice(0, 2) + bc.slice(3);
-            }
-            return bc;
-        };
-        const expandBranchCode = (bc) => {
-            // "ST001" -> "ST0001", "BT001" -> "BT0001"
-            if (bc && String(bc).length === 5) {
-                return bc.slice(0, 2) + "0" + bc.slice(2);
-            }
-            return bc;
-        };
 
         const siWhere = {
             deliveryDate: { gte: startUtc, lte: endUtc },
@@ -598,13 +584,13 @@ exports.getStoreAnalysis = async (req, res) => {
             SELECT
                 "branch_code",
                 "product_code",
-                TO_CHAR("date", 'YYYY-MM') AS month,
+                TO_CHAR("date" AT TIME ZONE 'Asia/Bangkok', 'YYYY-MM') AS month,
                 COALESCE(SUM("quantity"), 0) AS sale_quantity,
                 COALESCE(SUM("sales"), 0) AS net_sales
             FROM "Gourmet"
             WHERE "date" >= $1 AND "date" <= $2
               ${branchCodes?.length ? `AND "branch_code" IN (${branchCodes.map(b => `'${expandBranchCode(b).replace(/'/g, "''")}'`).join(",")})` : ""}
-            GROUP BY "branch_code", "product_code", TO_CHAR("date", 'YYYY-MM')
+            GROUP BY "branch_code", "product_code", TO_CHAR("date" AT TIME ZONE 'Asia/Bangkok', 'YYYY-MM')
         `, startUtc, endUtc);
 
         // ====================================================
@@ -836,16 +822,15 @@ exports.getStoreAnalysis = async (req, res) => {
             return bc !== 0 ? bc : a.product_code.localeCompare(b.product_code);
         });
 
-        res.json({
+        return response.success(res, result, {
             months,
             range: { start: startDate, end: endDate },
             total: result.length,
-            rows: result,
         });
 
     } catch (err) {
         console.error("getStoreAnalysis error:", err);
-        res.status(500).json({ error: err.message });
+        return response.error(res, err.message);
     }
 };
 
@@ -858,7 +843,7 @@ exports.getBrandAnalysis = async (req, res) => {
         const { startDate, endDate, reasons, shelfLifeFilter } = req.body;
 
         if (!startDate || !endDate) {
-            return res.status(400).json({ error: "startDate and endDate are required" });
+            return response.error(res, "startDate and endDate are required", "BAD_REQUEST", 400);
         }
 
         // Validate max 5 months
@@ -866,7 +851,7 @@ exports.getBrandAnalysis = async (req, res) => {
         const eDate = new Date(endDate);
         const diffMonths = (eDate.getFullYear() - sDate.getFullYear()) * 12 + (eDate.getMonth() - sDate.getMonth());
         if (diffMonths > 4) {
-            return res.status(400).json({ error: "ช่วงเวลาสูงสุด 5 เดือน" });
+            return response.error(res, "ช่วงเวลาสูงสุด 5 เดือน", "BAD_REQUEST", 400);
         }
 
         // Build month buckets
@@ -880,14 +865,8 @@ exports.getBrandAnalysis = async (req, res) => {
             cursor.setMonth(cursor.getMonth() + 1);
         }
 
-        const getBangkokUtcRange = (startStr, endStr) => {
-            const start = new Date(startStr + "T00:00:00+07:00");
-            const end = new Date(endStr + "T23:59:59.999+07:00");
-            return { startUtc: start, endUtc: end };
-        };
         const { startUtc, endUtc } = getBangkokUtcRange(startDate, endDate);
 
-        const toInt = (code) => parseInt(String(code).replace(/^0+/, ""), 10) || 0;
 
         // 0) ListOfItemHold — map codeProduct → nameBrand + consingItem
         const masterItems = await prisma.listOfItemHold.findMany({
@@ -1027,16 +1006,15 @@ exports.getBrandAnalysis = async (req, res) => {
 
         result.sort((a, b) => a.brand.localeCompare(b.brand));
 
-        res.json({
+        return response.success(res, result, {
             months,
             range: { start: startDate, end: endDate },
             total: result.length,
-            rows: result,
         });
 
     } catch (err) {
         console.error("getBrandAnalysis error:", err);
-        res.status(500).json({ error: err.message });
+        return response.error(res, err.message);
     }
 };
 
@@ -1050,7 +1028,7 @@ exports.getStoreSummary = async (req, res) => {
         const { startDate, endDate, reasons, shelfLifeFilter } = req.body;
 
         if (!startDate || !endDate) {
-            return res.status(400).json({ error: "startDate and endDate are required" });
+            return response.error(res, "startDate and endDate are required", "BAD_REQUEST", 400);
         }
 
         // Validate max 5 months
@@ -1058,7 +1036,7 @@ exports.getStoreSummary = async (req, res) => {
         const eDate = new Date(endDate);
         const diffMonths = (eDate.getFullYear() - sDate.getFullYear()) * 12 + (eDate.getMonth() - sDate.getMonth());
         if (diffMonths > 4) {
-            return res.status(400).json({ error: "ช่วงเวลาสูงสุด 5 เดือน" });
+            return response.error(res, "ช่วงเวลาสูงสุด 5 เดือน", "BAD_REQUEST", 400);
         }
 
         // Build month buckets
@@ -1072,11 +1050,6 @@ exports.getStoreSummary = async (req, res) => {
             cursor.setMonth(cursor.getMonth() + 1);
         }
 
-        const getBangkokUtcRange = (startStr, endStr) => {
-            const start = new Date(startStr + "T00:00:00+07:00");
-            const end = new Date(endStr + "T23:59:59.999+07:00");
-            return { startUtc: start, endUtc: end };
-        };
         const { startUtc, endUtc } = getBangkokUtcRange(startDate, endDate);
 
         // ====================================================
@@ -1199,7 +1172,6 @@ exports.getStoreSummary = async (req, res) => {
             return resultMap.get(branchCode);
         };
 
-        const toInt = (code) => parseInt(String(code).replace(/^0+/, ""), 10) || 0;
 
         // Sales
         for (const row of salesRows) {
@@ -1215,12 +1187,6 @@ exports.getStoreSummary = async (req, res) => {
         }
 
         // Gourmet Sales
-        const normalizeBranchCode = (bc) => {
-            if (bc && String(bc).length === 6) {
-                return bc.slice(0, 2) + bc.slice(3);
-            }
-            return bc;
-        };
         for (const row of gourmetRows) {
             if (allowedProducts) {
                 const intCode = toInt(row.product_code);
@@ -1257,15 +1223,14 @@ exports.getStoreSummary = async (req, res) => {
             a.branch_code.localeCompare(b.branch_code)
         );
 
-        res.json({
+        return response.success(res, result, {
             months,
             range: { start: startDate, end: endDate },
             total: result.length,
-            rows: result,
         });
 
     } catch (err) {
         console.error("getStoreSummary error:", err);
-        res.status(500).json({ error: err.message });
+        return response.error(res, err.message);
     }
 };

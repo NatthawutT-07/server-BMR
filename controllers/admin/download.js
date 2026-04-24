@@ -1,4 +1,5 @@
 const prisma = require('../../config/prisma');
+const response = require("../../utils/responseHelper");
 
 exports.downloadTemplate = async (req, res) => {
     try {
@@ -20,12 +21,13 @@ exports.downloadTemplate = async (req, res) => {
             ],
         });
 
-        res.json(templates); // ส่ง JSON กลับไปให้ frontend
+        return response.success(res, templates);
     } catch (err) {
         console.error('Error fetching templates:', err);
-        res.status(500).json({ error: 'Failed to fetch data' });
+        return response.error(res, 'Failed to fetch data');
     }
 };
+
 exports.downloadSKU = async (req, res) => {
     try {
         const { branchCode } = req.query;
@@ -44,14 +46,13 @@ exports.downloadSKU = async (req, res) => {
                 { branchCode: 'asc' },
                 { shelfCode: 'asc' },
                 { rowNo: 'asc' },
-                // { codeProduct: 'asc' },
                 { index: 'asc' }
             ],
         });
 
-        res.json(skus); // ส่ง JSON กลับไปให้ frontend
+        return response.success(res, skus);
     } catch (err) {
         console.error('Error fetching SKU:', err);
-        res.status(500).json({ error: 'Failed to fetch data' });
+        return response.error(res, 'Failed to fetch data');
     }
 };

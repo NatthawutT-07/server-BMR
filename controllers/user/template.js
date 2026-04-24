@@ -1,9 +1,7 @@
 // controllers/admin/<your-file>.js
 const prisma = require("../../config/prisma");
-const NodeCache = require("node-cache");
-
-// cache (ตอนนี้ตั้งไว้ 5 วิ)
-const cache = new NodeCache({ stdTTL: 5 });
+const cacheManager = require("../../utils/cacheManager");
+const cache = cacheManager.getCache("user-template", { stdTTL: 60 }); // Increased from 5s to 60s for better performance
 
 /**
  * Helper: แปลง "ช่วงเดือนตามเวลาไทย" → เป็นช่วงเวลา UTC (Date)
@@ -40,7 +38,18 @@ const getMonthRangeUtcFromBangkok = (year, month) => {
  */
 const getBangkokMonthMeta = () => {
   const now = new Date();
-  const bangkokNow = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Bangkok" }));
+  const formatter = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Bangkok",
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+  });
+  const parts = formatter.formatToParts(now);
+  const getPart = (type) => parts.find(p => p.type === type).value;
+  const bkkYear = parseInt(getPart("year"));
+  const bkkMonth = parseInt(getPart("month"));
+  const bkkDay = parseInt(getPart("day"));
+  const bangkokNow = new Date(`${bkkYear}-${String(bkkMonth).padStart(2, "0")}-${String(bkkDay).padStart(2, "0")}T00:00:00+07:00`);
 
   const currentYear = bangkokNow.getFullYear();
   const currentMonth = bangkokNow.getMonth() + 1; // 1–12

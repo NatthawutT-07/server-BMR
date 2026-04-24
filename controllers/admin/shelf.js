@@ -1,8 +1,10 @@
-const NodeCache = require("node-cache");
-const cache = new NodeCache({ stdTTL: 1 });
-const summaryCache = new NodeCache({ stdTTL: 60 });
+const cacheManager = require("../../utils/cacheManager");
+const cache = cacheManager.getCache("shelf-sku", { stdTTL: 60 });
+const summaryCache = cacheManager.getCache("shelf-summary", { stdTTL: 300 });
 
 const shelfService = require("../../services/admin/shelfService");
+const { serialize } = require("../../utils/serializer");
+const response = require("../../utils/responseHelper");
 
 const safeStr = (v) => (v == null ? "" : String(v));
 
@@ -17,13 +19,13 @@ const toBkkDateStr = (dateObj) =>
 exports.getMasterItem = async (req, res) => {
   try {
     const qRaw = safeStr(req.query.q).trim();
-    if (!qRaw || qRaw.length < 2) return res.json({ items: [] });
+    if (!qRaw || qRaw.length < 2) return response.success(res, { items: [] });
 
     const items = await shelfService.getMasterItem(qRaw);
-    return res.json({ items });
+    return response.success(res, { items });
   } catch (error) {
     console.error("getMasterItem error:", error);
-    return res.status(500).json({ error: "Server error" });
+    return response.error(res, "Server error");
   }
 };
 
@@ -31,15 +33,15 @@ exports.itemCreate = async (req, res) => {
   try {
     const { items } = req.body;
     if (!items || items.length === 0) {
-      return res.status(400).json({ error: "No items provided." });
+      return response.error(res, "No items provided.", "BAD_REQUEST", 400);
     }
 
     await shelfService.createItems(items, req.user?.name);
 
-    return res.status(201).json({ success: true, message: "Information added successfully." });
+    return response.success(res, null, null, "Information added successfully.", 201);
   } catch (error) {
     console.error("Error in itemCreate:", error);
-    return res.status(500).json({ success: false, error: "Server error" });
+    return response.error(res, "Server error");
   }
 };
 
@@ -51,18 +53,18 @@ exports.itemDelete = async (req, res) => {
       (id == null || id === "") &&
       (!branchCode || !shelfCode || rowNo == null || codeProduct == null || index == null)
     ) {
-      return res.status(400).json({ success: false, message: "Missing delete identifiers" });
+      return response.error(res, "Missing delete identifiers", "BAD_REQUEST", 400);
     }
 
     await shelfService.deleteItem({ id, branchCode, shelfCode, rowNo, codeProduct, index }, req.user?.name);
 
-    return res.json({ success: true, message: "Deleted and rearranged successfully" });
+    return response.success(res, null, null, "Deleted and rearranged successfully");
   } catch (error) {
     console.error("itemDelete error:", error?.message || error);
     if (error.message === "Item not found") {
-      return res.status(404).json({ success: false, message: "Item not found" });
+      return response.error(res, "Item not found", "NOT_FOUND", 404);
     }
-    return res.status(500).json({ success: false, message: "Failed to delete data" });
+    return response.error(res, "Failed to delete data");
   }
 };
 
@@ -70,15 +72,15 @@ exports.itemUpdate = async (req, res) => {
   try {
     const items = req.body;
     if (!items || items.length === 0) {
-      return res.status(400).json({ success: false, message: "No items provided" });
+      return response.error(res, "No items provided", "BAD_REQUEST", 400);
     }
 
     await shelfService.updateItems(items, req.user?.name);
 
-    return res.json({ success: true, message: "Shelf update successful" });
+    return response.success(res, null, null, "Shelf update successful");
   } catch (error) {
     console.error("itemUpdate error:", error);
-    return res.status(500).json({ success: false, message: "Shelf update failed" });
+    return response.error(res, "Shelf update failed");
   }
 };
 
@@ -86,10 +88,10 @@ exports.itemUpdate = async (req, res) => {
 exports.tamplate = async (req, res) => {
   try {
     const result = await shelfService.getTemplates();
-    res.json(result);
+    return response.success(res, result);
   } catch (error) {
     console.error("tamplate error:", error);
-    res.status(500).json({ msg: "error" });
+    return response.error(res, "Failed to load templates");
   }
 };
 
@@ -97,15 +99,15 @@ exports.sku = async (req, res) => {
   const { branchCode } = req.body;
 
   if (!branchCode) {
-    return res.status(400).json({ msg: "branchCode is required" });
+    return response.error(res, "branchCode is required", "BAD_REQUEST", 400);
   }
 
-  const { startUtc, endUtc } = await shelfService.getDashboardSummary(); // Get dates from service helper if needed, but here we just use the cache key logic
+  const { startUtc, endUtc } = await shelfService.getDashboardSummary();
 
   const key = `sku-${branchCode}-${new Date().toISOString().slice(0, 10)}`;
 
   const cached = cache.get(key);
-  if (cached) return res.json(cached);
+  if (cached) return response.success(res, cached);
 
   try {
     const { result: rawResult } = await shelfService.getSkuData(branchCode);
@@ -137,10 +139,10 @@ exports.sku = async (req, res) => {
     });
 
     cache.set(key, result);
-    return res.json(result);
+    return response.success(res, result);
   } catch (error) {
     console.error("sku error:", error);
-    return res.status(500).json({ msg: "Failed to retrieve data" });
+    return response.error(res, "Failed to retrieve data");
   }
 };
 
@@ -148,12 +150,8 @@ exports.getShelfDashboardSummary = async (req, res) => {
   try {
     const { rows, startUtc, endUtc, overallUniqueSkus, missingSalesDates } = await shelfService.getDashboardSummary();
 
-    const payload = {
-      rows: JSON.parse(
-        JSON.stringify(rows, (_, value) =>
-          typeof value === "bigint" ? Number(value) : value
-        )
-      ),
+    const data = serialize(rows);
+    const meta = {
       range: {
         start: startUtc.toISOString().slice(0, 10),
         end: endUtc.toISOString().slice(0, 10),
@@ -162,17 +160,17 @@ exports.getShelfDashboardSummary = async (req, res) => {
       missingSalesDates
     };
 
-    return res.json(payload);
+    return response.success(res, data, meta);
   } catch (error) {
     console.error("getShelfDashboardSummary error:", error);
-    return res.status(500).json({ error: "shelf dashboard summary error" });
+    return response.error(res, "shelf dashboard summary error");
   }
 };
 
 exports.getShelfDashboardShelfSales = async (req, res) => {
   const branchCode = String(req.query.branchCode || "").trim();
   if (!branchCode) {
-    return res.status(400).json({ error: "branchCode is required" });
+    return response.error(res, "branchCode is required", "BAD_REQUEST", 400);
   }
 
   try {
@@ -187,12 +185,9 @@ exports.getShelfDashboardShelfSales = async (req, res) => {
       stockCost: Number(row.stockCost || 0),
     }));
 
-    return res.json({
-      branchCode,
-      shelves,
-    });
+    return response.success(res, { branchCode, shelves });
   } catch (error) {
     console.error("getShelfDashboardShelfSales error:", error);
-    return res.status(500).json({ error: "shelf dashboard shelf sales error" });
+    return response.error(res, "shelf dashboard shelf sales error");
   }
 };

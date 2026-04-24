@@ -1,18 +1,16 @@
 const prisma = require("../../config/prisma");
-
-const NodeCache = require("node-cache");
-
-// cache สำหรับ sales search (TTL = 1 ชั่วโมง)
-const salesCache = new NodeCache({ stdTTL: 60 * 60 }); // 3600 วินาที
+const response = require("../../utils/responseHelper");
+const cacheManager = require("../../utils/cacheManager");
+const salesCache = cacheManager.getCache("sales-search", { stdTTL: 3600 });
 
 
 exports.getBranchListSales = async (req, res) => {
     try {
         const itemall = await prisma.branch.findMany();
-        res.json(itemall).status(200);
+        return response.success(res, itemall);
     } catch (err) {
         console.error(err);
-        res.status(500).json({ error: 'select station error' });
+        return response.error(res, "select station error");
     }
 };
 
@@ -27,7 +25,7 @@ exports.getSearchBranchSales = async (req, res) => {
             where: { branch_code },
         });
         if (!branch) {
-            return res.status(404).json({ msg: "Branch not found" });
+            return response.error(res, "Branch not found", "NOT_FOUND", 404);
         }
 
         const channels = await prisma.salesChannel.findMany();
@@ -40,7 +38,7 @@ exports.getSearchBranchSales = async (req, res) => {
         ======================================================== */
         const rows = await prisma.$queryRaw`
             SELECT
-                DATE_TRUNC('month', "date") AS month,
+                DATE_TRUNC('month', "date" AT TIME ZONE 'Asia/Bangkok') AS month,
                 "doc_type",
                 "salesChannelId",
                 SUM("total_sales") AS total_sales,
@@ -59,8 +57,8 @@ exports.getSearchBranchSales = async (req, res) => {
         ======================================================== */
         const dayRows = await prisma.$queryRaw`
             SELECT
-                DATE_TRUNC('month', b."date") AS month,
-                COUNT(DISTINCT DATE_TRUNC('day', b."date")) AS days_count
+                DATE_TRUNC('month', b."date" AT TIME ZONE 'Asia/Bangkok') AS month,
+                COUNT(DISTINCT DATE_TRUNC('day', b."date" AT TIME ZONE 'Asia/Bangkok')) AS days_count
             FROM "Bill" b
             WHERE b."branchId" = ${branch.id}
             GROUP BY month
@@ -187,10 +185,10 @@ exports.getSearchBranchSales = async (req, res) => {
             };
         });
 
-        res.json(result);
+        return response.success(res, result);
     } catch (error) {
         console.error("getSearchBranchSales error:", error);
-        res.status(500).json({ msg: "error" });
+        return response.error(res, "error");
     }
 };
 
@@ -205,7 +203,7 @@ exports.getSearchBranchSalesDay = async (req, res) => {
         const branch = await prisma.branch.findUnique({
             where: { branch_code },
         });
-        if (!branch) return res.status(404).json({ msg: "Branch not found" });
+        if (!branch) return response.error(res, "Branch not found", "NOT_FOUND", 404);
 
         const channels = await prisma.salesChannel.findMany();
         const channelMap = Object.fromEntries(
@@ -215,7 +213,7 @@ exports.getSearchBranchSalesDay = async (req, res) => {
         // ⭐ ใช้เวลาไทย
         const rows = await prisma.$queryRaw`
             SELECT
-                DATE_TRUNC('day', "date") AS day,
+                DATE_TRUNC('day', "date" AT TIME ZONE 'Asia/Bangkok') AS day,
                 "doc_type",
                 "salesChannelId",
                 SUM("total_sales") AS total_sales,
@@ -224,8 +222,8 @@ exports.getSearchBranchSalesDay = async (req, res) => {
                 COUNT(id) AS bill_count
             FROM "Bill"
             WHERE "branchId" = ${branch.id}
-              AND EXTRACT(YEAR FROM "date") = ${year}
-              AND EXTRACT(MONTH FROM "date") = ${month}
+              AND EXTRACT(YEAR FROM "date" AT TIME ZONE 'Asia/Bangkok') = ${year}
+              AND EXTRACT(MONTH FROM "date" AT TIME ZONE 'Asia/Bangkok') = ${month}
               AND "doc_type" IN ('เอกสารขาย', 'เอกสารคืน')
             GROUP BY day, "doc_type", "salesChannelId"
             ORDER BY day;
@@ -360,10 +358,10 @@ exports.getSearchBranchSalesDay = async (req, res) => {
                 };
             });
 
-        res.json(result);
+        return response.success(res, result);
     } catch (err) {
         console.error("getSearchBranchSalesDay error:", err);
-        res.status(500).json({ error: "select day error" });
+        return response.error(res, "select day error");
     }
 };
 
@@ -416,8 +414,8 @@ exports.getSearchBranchSalesProductMonth = async (req, res) => {
             JOIN "Product" p ON p.id = bi."productId"
 
             WHERE b."branchId" = ${branch.id}
-              AND EXTRACT(YEAR FROM b."date") = ${year}
-              AND EXTRACT(MONTH FROM b."date") = ${month}
+              AND EXTRACT(YEAR FROM b."date" AT TIME ZONE 'Asia/Bangkok') = ${year}
+              AND EXTRACT(MONTH FROM b."date" AT TIME ZONE 'Asia/Bangkok') = ${month}
 
             GROUP BY p.product_code, p.product_name, p.product_brand
             ORDER BY p.product_code;
@@ -425,10 +423,10 @@ exports.getSearchBranchSalesProductMonth = async (req, res) => {
 
         salesCache.set(cacheKey, rows);
 
-        res.json(rows);
+        return response.success(res, rows);
     } catch (err) {
         console.error("getSearchBranchSalesProductMonth error:", err);
-        res.status(500).json({ error: "select branch sales product month error" });
+        return response.error(res, "select branch sales product month error");
     }
 };
 
@@ -483,9 +481,9 @@ exports.getSearchBranchSalesProductDay = async (req, res) => {
             JOIN "Product" p ON p.id = bi."productId"
 
             WHERE b."branchId" = ${branch.id}
-              AND EXTRACT(YEAR FROM b."date") = ${year}
-              AND EXTRACT(MONTH FROM b."date") = ${month}
-              AND EXTRACT(DAY FROM b."date") = ${day}
+              AND EXTRACT(YEAR FROM b."date" AT TIME ZONE 'Asia/Bangkok') = ${year}
+              AND EXTRACT(MONTH FROM b."date" AT TIME ZONE 'Asia/Bangkok') = ${month}
+              AND EXTRACT(DAY FROM b."date" AT TIME ZONE 'Asia/Bangkok') = ${day}
 
             GROUP BY p.product_code, p.product_name, p.product_brand
             ORDER BY p.product_code;
@@ -493,11 +491,11 @@ exports.getSearchBranchSalesProductDay = async (req, res) => {
 
         salesCache.set(cacheKey, rows);
 
-        res.json(rows);
+        return response.success(res, rows);
 
     } catch (err) {
         console.error("getSearchBranchSalesProductDay error:", err);
-        res.status(500).json({ error: "select product/day error" });
+        return response.error(res, "select product/day error");
     }
 };
 
@@ -520,7 +518,7 @@ exports.searchProductSales = async (req, res) => {
         const keyword = (q || "").trim();
 
         if (!keyword) {
-            return res.json({ total: 0, items: [] });
+            return response.success(res, { total: 0, items: [] });
         }
 
         const products = await prisma.product.findMany({
@@ -565,28 +563,26 @@ exports.searchProductSales = async (req, res) => {
         });
     } catch (err) {
         console.error("searchProductSales error:", err);
-        res.status(500).json({ error: "product search error" });
+        return response.error(res, "product search error");
     }
 };
 
 // cache รายงาน product sales detail (ตาม productId + date range)
-const productSalesCache = new NodeCache({
-    stdTTL: 28800, // cache 60 วินาที (อยากให้มากกว่านี้ก็ปรับได้ เช่น 300 = 5 นาที)
-});
+const productSalesCache = cacheManager.getCache("sales-product-detail", { stdTTL: 28800 });
 
 exports.getProductSalesDetail = async (req, res) => {
     try {
         const { productId, start, end } = req.body;
 
         if (!productId) {
-            return res.status(400).json({ error: "productId is required" });
+            return response.error(res, "productId is required", "BAD_REQUEST", 400);
         }
 
         // key สำหรับ cache (ผูกกับ product + ช่วงวันที่ใช้)
         const cacheKey = `${productId}:${start || "auto"}:${end || "auto"}`;
         const cached = productSalesCache.get(cacheKey);
         if (cached) {
-            return res.json(cached);
+            return response.success(res, cached);
         }
 
         const product = await prisma.product.findUnique({
@@ -594,14 +590,14 @@ exports.getProductSalesDetail = async (req, res) => {
         });
 
         if (!product) {
-            return res.status(404).json({ error: "Product not found" });
+            return response.error(res, "Product not found", "NOT_FOUND", 404);
         }
 
         // ถ้าไม่ได้ส่งช่วงวันที่มา → default = 12 เดือนล่าสุด
         let startDate, endDate;
         if (start && end) {
-            startDate = new Date(start + "T00:00:00");
-            endDate = new Date(end + "T23:59:59");
+            startDate = new Date(start + "T00:00:00+07:00");
+            endDate = new Date(end + "T23:59:59.999+07:00");
         } else {
             endDate = new Date();
             endDate.setHours(23, 59, 59, 999);
@@ -612,7 +608,7 @@ exports.getProductSalesDetail = async (req, res) => {
         }
 
         if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
-            return res.status(400).json({ error: "invalid date format" });
+            return response.error(res, "invalid date format", "BAD_REQUEST", 400);
         }
 
         // ตัด JOIN "Product" ทิ้ง ใช้ bi."productId" แทน
@@ -620,8 +616,8 @@ exports.getProductSalesDetail = async (req, res) => {
       SELECT
         br."branch_code",
         br."branch_name",
-        EXTRACT(YEAR FROM b."date")::int   AS year,
-        EXTRACT(MONTH FROM b."date")::int  AS month,
+        EXTRACT(YEAR FROM b."date" AT TIME ZONE 'Asia/Bangkok')::int   AS year,
+        EXTRACT(MONTH FROM b."date" AT TIME ZONE 'Asia/Bangkok')::int  AS month,
 
         SUM(
           CASE 
@@ -681,7 +677,7 @@ exports.getProductSalesDetail = async (req, res) => {
         return res.json(responsePayload);
     } catch (err) {
         console.error("getProductSalesDetail error:", err);
-        res.status(500).json({ error: "product sales detail error" });
+        return response.error(res, "product sales detail error");
     }
 };
 

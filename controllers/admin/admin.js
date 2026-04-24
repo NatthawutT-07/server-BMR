@@ -1,5 +1,6 @@
 const prisma = require("../../config/prisma");
 const bcrypt = require("bcryptjs");
+const response = require("../../utils/responseHelper");
 
 exports.listUser = async (req, res) => {
   try {
@@ -12,10 +13,10 @@ exports.listUser = async (req, res) => {
       },
       orderBy: { id: 'asc' }
     });
-    res.json(users);
+    return response.success(res, users);
   } catch (e) {
     console.log(e);
-    res.status(500).json({ msg: "List Users Error" });
+    return response.error(res, "List Users Error");
   }
 };
 
@@ -24,7 +25,7 @@ exports.createUser = async (req, res) => {
     const { name, password, role } = req.body;
     
     if (!name || !password) {
-      return res.status(400).json({ message: "Name and password are required" });
+      return response.error(res, "Name and password are required", "BAD_REQUEST", 400);
     }
 
     const existingUser = await prisma.user.findUnique({
@@ -32,7 +33,7 @@ exports.createUser = async (req, res) => {
     });
 
     if (existingUser) {
-      return res.status(400).json({ message: "User already exists" });
+      return response.error(res, "User already exists", "CONFLICT", 400);
     }
 
     const salt = await bcrypt.genSalt(10);
@@ -47,10 +48,10 @@ exports.createUser = async (req, res) => {
       select: { id: true, name: true, role: true, enabled: true }
     });
 
-    res.status(201).json(newUser);
+    return response.success(res, newUser, null, "User created successfully", 201);
   } catch (e) {
     console.log("Create User Error:", e);
-    res.status(500).json({ message: "Server Error" });
+    return response.error(res, "Server Error");
   }
 };
 
@@ -59,21 +60,19 @@ exports.deleteUser = async (req, res) => {
     const { id } = req.params;
     const userId = Number(id);
 
-    if (isNaN(userId)) return res.status(400).json({ message: "Invalid ID" });
+    if (isNaN(userId)) return response.error(res, "Invalid ID", "BAD_REQUEST", 400);
 
-    // Optional: prevent deleting self or the main admin
-    // For now, we'll just delete the user
     await prisma.user.delete({
       where: { id: userId }
     });
 
-    res.json({ message: "User deleted successfully" });
+    return response.success(res, null, null, "User deleted successfully");
   } catch (e) {
     console.log("Delete User Error:", e);
     if (e.code === "P2003" || e.code === "P2014" || e.code === "P2025") {
-      return res.status(400).json({ message: "Cannot delete user because it is referenced by other records." });
+      return response.error(res, "Cannot delete user because it is referenced by other records.", "BAD_REQUEST", 400);
     }
-    res.status(500).json({ message: "Server Error" });
+    return response.error(res, "Server Error");
   }
 };
 
@@ -85,10 +84,10 @@ exports.changeStatus = async (req, res) => {
       data: { enabled: enabled },
     });
 
-    res.send("Update Status Success");
+    return response.success(res, null, null, "Update Status Success");
   } catch (e) {
     console.log(e);
-    res.status(500).json({ msg: "changeStatus Error" });
+    return response.error(res, "changeStatus Error");
   }
 };
 
@@ -100,10 +99,10 @@ exports.changeRole = async (req, res) => {
       data: { role: role },
     });
 
-    res.send("Update Role Success");
+    return response.success(res, null, null, "Update Role Success");
   } catch (e) {
     console.log(e);
-    res.status(500).json({ msg: "changeStatus Error" });
+    return response.error(res, "changeRole Error");
   }
 };
 

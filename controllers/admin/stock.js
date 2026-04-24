@@ -1,68 +1,21 @@
-// controllers/admin/download.js
-
 const prisma = require("../../config/prisma");
-const NodeCache = require("node-cache");
-
-const cache = new NodeCache({
-  stdTTL: 3600, // 60 นาที
-});
+const response = require("../../utils/responseHelper");
+const cacheManager = require("../../utils/cacheManager");
+const { getBangkok90DaysRange } = require("../../utils/dateHelper");
+const { serialize } = require("../../utils/serializer");
+const cache = cacheManager.getCache("stock", { stdTTL: 3600 });
 
 // สาขาที่ "ไม่คำนวณยอดขาย" ให้เป็น null ทั้งหมด
 const EXCLUDED_SALES_BRANCHES = new Set(["EC000", "ST000", "ST036", "ST037"]);
 const normalizeBranchCode = (v) => String(v || "").trim().toUpperCase();
 
-/**
- * Helper: แปลง "วันเวลาไทย" → Date UTC
- */
-const makeBangkokDateTimeUtc = (year, month, day, timeStr) => {
-  const y = String(year).padStart(4, "0");
-  const m = String(month).padStart(2, "0");
-  const d = String(day).padStart(2, "0");
-  return new Date(`${y}-${m}-${d}T${timeStr}+07:00`);
-};
-
-/**
- * helper: ช่วงเวลา 90 วันย้อนหลัง (ยึดตามเวลา Asia/Bangkok) และใช้ yesterday เป็นวันสุดท้าย
- * → คืนค่าเป็น Date UTC { startUtc, endUtc }
- * → start = yesterday - 89 วัน (รวมเป็น 90 วัน)
- */
-const getBangkok90DaysRangeUtc = () => {
-  const now = new Date();
-  const bangkokNow = new Date(
-    now.toLocaleString("en-US", { timeZone: "Asia/Bangkok" })
-  );
-
-  // yesterday ตามเวลาไทย
-  const endThai = new Date(bangkokNow);
-  endThai.setDate(endThai.getDate() - 1);
-
-  // start = yesterday - 89 วัน (รวมเป็น 90 วัน)
-  const startThai = new Date(endThai);
-  startThai.setDate(startThai.getDate() - 89);
-
-  const startUtc = makeBangkokDateTimeUtc(
-    startThai.getFullYear(),
-    startThai.getMonth() + 1,
-    startThai.getDate(),
-    "00:00:00.000"
-  );
-
-  const endUtc = makeBangkokDateTimeUtc(
-    endThai.getFullYear(),
-    endThai.getMonth() + 1,
-    endThai.getDate(),
-    "23:59:59.999"
-  );
-
-  return { startUtc, endUtc };
-};
 
 exports.getStock = async (req, res) => {
   try {
     const { branchCode } = req.query;
 
     // rolling 90 วัน (yesterday -> ย้อน 90 วัน)
-    const { startUtc, endUtc } = getBangkok90DaysRangeUtc();
+    const { startUtc, endUtc } = getBangkok90DaysRange();
 
     // กัน cache ค้างข้ามวัน (เพราะช่วง rolling เปลี่ยนทุกวัน)
     const startKey = startUtc.toISOString().slice(0, 10);
@@ -73,7 +26,7 @@ exports.getStock = async (req, res) => {
       : `stock_all_nonzero_${startKey}_${endKey}`;
 
     const cached = cache.get(cacheKey);
-    if (cached) return res.json(cached);
+    if (cached) return response.success(res, cached.rows, { range: cached.range });
 
     let rows;
 
@@ -112,12 +65,7 @@ exports.getStock = async (req, res) => {
         ORDER BY sr."branchCode", sr."codeProduct";
       `;
 
-      const data = JSON.parse(
-        JSON.stringify(rows, (_, value) =>
-          typeof value === "bigint" ? Number(value) : value
-        )
-      );
-
+      const data = serialize(rows);
       cache.set(cacheKey, data);
       return res.json(data);
     }
@@ -241,16 +189,12 @@ exports.getStock = async (req, res) => {
       `;
     }
 
-    const data = JSON.parse(
-      JSON.stringify(rows, (_, value) =>
-        typeof value === "bigint" ? Number(value) : value
-      )
-    );
-
-    cache.set(cacheKey, data);
-    return res.json(data);
+    const data = serialize(rows);
+    const meta = { range: { start: startKey, end: endKey } };
+    cache.set(cacheKey, { rows: data, range: meta.range });
+    return response.success(res, data, meta);
   } catch (err) {
     console.error("getStock error:", err);
-    return res.status(500).json({ error: "select station error" });
+    return response.error(res, "select station error");
   }
 };

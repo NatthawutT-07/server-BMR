@@ -5,49 +5,12 @@ const { markShelfUpdated, createShelfChangeLogs, createSingleChangeLog } = requi
 const safeStr = (v) => (v == null ? "" : String(v));
 const digitsOnly = (s) => safeStr(s).replace(/\D/g, "");
 
-const toBkkDateStr = (dateObj) =>
-  new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Bangkok",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(dateObj);
+const { toBkkDateStr, getBangkok90DaysRange: get90DaysRangeUtc } = require("../../utils/dateHelper");
 
 const makeUtcDate = (year, month, day, h = 0, m = 0, s = 0, ms = 0) => {
   return new Date(Date.UTC(year, month - 1, day, h, m, s, ms));
 };
 
-const get90DaysRangeUtc = () => {
-  const now = new Date();
-  const bangkokNow = new Date(
-    now.toLocaleString("en-US", { timeZone: "Asia/Bangkok" })
-  );
-
-  const endBkk = new Date(bangkokNow);
-  endBkk.setDate(endBkk.getDate() - 1);
-  endBkk.setHours(23, 59, 59, 999);
-
-  const startBkk = new Date(endBkk);
-  startBkk.setDate(startBkk.getDate() - 89);
-  startBkk.setHours(0, 0, 0, 0);
-
-  const startUtc = new Date(startBkk.getTime() - 7 * 60 * 60 * 1000);
-  const endUtc = new Date(endBkk.getTime() - 7 * 60 * 60 * 1000);
-
-  const formatYMD = (d) => {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${y}-${m}-${day}`;
-  };
-
-  return {
-    startUtc,
-    endUtc,
-    startDateStr: formatYMD(startBkk),
-    endDateStr: formatYMD(endBkk)
-  };
-};
 
 const getMonthRangeUtc = (year, month) => {
   const startUtc = makeUtcDate(year, month, 1, 0, 0, 0, 0);

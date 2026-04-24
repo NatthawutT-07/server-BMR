@@ -1,14 +1,15 @@
 const prisma = require("../../config/prisma");
+const response = require("../../utils/responseHelper");
 
 exports.listBranches = async (req, res) => {
   try {
     const branches = await prisma.branch.findMany({
       orderBy: { branch_code: "asc" },
     });
-    res.json(branches);
+    return response.success(res, branches);
   } catch (error) {
     console.error("List Branches Error:", error);
-    res.status(500).json({ message: "Server Error" });
+    return response.error(res, "Server Error");
   }
 };
 
@@ -17,7 +18,7 @@ exports.createBranch = async (req, res) => {
     const { branch_code, branch_name } = req.body;
     
     if (!branch_code || !branch_name) {
-      return res.status(400).json({ message: "Branch code and name are required" });
+      return response.error(res, "Branch code and name are required", "BAD_REQUEST", 400);
     }
 
     const existing = await prisma.branch.findUnique({
@@ -25,17 +26,17 @@ exports.createBranch = async (req, res) => {
     });
 
     if (existing) {
-      return res.status(400).json({ message: "Branch code already exists" });
+      return response.error(res, "Branch code already exists", "CONFLICT", 400);
     }
 
     const branch = await prisma.branch.create({
       data: { branch_code, branch_name },
     });
 
-    res.status(201).json(branch);
+    return response.success(res, branch, null, "Branch created", 201);
   } catch (error) {
     console.error("Create Branch Error:", error);
-    res.status(500).json({ message: "Server Error" });
+    return response.error(res, "Server Error");
   }
 };
 
@@ -45,7 +46,7 @@ exports.updateBranch = async (req, res) => {
     const { branch_code, branch_name } = req.body;
 
     const branchId = Number(id);
-    if (isNaN(branchId)) return res.status(400).json({ message: "Invalid ID" });
+    if (isNaN(branchId)) return response.error(res, "Invalid ID", "BAD_REQUEST", 400);
 
     // Check if branch_code exists in another record
     if (branch_code) {
@@ -53,7 +54,7 @@ exports.updateBranch = async (req, res) => {
         where: { branch_code },
       });
       if (existing && existing.id !== branchId) {
-        return res.status(400).json({ message: "Branch code already exists" });
+        return response.error(res, "Branch code already exists", "CONFLICT", 400);
       }
     }
 
@@ -62,10 +63,10 @@ exports.updateBranch = async (req, res) => {
       data: { branch_code, branch_name },
     });
 
-    res.json(updatedBranch);
+    return response.success(res, updatedBranch);
   } catch (error) {
     console.error("Update Branch Error:", error);
-    res.status(500).json({ message: "Server Error" });
+    return response.error(res, "Server Error");
   }
 };
 
@@ -74,18 +75,18 @@ exports.deleteBranch = async (req, res) => {
     const { id } = req.params;
     const branchId = Number(id);
     
-    if (isNaN(branchId)) return res.status(400).json({ message: "Invalid ID" });
+    if (isNaN(branchId)) return response.error(res, "Invalid ID", "BAD_REQUEST", 400);
 
     await prisma.branch.delete({
       where: { id: branchId },
     });
 
-    res.json({ message: "Branch deleted successfully" });
+    return response.success(res, null, null, "Branch deleted successfully");
   } catch (error) {
     console.error("Delete Branch Error:", error);
     if (error.code === "P2003" || error.code === "P2014" || error.code === "P2025") {
-      return res.status(400).json({ message: "Cannot delete branch because it is referenced by other records." });
+      return response.error(res, "Cannot delete branch because it is referenced by other records.", "BAD_REQUEST", 400);
     }
-    res.status(500).json({ message: "Server Error" });
+    return response.error(res, "Server Error");
   }
 };
