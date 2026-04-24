@@ -111,7 +111,7 @@ const createLog = async (req, res) => {
       return response.error(res, "กรุณากรอกข้อมูลให้ครบถ้วน", "BAD_REQUEST", 400);
     }
 
-    if (action !== "แลกรางวัล" && action !== "หักคะแนน" && (!branch_code || !branch_name)) {
+    if (action !== "แลกรางวัล" && action !== "หักคะแนน" && action !== "เพิ่มคะแนน" && (!branch_code || !branch_name)) {
       return response.error(res, "กรุณาระบุข้อมูลสาขา", "BAD_REQUEST", 400);
     }
 
