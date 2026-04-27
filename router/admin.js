@@ -42,7 +42,7 @@ const {
 router.post('/upload-minmax', authCheck, adminCheck, upload.single('file'), uploadItemMinMaxXLSX);
 // router.post('/upload-partners', authCheck, adminCheck, upload.single('file'), uploadPartnersCSV)
 router.post('/upload-masterItem', authCheck, adminCheck, upload.single('file'), uploadMasterItemXLSX)
-router.post('/upload-stock', authCheck, adminCheck, upload.single('file'), uploadStockXLSX,)
+router.post('/upload-stock', authCheck, upload.single('file'), uploadStockXLSX)
 router.post('/upload-withdraw', authCheck, adminCheck, upload.single('file'), uploadWithdrawXLSX)
 router.post('/upload-template', authCheck, adminCheck, upload.single('file'), uploadTemplateXLSX)
 router.post('/upload-sku', authCheck, adminCheck, upload.single('file'), uploadSKU_XLSX)

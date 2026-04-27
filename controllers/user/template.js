@@ -113,11 +113,35 @@ const toBangkokOffsetISOString = (val) => {
 // ======================================================
 exports.getStockLastUpdate = async (req, res) => {
   try {
-    const row = await prisma.dataSync.findUnique({ where: { key: "stock" } });
+    const { branchCode } = req.query;
+    const userBranch = branchCode || req.user?.storecode || req.user?.name;
+
+    // 1. ดึงเวลาส่วนกลาง (Admin upload / Global sync)
+    const globalRow = await prisma.dataSync.findUnique({ where: { key: "stock" } });
+
+    // 2. ดึงเวลารายสาขา (User upload เฉพาะสาขา)
+    let branchRow = null;
+    if (userBranch) {
+      const bRows = await prisma.$queryRaw`
+        SELECT "updatedAt", "rowCount" FROM "BranchDataSync" 
+        WHERE "branchCode" = ${userBranch} AND "key" = 'stock' 
+        LIMIT 1
+      `;
+      branchRow = bRows[0] || null;
+    }
+
+    // 3. เทียบหาเวลาที่ล่าสุดกว่า (Latest between Global and Branch-specific)
+    let latestUpdate = globalRow?.updatedAt || null;
+    if (branchRow?.updatedAt) {
+      const bDate = new Date(branchRow.updatedAt);
+      if (!latestUpdate || bDate > latestUpdate) {
+        latestUpdate = bDate;
+      }
+    }
 
     return res.json({
-      updatedAt: row?.updatedAt ? toBangkokOffsetISOString(row.updatedAt) : null,
-      rowCount: row?.rowCount || 0,
+      updatedAt: latestUpdate ? toBangkokOffsetISOString(latestUpdate) : null,
+      rowCount: (branchRow?.rowCount || globalRow?.rowCount) || 0,
     });
   } catch (error) {
     console.error("getStockLastUpdate error:", error);

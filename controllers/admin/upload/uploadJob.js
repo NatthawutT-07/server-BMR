@@ -3,15 +3,27 @@ const prisma = require('../../../config/prisma');
 const uploadJobs = new Map();
 const MAX_JOB_AGE_MS = 6 * 60 * 60 * 1000;
 
-const touchDataSync = async (key, rowCount) => {
+const touchDataSync = async (key, rowCount, branchCode) => {
     try {
+        // 1. อัปเดตเวลาภาพรวม (Global)
         await prisma.dataSync.upsert({
             where: { key },
             update: { updatedAt: new Date(), rowCount: rowCount ?? undefined },
             create: { key, updatedAt: new Date(), rowCount: rowCount ?? 0 },
         });
+
+        // 2. ถ้ามีการระบุสาขา ให้บันทึกเวลาแยกตามสาขาด้วย
+        if (branchCode) {
+            // ใช้ raw SQL เผื่อ Prisma Client ยังไม่ได้ Generate โมเดลใหม่
+            await prisma.$executeRaw`
+                INSERT INTO "BranchDataSync" ("branchCode", "key", "updatedAt", "rowCount")
+                VALUES (${branchCode}, ${key}, NOW(), ${rowCount ?? 0})
+                ON CONFLICT ("branchCode", "key")
+                DO UPDATE SET "updatedAt" = EXCLUDED."updatedAt", "rowCount" = EXCLUDED."rowCount"
+            `;
+        }
     } catch (err) {
-        console.error(`DataSync update failed (${key}):`, err);
+        console.error(`DataSync update failed (${key}, ${branchCode}):`, err);
     }
 };
 

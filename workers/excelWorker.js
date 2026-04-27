@@ -146,8 +146,9 @@ const parseStock = (raw) => {
             return code && !isNaN(code) && branch;
         })
         .map(row => {
-            const codeProduct = parseInt(row["รหัสสินค้า"], 10);
-            const branchCode = (row["รหัสสาขา"] || "").trim();
+            const rawCode = (row["รหัสสินค้า"] || "").toString().trim();
+            const codeProduct = parseInt(rawCode, 10);
+            const branchCode = (row["รหัสสาขา"] || "").toString().trim();
             let qty = parseFloat(row["จำนวนคงเหลือ"]);
             if (isNaN(qty) || qty > INT32_MAX || qty < INT32_MIN) qty = 0;
             qty = Math.floor(qty);
@@ -205,10 +206,10 @@ const parseWithdraw = (raw) => {
             return {
                 codeProduct,
                 branchCode,
-                docNumber: row["เลขที่เอกสาร"] || null,
-                date: row["วันที่"] || null,
-                docStatus: row["สถานะเอกสาร"] || null,
-                reason: row["เหตุผล"] || null,
+                docNumber: (row["เลขที่เอกสาร"] || "").toString().trim() || null,
+                date: (row["วันที่"] || "").toString().trim() || null,
+                docStatus: (row["สถานะเอกสาร"] || "").toString().trim() || null,
+                reason: (row["เหตุผล"] || "").toString().trim() || null,
                 quantity: qty,
                 value: val,
             };

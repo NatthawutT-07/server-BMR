@@ -57,8 +57,11 @@ exports.uploadWithdrawXLSX = async (req, res) => {
 
         if (duplicates.length > 0) {
             // console.log(`🔍 Found ${duplicates.length} duplicate records in batch:`, duplicates.slice(0, 5));
-            // เก็บเฉพาะข้อมูลที่ไม่ซ้ำ
-            mapped = mapped.filter((_, index) => uniqueMap.has(`${mapped[index].docNumber}-${mapped[index].branchCode}-${mapped[index].codeProduct}-${mapped[index].quantity}-${mapped[index].value}`));
+            // เก็บเฉพาะข้อมูลที่ไม่ซ้ำ (เก็บตัวแรกที่เจอ)
+            mapped = mapped.filter((r, index) => {
+                const key = `${r.docNumber}-${r.branchCode}-${r.codeProduct}-${r.quantity}-${r.value}`;
+                return uniqueMap.get(key) === index;
+            });
             // console.log(`📊 After deduplication: ${mapped.length} unique records`);
         }
 
@@ -85,10 +88,7 @@ exports.uploadWithdrawXLSX = async (req, res) => {
                 ("codeProduct", "branchCode", "docNumber", "date", "docStatus", "reason", "quantity", "value")
                 VALUES ${Prisma.join(values)}
                 ON CONFLICT ("docNumber", "branchCode", "codeProduct", "quantity", "value") 
-                DO UPDATE SET 
-                    "date" = EXCLUDED."date",
-                    "docStatus" = EXCLUDED."docStatus",
-                    "reason" = EXCLUDED."reason"
+                DO NOTHING
             `;
 
             await prisma.$executeRaw(sql);

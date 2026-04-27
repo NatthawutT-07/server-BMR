@@ -63,6 +63,15 @@ model DataSync {
   rowCount  Int?
 }
 
+model BranchDataSync {
+  branchCode String
+  key        String
+  updatedAt  DateTime @default(now())
+  rowCount   Int?
+
+  @@id([branchCode, key])
+}
+
 model withdraw {
   id          Int    @id @default(autoincrement())
   codeProduct Int

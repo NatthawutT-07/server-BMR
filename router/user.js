@@ -8,10 +8,13 @@ const {
     getNextIndex,
     registerProduct
 } = require('../controllers/user/registerProduct');
+const upload = require('../config/multerConfig');
+const { uploadStockXLSX } = require('../controllers/admin/upload/uploadController');
 const router = express.Router()
 
 
 router.post('/template-item', authCheck, UserTemplateItem);
+router.post('/upload-stock', authCheck, upload.single('file'), uploadStockXLSX);
 router.get("/stock-last-update", authCheck, getStockLastUpdate);
 router.get("/branch-shelves", authCheck, getBranchShelves); // ดึง shelf templates ของสาขา
 
