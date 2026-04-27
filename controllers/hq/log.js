@@ -190,10 +190,21 @@ const createLog = async (req, res) => {
         },
       });
     } else if (action === "แลกรางวัล" && point !== undefined && point !== null) {
-      await prisma.employee_hq.update({
-        where: { employee_code },
-        data: { point_redeemed: { increment: parseInt(point) } },
-      });
+      try {
+        const pointToDeduct = Math.abs(parseInt(point));
+        await prisma.employee_hq.update({
+          where: { 
+            employee_code,
+            point_redeemed: { gte: pointToDeduct }
+          },
+          data: { point_redeemed: { increment: parseInt(point) } },
+        });
+      } catch (error) {
+        if (error.code === 'P2025') {
+          return response.error(res, "แต้มสะสมไม่เพียงพอสำหรับการแลกรางวัลนี้", "INSUFFICIENT_POINTS", 400);
+        }
+        throw error;
+      }
     }
 
     return response.success(res, log, null, "บันทึกข้อมูลสำเร็จ", 201);
