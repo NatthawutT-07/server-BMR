@@ -6,19 +6,21 @@ module.exports = {
       instances: 1,              // For 1 vCPU, 1 instance is optimal
       exec_mode: "fork",         // Fork mode is better for single instance
       watch: false,              // Disable in production
-      max_memory_restart: "1.5G", // Increased slightly since it's only 1 process on 2GB RAM
+      max_memory_restart: "1300M", // Increased slightly since it's only 1 process on 2GB RAM
 
       // 2. เพิ่ม V8 Heap Space ของ Node.js ให้ใช้แรมได้สูงสุด ~1536MB
-      node_args: "--max-old-space-size=1536",
+      node_args: "--max-old-space-size=1300",
 
       // Environment
       env: {
         NODE_ENV: "development",
         PORT: 5001,
+        TZ: "Asia/Bangkok",
       },
       env_production: {
         NODE_ENV: "production",
         PORT: 5001,
+        TZ: "Asia/Bangkok",
       },
 
       // Logging
