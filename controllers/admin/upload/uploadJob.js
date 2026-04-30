@@ -5,21 +5,20 @@ const MAX_JOB_AGE_MS = 6 * 60 * 60 * 1000;
 
 const touchDataSync = async (key, rowCount, branchCode) => {
     try {
-        // 1. อัปเดตเวลาภาพรวม (Global)
-        await prisma.$executeRaw`
-            INSERT INTO "DataSync" ("key", "updatedAt", "rowCount")
-            VALUES (${key}, timezone('Asia/Bangkok', NOW()), ${rowCount ?? 0})
-            ON CONFLICT ("key")
-            DO UPDATE SET "updatedAt" = EXCLUDED."updatedAt", "rowCount" = EXCLUDED."rowCount"
-        `;
-
-        // 2. ถ้ามีการระบุสาขา ให้บันทึกเวลาแยกตามสาขาด้วย
         if (branchCode) {
-            // ใช้ raw SQL เผื่อ Prisma Client ยังไม่ได้ Generate โมเดลใหม่
+            // อัปเดตเฉพาะรายสาขา (ไม่แตะ Global เพื่อไม่ให้สาขาอื่นเห็นเวลาที่ผิด)
             await prisma.$executeRaw`
                 INSERT INTO "BranchDataSync" ("branchCode", "key", "updatedAt", "rowCount")
                 VALUES (${branchCode}, ${key}, timezone('Asia/Bangkok', NOW()), ${rowCount ?? 0})
                 ON CONFLICT ("branchCode", "key")
+                DO UPDATE SET "updatedAt" = EXCLUDED."updatedAt", "rowCount" = EXCLUDED."rowCount"
+            `;
+        } else {
+            // อัปเดตเวลาภาพรวม (Global) — ใช้เมื่อ Admin upload เท่านั้น
+            await prisma.$executeRaw`
+                INSERT INTO "DataSync" ("key", "updatedAt", "rowCount")
+                VALUES (${key}, timezone('Asia/Bangkok', NOW()), ${rowCount ?? 0})
+                ON CONFLICT ("key")
                 DO UPDATE SET "updatedAt" = EXCLUDED."updatedAt", "rowCount" = EXCLUDED."rowCount"
             `;
         }
