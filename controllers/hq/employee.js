@@ -448,6 +448,61 @@ const bulkCreateEmployees = async (req, res) => {
   }
 };
 
+/**
+ * POST /api/hq/employees/bulk-add-points
+ */
+const bulkAddPoints = async (req, res) => {
+  try {
+    const { employee_hits } = req.body;
+
+    if (!employee_hits || typeof employee_hits !== 'object') {
+      return response.error(res, "ข้อมูลไม่ถูกต้อง", "BAD_REQUEST", 400);
+    }
+
+    const results = {
+      success: [],
+      failed: [],
+    };
+
+    for (const [employee_code, hits] of Object.entries(employee_hits)) {
+      try {
+        const addedPoints = parseInt(hits);
+        if (isNaN(addedPoints) || addedPoints <= 0) continue;
+
+        const updated = await prisma.employee_hq.update({
+          where: { employee_code },
+          data: {
+            point_earned: { increment: addedPoints },
+            point_redeemed: { increment: addedPoints }
+          },
+          select: {
+            employee_code: true,
+            nickname: true
+          }
+        });
+
+        results.success.push({
+          employee_code: updated.employee_code,
+          nickname: updated.nickname,
+          addedPoints
+        });
+      } catch (error) {
+        results.failed.push({
+          employee_code,
+          reason: error.code === "P2025" ? "ไม่พบรหัสพนักงานในระบบ" : error.message
+        });
+      }
+    }
+
+    employeeCache.flushAll();
+
+    return response.success(res, results, null, `บันทึกคะแนนสำเร็จ ${results.success.length} รายการ`);
+  } catch (error) {
+    console.error("Bulk add points error:", error);
+    return response.error(res, "เกิดข้อผิดพลาดในการบันทึกคะแนน", "BULK_ERROR", 500, error.message);
+  }
+};
+
 module.exports = {
   getAllEmployees,
   getEmployeeById,
@@ -458,4 +513,5 @@ module.exports = {
   getEmployeeStats,
   resetAllPoints,
   bulkCreateEmployees,
+  bulkAddPoints,
 };

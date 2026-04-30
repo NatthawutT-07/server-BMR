@@ -288,10 +288,86 @@ const deleteLog = async (req, res) => {
   }
 };
 
+/**
+ * POST /api/hq/logs/bulk-hit-target
+ * Bulk create logs for hit target employees + update points
+ */
+const bulkCreateHitTargetLogs = async (req, res) => {
+  try {
+    const { entries, date } = req.body;
+
+    if (!Array.isArray(entries) || entries.length === 0) {
+      return response.error(res, "ข้อมูลไม่ถูกต้อง", "BAD_REQUEST", 400);
+    }
+    if (!date) {
+      return response.error(res, "กรุณาระบุวันที่", "BAD_REQUEST", 400);
+    }
+
+    const logDate = new Date(date.length === 10 ? date + "T00:00:00+07:00" : date);
+    const results = { success: [], failed: [] };
+
+    for (const entry of entries) {
+      const { employee_code, branch_name, target, sales } = entry;
+      try {
+        // ตรวจสอบว่าพนักงานมีอยู่ในระบบ
+        const emp = await prisma.employee_hq.findUnique({ where: { employee_code } });
+        if (!emp) {
+          results.failed.push({ employee_code, branch_name, reason: "ไม่พบรหัสพนักงานในระบบ" });
+          continue;
+        }
+
+        // สร้าง log และอัปเดต point ในเดียว (transaction)
+        await prisma.$transaction([
+          prisma.log_hq.create({
+            data: {
+              employee: { connect: { employee_code } },
+              branch_code: null,
+              branch_name: branch_name || null,
+              date: logDate,
+              action: "ขาย",
+              target: target !== undefined && target !== null ? parseFloat(target) : null,
+              sales: sales !== undefined && sales !== null ? parseFloat(sales) : null,
+              point: 1,
+              reward: null,
+              created_at: dateHelper.getBangkokDate(),
+            }
+          }),
+          prisma.employee_hq.update({
+            where: { employee_code },
+            data: {
+              point_earned: { increment: 1 },
+              point_redeemed: { increment: 1 },
+            }
+          })
+        ]);
+
+        results.success.push({
+          employee_code,
+          nickname: emp.nickname,
+          branch_name,
+          addedPoints: 1
+        });
+      } catch (error) {
+        results.failed.push({
+          employee_code,
+          branch_name,
+          reason: error.message
+        });
+      }
+    }
+
+    return response.success(res, results, null, `บันทึก Hit Target Log สำเร็จ ${results.success.length} รายการ`);
+  } catch (error) {
+    console.error("Bulk create hit target logs error:", error);
+    return response.error(res, "เกิดข้อผิดพลาดในการบันทึก", "BULK_ERROR", 500, error.message);
+  }
+};
+
 module.exports = {
   getAllLogs,
   getLogById,
   createLog,
   updateLog,
   deleteLog,
+  bulkCreateHitTargetLogs,
 };

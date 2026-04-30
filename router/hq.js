@@ -50,6 +50,7 @@ router.get("/hq/employees/:id/stats", hqAuthCheck, employeeController.getEmploye
 router.post("/hq/employees", hqAuthCheck, hqAdminCheck, employeeController.createEmployee);
 router.post("/hq/employees/bulk", hqAuthCheck, hqAdminCheck, employeeController.bulkCreateEmployees);
 router.post("/hq/employees/reset-all-points", hqAuthCheck, hqAdminCheck, employeeController.resetAllPoints);
+router.post("/hq/employees/bulk-add-points", hqAuthCheck, hqAdminCheck, employeeController.bulkAddPoints);
 router.put("/hq/employees/:id", hqAuthCheck, hqAdminCheck, employeeController.updateEmployee);
 router.delete("/hq/employees/:id", hqAuthCheck, hqAdminCheck, employeeController.deleteEmployee);
 
@@ -57,6 +58,7 @@ router.delete("/hq/employees/:id", hqAuthCheck, hqAdminCheck, employeeController
 router.get("/hq/logs", hqAuthCheck, logController.getAllLogs);
 router.get("/hq/logs/:id", hqAuthCheck, logController.getLogById);
 router.post("/hq/logs", logController.createLog);
+router.post("/hq/logs/bulk-hit-target", hqAuthCheck, hqAdminCheck, logController.bulkCreateHitTargetLogs);
 router.put("/hq/logs/:id", hqAuthCheck, hqAdminCheck, logController.updateLog);
 router.delete("/hq/logs/:id", hqAuthCheck, hqAdminCheck, logController.deleteLog);
 
