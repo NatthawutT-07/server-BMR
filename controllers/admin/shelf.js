@@ -96,8 +96,6 @@ exports.sku = async (req, res) => {
     return response.error(res, "branchCode is required", "BAD_REQUEST", 400);
   }
 
-  const { startUtc, endUtc } = await shelfService.getDashboardSummary();
-
   const key = `sku-${branchCode}-${new Date().toISOString().slice(0, 10)}`;
 
   const cached = cache.get(key);

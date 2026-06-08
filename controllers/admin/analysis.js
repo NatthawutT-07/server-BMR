@@ -132,7 +132,7 @@ exports.getSkuAnalysis = async (req, res) => {
         // ====================================================
         // 2) WITHDRAW (per month)
         // ====================================================
-        let withdrawReasonFilter = "AND \"reason\" != 'เบิกเพื่อขาย'";
+        let withdrawReasonFilter = "AND \"reason\" == 'เบิกหมดอายุ'";
         if (reasons?.length > 0) {
             withdrawReasonFilter = `AND "reason" IN (${reasons.map(r => `'${r.replace(/'/g, "''")}'`).join(",")})`;
         }
@@ -1075,26 +1075,40 @@ exports.getStoreSummary = async (req, res) => {
         }
 
         // ====================================================
-        // 1.5) Shelf Life filter — build allowed product codes
+        // 1.5) Product filters (Shelf Life & Consignment)
         // ====================================================
+        const { consingItemFilter } = req.body;
         let allowedProducts = null;
-        if (shelfLifeFilter && shelfLifeFilter !== "all") {
+        if ((shelfLifeFilter && shelfLifeFilter !== "all") || (consingItemFilter && consingItemFilter !== "all")) {
             const masterItems = await prisma.listOfItemHold.findMany({
-                select: { codeProduct: true, shelfLife: true },
+                select: { codeProduct: true, shelfLife: true, consingItem: true },
             });
             allowedProducts = new Set();
             for (const item of masterItems) {
-                if (shelfLifeFilter === "none") {
-                    if (!item.shelfLife || item.shelfLife === "" || isNaN(parseFloat(item.shelfLife))) {
-                        allowedProducts.add(item.codeProduct);
-                    }
-                } else {
-                    const sl = parseFloat(item.shelfLife);
-                    if (isNaN(sl)) continue;
-                    if (shelfLifeFilter === "gt15" ? sl > 15 : sl <= 15) {
-                        allowedProducts.add(item.codeProduct);
+                let ok = true;
+
+                // Shelf Life check
+                if (shelfLifeFilter && shelfLifeFilter !== "all") {
+                    if (shelfLifeFilter === "none") {
+                        if (item.shelfLife && item.shelfLife !== "" && !isNaN(parseFloat(item.shelfLife))) ok = false;
+                    } else {
+                        const sl = parseFloat(item.shelfLife);
+                        if (isNaN(sl)) ok = false;
+                        else if (shelfLifeFilter === "gt15" && sl <= 15) ok = false;
+                        else if (shelfLifeFilter === "lte15" && sl > 15) ok = false;
                     }
                 }
+
+                // Consignment check
+                if (ok && consingItemFilter && consingItemFilter !== "all") {
+                    if (consingItemFilter === "yes") {
+                        if (item.consingItem !== "เป็นสินค้าฝากขาย") ok = false;
+                    } else if (consingItemFilter === "no") {
+                        if (item.consingItem !== "ไม่เป็นสินค้าฝากขาย") ok = false;
+                    }
+                }
+
+                if (ok) allowedProducts.add(item.codeProduct);
             }
         }
 

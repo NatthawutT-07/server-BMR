@@ -24,7 +24,7 @@ exports.uploadWithdrawXLSX = async (req, res) => {
         }
 
         // ฟิวเตอร์พื้นฐาน (docStatus === 'อนุมัติแล้ว' และ reason !== 'เบิกเพื่อขาย')
-        mapped = mapped.filter(r => r.docStatus === 'อนุมัติแล้ว' && r.reason !== 'เบิกเพื่อขาย');
+        mapped = mapped.filter(r => r.docStatus === 'อนุมัติแล้ว' && r.reason === 'เบิกหมดอายุ');
 
         if (mapped.length === 0) {
             finishUploadJob(jobId, "completed");
@@ -37,9 +37,9 @@ exports.uploadWithdrawXLSX = async (req, res) => {
         // ตรวจสอบและลบข้อมูลซ้ำใน batch เดียวกัน
         const uniqueMap = new Map();
         const duplicates = [];
-        
+
         mapped.forEach((r, index) => {
-            const key = `${r.docNumber}-${r.branchCode}-${r.codeProduct}-${r.quantity}-${r.value}`;
+            const key = `${r.docNumber}-${r.branchCode}-${r.codeProduct}`;
             if (uniqueMap.has(key)) {
                 duplicates.push({
                     index,
@@ -56,13 +56,13 @@ exports.uploadWithdrawXLSX = async (req, res) => {
         });
 
         if (duplicates.length > 0) {
-            // console.log(`🔍 Found ${duplicates.length} duplicate records in batch:`, duplicates.slice(0, 5));
+            // console.log(` Found ${duplicates.length} duplicate records in batch:`, duplicates.slice(0, 5));
             // เก็บเฉพาะข้อมูลที่ไม่ซ้ำ (เก็บตัวแรกที่เจอ)
             mapped = mapped.filter((r, index) => {
-                const key = `${r.docNumber}-${r.branchCode}-${r.codeProduct}-${r.quantity}-${r.value}`;
+                const key = `${r.docNumber}-${r.branchCode}-${r.codeProduct}`;
                 return uniqueMap.get(key) === index;
             });
-            // console.log(`📊 After deduplication: ${mapped.length} unique records`);
+            // console.log(`After deduplication: ${mapped.length} unique records`);
         }
 
         // ------------------------------------------------------------
@@ -87,7 +87,7 @@ exports.uploadWithdrawXLSX = async (req, res) => {
                 INSERT INTO "withdraw"
                 ("codeProduct", "branchCode", "docNumber", "date", "docStatus", "reason", "quantity", "value")
                 VALUES ${Prisma.join(values)}
-                ON CONFLICT ("docNumber", "branchCode", "codeProduct", "quantity", "value") 
+                ON CONFLICT ("docNumber", "branchCode", "codeProduct") 
                 DO NOTHING
             `;
 

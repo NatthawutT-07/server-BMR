@@ -1,122 +1,98 @@
-# 📖 บริหารจัดการชั้นวางสินค้า - ระบบหลังบ้าน (Backend BMR)
+# 🖥️ ระบบหลังบ้าน บริหารจัดการชั้นวางสินค้า (Backend BMR)
 
-โปรเจคนี้คือระบบ **Backend / API Server** สำหรับจัดการแอปพลิเคชันบริหารจัดการชั้นวางสินค้า (Planogram & BMR) ซึ่งเชื่อมต่อกับทั้งหน้าเว็บ (Web Admin) และแอปพลิเคชันมือถือ (Mobile App)
+โปรเจกต์นี้คือระบบ **Backend API Server** สำหรับบริการจัดการข้อมูลชั้นวางสินค้า (Planogram / BMR) ของร้าน **BAIMIANG Healthy Shop** รองรับการทำงานร่วมกับระบบหน้าเว็บ (Web Admin Dashboard) และระบบอุปกรณ์สแกนบาร์โค้ดสาขา (Mobile Client App) เพื่อให้สาขาและสำนักงานใหญ่เชื่อมต่อการทำงานแบบเรียลไทม์
 
 ---
 
 ## 🚀 เทคโนโลยีที่ใช้ (Tech Stack)
 
-*   **Runtime & Framework:** Node.js, Express.js (v5)
-*   **Database:** PostgreSQL
-*   **ORM (Object-Relational Mapping):** Prisma Client (v6.16.2)
-*   **Authentication & Security:** JWT (JSON Web Token), bcryptjs, Helmet, CORS, CSRF Protection, express-rate-limit
-*   **Caching & Workers:** Redis (ioredis)
-*   **File Upload & Processing:** Multer, ExcelJS, CSV-Parser, json2csv, xlsx
-*   **Process Manager / Deployment:** PM2, Docker
+*   **Runtime Environment:** `Node.js (v18+)`
+*   **Web Framework:** `Express.js (v5)`
+*   **Database & ORM:** `PostgreSQL` และ `Prisma Client (v6.16.2)` สำหรับเขียน Query เชื่อมโยงฐานข้อมูล
+*   **Caching & Queue Workers:** `Redis` (ผ่าน `ioredis` library)
+*   **Authentication & Security:** 
+    *   `JWT` (In-memory Access Token & HttpOnly Cookies Refresh Token)
+    *   `bcryptjs` สำหรับเข้ารหัสผ่าน
+    *   `Helmet` สำหรับตั้งค่าความปลอดภัย HTTP Headers
+    *   `CORS` สำหรับจำกัดการเข้าใช้งานเฉพาะโดเมนของแอปพลิเคชัน
+    *   `CSRF Protection` ด้วยระบบ Double-Submit Cookie
+    *   `express-rate-limit` เพื่อระงับคำขอรบกวนระบบ (Spam/Brute Force)
+*   **File Upload & Parsing:** `Multer` (สำหรับรับไฟล์ Excel), `ExcelJS` และ `xlsx` (สำหรับแยกวิเคราะห์ไฟล์ข้อมูลขนาดใหญ่)
 
 ---
 
-## 📁 โครงสร้างโปรเจค (Project Structure)
+## 📁 โครงสร้างโปรเจกต์ (Project Structure)
 
-```text
+โครงสร้างโฟลเดอร์ฝั่ง Backend มีดังนี้ (ข้อมูลโครงสร้างระบบถูกตัดส่วน HQ ออก):
+
+```
 backend-BMR/
-├── prisma/               # ไฟล์ Config ฐานข้อมูลและ Schema (schema.prisma)
-├── controllers/          # ที่เก็บลอจิกการทำงานของ API 各หน้างาน (admin, user, worker, auth.js)
-├── router/               # จัดการ Routing (แบ่งเป็น auth, admin, user, userMobile)
-├── middlewares/          # ฟังก์ชันที่คั่นกลาง (เช่น จัดการ CSRF, เช็ค Token)
-├── utils/                # ฟังก์ชันตัวช่วยต่างๆ (Helpers)
-├── workers/              # Service ที่ทำงานเบื้องหลัง (Background Jobs / Redis)
-├── config/               # ไฟล์ตั้งค่าทั่วไปของระบบ
-├── uploads/              # โฟลเดอร์สำหรับเก็บไฟล์ที่ถูกอัปโหลด
-├── docs/                 # เอกสารคู่มือต่างๆ ของเซิร์ฟเวอร์
-├── ecosystem.config.js   # ไฟล์ตั้งค่าสำหรับการรันระบบด้วย PM2
-├── Dockerfile            # การตั้งค่าสำหรับนำแอปไปรันบน Docker
-├── docker-compose.yml    # จัดการส่วนย่อยของ Database และ Server ให้เชื่อมกัน
-├── server.js             # ⭐️ จุดเริ่มต้นของแอปพลิเคชัน (Entry point)
-└── package.json          # กำหนด Dependencies และ Scripts การรัน
+├── prisma/                 # การตั้งค่าฐานข้อมูล (schema.prisma) และการทำ Migration
+├── config/                 # ค่าคอนฟิกูเรชันหลัก เช่น พอร์ต, การอัปโหลดไฟล์ (multer)
+├── controllers/            # ส่วนประมวลผลโลจิกและควบคุมการส่งกลับข้อมูล (Controllers)
+│   ├── admin/              # ลอจิกควบคุม Dashboard, การวิเคราะห์ข้อมูล (Analysis), การจัดการ POG, อัปโหลด Excel
+│   ├── user/               # ลอจิกการดึงข้อมูลผังเชลฟ์ของพนักงานสาขา
+│   ├── worker/             # ลอจิกของโปรเซสย่อยเบื้องหลัง
+│   └── auth.js             # ลอจิกการเข้าใช้งาน/ลงชื่อออกจากระบบ (Authentication)
+├── router/                 # ระบบระบุเส้นทางและรับ endpoints
+│   ├── admin.js            # จัดการเส้นทางสำหรับแอดมิน (Dashboard, Template, POG Requests, Sync)
+│   ├── auth.js             # จัดการเส้นทางล็อกอิน ต่ออายุ Token คืนสถานะผู้ใช้งาน
+│   ├── user.js             # จัดการเส้นทางดูเชลฟ์สำหรับผู้ใช้สาขา
+│   └── userMobile.js       # จัดการเส้นทางรองรับ Mobile Client
+├── middlewares/            # ฟังก์ชันที่คั่นกลางกรองข้อมูลก่อนถึง Controller
+│   ├── authCheck.js        # ตรวจสอบสิทธิ์ Access Token และสิทธิ์ Admin
+│   ├── csrf.js             # ยืนยันความถูกต้องของ CSRF Token
+│   └── validate.js         # ตรวจสอบความถูกต้องของโครงสร้าง Request (Schema validation)
+├── workers/                # การประมวลผลงานหนักแบบ Asynchronous ด้วย Redis Queue
+├── uploads/                # เก็บไฟล์ Static ที่นำเข้าชั่วคราวและรูปภาพประกอบ
+├── server.js               # ⭐️ ไฟล์เริ่มต้นเซิร์ฟเวอร์หลัก (Entry Point)
+├── Dockerfile              # ค่า Docker image configuration สำหรับเซิร์ฟเวอร์
+├── docker-compose.yml      # ตั้งค่า Docker Compose สำหรับฐานข้อมูล PostgreSQL & Redis
+└── package.json            # ไฟล์เก็บประวัติไลบรารีและคำสั่งรันระบบ
 ```
 
 ---
 
-## 🛠️ การติดตั้งและรันโปรเจคเครื่องตัวเอง (Local Development)
+## 🛠️ การติดตั้งและรันระบบเครื่องตัวเอง (Local Development)
 
-### สิ่งที่ต้องเตรียม
-1.  **Node.js** (แนะนำเวอร์ชัน 18 หรือ 20 ขึ้นไป)
-2.  **PostgreSQL** (ติดตั้งในเครื่อง หรือใช้ Docker)
-3.  **Redis** (สำหรับระบบ Message Queue / Workers)
+### สิ่งที่ต้องเตรียมก่อนเริ่มงาน
+1.  **Node.js** (เวอร์ชัน 18 ขึ้นไป แนะนำ 20 LTS)
+2.  **PostgreSQL Database** (ลงโปรแกรมในระบบ Windows หรือรันผ่าน Docker container)
+3.  **Redis Server** (สำหรับงาน Workers)
 
-### ขั้นตอนการรัน
-1.  **เปิด Terminal และเข้าไปที่โฟลเดอร์ \`backend-BMR\`:**
-    ```bash
-    cd c:\BrightMindRetail\brightmind_project\planogram_project\backend-BMR
-    ```
+## 🔑 โครงสร้างฐานข้อมูลหลัก (Core Planogram Models)
 
-2.  **ติดตั้งไลบรารีที่จำเป็น (Dependencies):**
-    ```bash
-    npm install
-    ```
+ตารางฐานข้อมูลหลักใน `schema.prisma` ที่ใช้ในการประมวลผลระบบ Planogram (POG):
 
-3.  **คัดลอกไฟล์ตั้งค่า Environment:**
-    สร้างไฟล์ `.env` ในโฟลเดอร์นี้ โดยมีค่าหลักๆ ที่ต้องกรอก (ดูตัวอย่างใน `.env.example` ถ้ามี):
-    ```env
-    DATABASE_URL="postgresql://user:password@localhost:5432/bmr_db?schema=public"
-    SECRET="your_jwt_secret_key"
-    REFRESH_SECRET="your_jwt_refresh_key"
-    PORT=5001
-    NODE_ENV=development
-    ```
-
-4.  **สั่งสร้าง Prisma Client และรัน Migration (เตรียมตารางฐานข้อมูล):**
-    ```bash
-    npx prisma generate
-    npx prisma migrate dev
-    ```
-
-5.  **เปิดเซิร์ฟเวอร์แบบนักพัฒนา (Watch mode):**
-    ```bash
-    npm run dev
-    ```
-    เซิร์ฟเวอร์จะเริ่มต้นทำงานที่ (โดยปกติ) `http://localhost:5001`
+*   **User / LoginLog:** เก็บข้อมูลผู้ใช้งานระบบ (สาขา และ แอดมิน) และเก็บประวัติล็อกอินเพื่อตรวจสอบความปลอดภัย
+*   **Sku:** เก็บข้อมูลดัชนีตำแหน่งวางของบาร์โค้ดบนชั้นวางสาขาจริง ประกอบด้วย `branchCode`, `shelfCode`, `rowNo`, `codeProduct` และลำดับช่อง (`index`)
+*   **Tamplate (Template):** เก็บข้อมูลโครงสร้างความกว้างชั้นวางสินค้าของแต่ละสาขา (จำนวนแถว, รหัสตู้)
+*   **PogRequest:** บันทึกประวัติคำขอเปลี่ยนแปลงสินค้าที่พนักงานสาขาส่งเข้ามา มีการเก็บตำแหน่งเดิม (`fromRow`, `fromIndex`) และตำแหน่งเป้าหมายปลายทาง (`toRow`, `toIndex`) รอการตัดสินใจจาก HQ
+*   **ItemMinMax / Stock / withdraw:** เก็บข้อมูลระดับสินค้าต่ำสุด/สูงสุด, จำนวนสต็อกคงเหลือปัจจุบัน และบันทึกการเบิกสินค้าออกนอกผังจัดร้าน
+*   **ListOfItemHold:** รายชื่อสินค้ากลาง (SKU Master) เพื่อค้นหา บาร์โค้ด แบรนด์ และราคาคู่ค้ารับซื้อ
+*   **ShelfChangeLog:** บันทึกวันเวลาและรายชื่อพนักงานที่มีการปรับผังจริงหลังจากแอดมินอนุมัติ เพื่อใช้ยืนยันการจัดเรียง (Acknowledge)
 
 ---
 
-## 💻 Script คำสั่งที่สำคัญ (Available Scripts)
+## 🛰️ เส้นทางและ API Endpoints ที่สำคัญ (API Endpoints Overview)
 
-*   `npm run dev` : เปิดเซิร์ฟเวอร์สำหรับการพัฒนา (ใช้ nodemon จะรีเฟรชออโต้เมื่อเซฟโค้ด)
-*   `npm start` : เปิดเซิร์ฟเวอร์สำหรับใช้งานจริง (รันไฟล์ server.js โดยตรง)
-*   `npm run build` : สั่งให้ Prisma อัปเดต Client (ใช้งานบ่อยหลังเปลี่ยน schema.prisma)
-*   `npm run migrate` : รัน `prisma migrate deploy` เพื่ออัปเดตโครงสร้าง Database บนโฮสต์จริง
-*   `npm run postinstall` : รัน `prisma generate` อัตโนมัติหลังติดตั้ง dependencies
+ระบบรองรับ API แยกตามหน้าที่การเข้าถึงอย่างเป็นระบบ:
 
----
+### 1. ระบบยืนยันตัวตน (Authentication)
+*   `GET /api/csrf-token` — ดึงค่าคุกกี้ token มาไว้สำหรับความปลอดภัยตอนเริ่มเข้าเว็บ
+*   `POST /api/login` — ตรวจสอบบัญชีผู้ใช้และมอบ Access/Refresh Tokens
+*   `POST /api/logout` — ล้างข้อมูล Token และ Cookie ออกจากเซสชันเบราว์เซอร์
+*   `POST /api/refresh-token` — ออก Access Token ชุดใหม่โดยอิงจาก Refresh Cookie
 
-## 🌐 การนำระบบขึ้นใช้งานจริง (Deployment - VPS)
+### 2. สำหรับแอดมินสำนักงานใหญ่ (Admin POG & Management)
+*   `GET /api/pog-requests` — ดึงประวัติคำขอทั้งหมดของสาขา (สถานะ pending, completed, rejected)
+*   `PATCH /api/pog-requests/:id` — เปลี่ยนสถานะรายการขยับสินค้า (อนุมัติ/ปฏิเสธคำขอ)
+*   `POST /api/pog-requests/bulk-approve` — สั่งอนุมัติคำขอคราวละหลายรายการ
+*   `POST /api/shelf-add` / `PUT /api/shelf-update` / `DELETE /api/shelf-delete` — ควบคุมผังสินค้าจากส่วนกลาง
+*   `GET /api/branch-ack-status` — ดึงรายงานตรวจสอบสาขาที่ยืนยันการจัดชั้นวางตามผังใหม่
+*   `POST /api/upload-sku` / `/upload-template` / `/upload-stock` — นำเข้าไฟล์สถิติจัดเก็บฐานข้อมูล
 
-ระบบสามารถ Deploy ขึ้น DigitalOcean หรือ VPS Linux อื่น ๆ ได้โดยใช้ **PM2** เพื่อรักษาให้แอปไม่หลุดหรือดับ
-
-**คำสั่งพื้นฐานสำหรับการ Deploy ใหม่ด้วย PM2:**
-```bash
-# 1. ติดตั้ง Dependencies และรัน Prisma ให้เสร็จ
-npm install
-npm run build
-npm run migrate
-
-# 2. ปล่อยแอปพลิเคชันทำงานด้วย PM2 (อ้างอิงไฟล์ ecosystem.config.js)
-pm2 start ecosystem.config.js --env production
-
-# 3. เซฟสถานะให้ PM2 รันขึ้นมาใหม่ตอนที่ลีนุกซ์หรือเครื่องค้าง (Reboot)
-pm2 save
-pm2 startup
-```
-
-_(หรือจะใช้วิธีรันผ่าน **Docker Compose** ก็ได้ โดยพิมพ์คำสั่ง `docker-compose up -d --build` ในเทอร์มินัล)_
-
----
-
-## 🔑 ข้อมูล API และ Security เพิ่มเติม
-- ระบบหลังบ้านนี้รองรับผู้เข้าใช้งานจากหน้าเว็บหลัก (CORS ถูกอนุญาตแค่โดเมนอย่างเว็บจริงและโดเมน Localhost สำหรับนักพัฒนา รวมถึง Mobile App และ Expo Dev Server) 
-- มีการใช้ระบบ `Helmet` ป้องกัน HTTP headers ทะลุ รวมทั้ง `express-rate-limit` ป้องกันการโจมตีแบบรัวๆ (Brute Force)
-- มีระบบ CSRF Protection (Double-Submit Cookie) สำหรับเพิ่มความปลอดภัย
-- มี Custom Logging Middleware สำหรับบันทึกระยะเวลาการตอบสนองของแต่ละ API Request
-- โค้ดทั้งหมดของการ Response API จะอยู่ในรูปแบบสากล `{ ok: boolean, code: string, message: string }`
-- มี Health Check Endpoint `/health` สำหรับให้ Docker/Kubernetes เช็คสถานะการทำงานของเซิร์ฟเวอร์
+### 3. สำหรับพนักงานหน้าร้านและสแกนเนอร์ (Branch Client Actions)
+*   `POST /api/shelf-sku` — ค้นหาตำแหน่งสินค้าบนเชลฟ์และสถานะยอดขาย
+*   `GET /api/shelf-update-check/:branchCode` — ตรวจสอบว่าแอดมินเพิ่งอัปเดตผังใหม่ไปเมื่อใด
+*   `POST /api/shelf-update-acknowledge/:branchCode` — กดยืนยันรับทราบและจัดเสร็จจริงหน้าร้าน
