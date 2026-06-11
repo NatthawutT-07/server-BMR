@@ -142,35 +142,12 @@ model Branch {
   bills       Bill[]
 }
 
-model SalesChannel {
-  id           Int    @id @default(autoincrement())
-  channel_code String @unique
-  channel_name String
-  bills        Bill[]
-}
 
-model Customer {
-  id            Int     @id @default(autoincrement())
-  customer_code String  @unique
-  customer_name String?
-  bills         Bill[]
-}
 
-model Product {
-  id            Int        @id @default(autoincrement())
-  product_code  String
-  product_name  String
-  product_brand String
-  billItems     BillItem[]
-
-  @@unique([product_code])
-}
 
 model Bill {
   id                   Int      @id @default(autoincrement())
   branchId             Int
-  salesChannelId       Int
-  customerId           Int?
   date                 DateTime
   bill_number          String   @unique
   doc_type             String
@@ -184,43 +161,20 @@ model Bill {
   total_sales          Float
   total_payment        Float
 
-  payments BillPayment[]
-
   branch       Branch       @relation(fields: [branchId], references: [id])
-  customer     Customer?    @relation(fields: [customerId], references: [id])
-  salesChannel SalesChannel @relation(fields: [salesChannelId], references: [id])
   billItems    BillItem[]
 
   @@index([branchId, doc_type, date])
   @@index([date])
   @@index([branchId, date])
-  @@index([salesChannelId, date])
-  @@index([customerId, date])
   @@index([doc_type, date])
   @@index([date, id])
-}
-
-model BillPayment {
-  id               Int     @id @default(autoincrement())
-  billId           Int
-  amount           Float
-  payment_method   String?
-  bank             String?
-  reference_number String?
-
-  bill Bill @relation(fields: [billId], references: [id], onDelete: Cascade)
-
-  // กันซ้ำแบบ “พอประมาณ” (ถ้ากลัวชนกันค่อยปรับเพิ่ม)
-  @@unique([billId, amount, payment_method, bank, reference_number])
-  @@index([billId])
-  @@index([payment_method])
-  @@index([bank])
 }
 
 model BillItem {
   id             Int     @id @default(autoincrement())
   billId         Int
-  productId      Int
+  product_code   String
   quantity       Float
   unit           String?
   price_per_unit Float
@@ -228,12 +182,10 @@ model BillItem {
   discount       Float
   net_sales      Float
   bill           Bill    @relation(fields: [billId], references: [id])
-  product        Product @relation(fields: [productId], references: [id])
 
-  @@index([productId])
+  @@index([product_code])
   @@index([billId])
-  // Index เสริมสำหรับ dashboard product (JOIN Bill + GROUP BY product)
-  @@index([billId, productId])
+  @@index([billId, product_code])
 }
 
 model PogRequest {

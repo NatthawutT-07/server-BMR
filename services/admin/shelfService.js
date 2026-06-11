@@ -272,22 +272,20 @@ exports.getSkuData = async (branchCode) => {
             GROUP BY "branchCode", "codeProduct"
         ) wd ON s."branchCode" = wd."branchCode" AND s."codeProduct" = wd."codeProduct"
         LEFT JOIN (
-            SELECT br."branch_code" AS "branchCode", (p."product_code")::int AS "codeProduct", SUM(bi."quantity")::int AS "quantity_total", SUM(bi."net_sales")::float8 AS "net_sales_total"
+            SELECT br."branch_code" AS "branchCode", (bi."product_code")::int AS "codeProduct", SUM(bi."quantity")::int AS "quantity_total", SUM(bi."net_sales")::float8 AS "net_sales_total"
             FROM "BillItem" bi
             JOIN "Bill" b ON bi."billId" = b."id"
             JOIN "Branch" br ON b."branchId" = br."id"
-            JOIN "Product" p ON bi."productId" = p."id"
             WHERE br."branch_code" = ${branchCode} AND b."date" >= ${startUtc} AND b."date" <= ${endUtc}
-            GROUP BY br."branch_code", (p."product_code")::int
+            GROUP BY br."branch_code", (bi."product_code")::int
         ) bs ON s."branchCode" = bs."branchCode" AND s."codeProduct" = bs."codeProduct"
         LEFT JOIN (
-            SELECT br."branch_code" AS "branchCode", (prod."product_code")::int AS "codeProduct", MAX(b."date") AS "lastSaleDate"
+            SELECT br."branch_code" AS "branchCode", (bi."product_code")::int AS "codeProduct", MAX(b."date") AS "lastSaleDate"
             FROM "BillItem" bi
             JOIN "Bill" b ON bi."billId" = b."id"
             JOIN "Branch" br ON b."branchId" = br."id"
-            JOIN "Product" prod ON bi."productId" = prod."id"
             WHERE br."branch_code" = ${branchCode} AND b."date" >= ${startUtc} AND b."date" <= ${endUtc}
-            GROUP BY br."branch_code", (prod."product_code")::int
+            GROUP BY br."branch_code", (bi."product_code")::int
         ) ls ON s."branchCode" = ls."branchCode" AND s."codeProduct" = ls."codeProduct"
         LEFT JOIN "ListOfItemHold" p ON s."codeProduct" = p."codeProduct"
         LEFT JOIN "ItemMinMax" im ON s."branchCode" = im."branchCode" AND s."codeProduct" = im."codeProduct"
@@ -312,13 +310,12 @@ exports.getDashboardSummary = async () => {
           GROUP BY "branchCode", "codeProduct"
       ),
       sales_map AS (
-          SELECT br."branch_code" AS "branchCode", (pr."product_code")::int AS "codeProduct", SUM(bi."net_sales")::float8 AS sales_total
+          SELECT br."branch_code" AS "branchCode", (bi."product_code")::int AS "codeProduct", SUM(bi."net_sales")::float8 AS sales_total
           FROM "BillItem" bi
           JOIN "Bill" b ON bi."billId" = b."id"
           JOIN "Branch" br ON b."branchId" = br."id"
-          JOIN "Product" pr ON bi."productId" = pr."id"
           WHERE b."date" >= ${startUtc} AND b."date" <= ${endUtc}
-          GROUP BY br."branch_code", (pr."product_code")::int
+          GROUP BY br."branch_code", (bi."product_code")::int
       ),
       branch_sums AS (
           SELECT sr."branchCode" AS branch_code, COUNT(DISTINCT sr."shelfCode")::int AS shelf_count, COUNT(DISTINCT sr."codeProduct")::int AS product_count,
@@ -386,10 +383,10 @@ exports.getShelfSales = async (branchCode) => {
           GROUP BY "branchCode", "codeProduct"
       ),
       sales_map AS (
-          SELECT br."branch_code" AS "branchCode", (pr."product_code")::int AS "codeProduct", SUM(bi."net_sales")::float8 AS sales_total
-          FROM "BillItem" bi JOIN "Bill" b ON bi."billId" = b."id" JOIN "Branch" br ON b."branchId" = br."id" JOIN "Product" pr ON bi."productId" = pr."id"
+          SELECT br."branch_code" AS "branchCode", (bi."product_code")::int AS "codeProduct", SUM(bi."net_sales")::float8 AS sales_total
+          FROM "BillItem" bi JOIN "Bill" b ON bi."billId" = b."id" JOIN "Branch" br ON b."branchId" = br."id"
           WHERE br."branch_code" = ${branchCode} AND b."date" >= ${startUtc} AND b."date" <= ${endUtc}
-          GROUP BY br."branch_code", (pr."product_code")::int
+          GROUP BY br."branch_code", (bi."product_code")::int
       ),
       shelf_sums AS (
           SELECT sr."branchCode" AS branch_code, sr."shelfCode" AS shelf_code, COUNT(DISTINCT sr."codeProduct")::int AS sku_count,

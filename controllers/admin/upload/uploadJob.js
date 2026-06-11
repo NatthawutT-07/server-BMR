@@ -37,73 +37,25 @@ const cleanupOldJobs = () => {
 };
 
 const initUploadJob = (req, label) => {
-    const rawId = req.headers["x-upload-job-id"];
-    const jobId = Array.isArray(rawId) ? rawId[0] : rawId;
-    if (!jobId) return null;
-    uploadJobs.set(jobId, {
-        status: "processing",
-        progress: 0,
-        label: label || "upload",
-        message: "starting",
-        updatedAt: Date.now(),
-    });
-    return jobId;
+    return null;
 };
 
 const setUploadJob = (jobId, progress, message) => {
-    if (!jobId) return;
-    const job = uploadJobs.get(jobId);
-    uploadJobs.set(jobId, {
-        ...(job || {}),
-        status: "processing",
-        progress: Math.max(0, Math.min(100, Number(progress) || 0)),
-        message: message || job?.message || "",
-        updatedAt: Date.now(),
-    });
+    return;
 };
 
 const finishUploadJob = (jobId, message) => {
-    if (!jobId) return;
-    const job = uploadJobs.get(jobId);
-    uploadJobs.set(jobId, {
-        ...(job || {}),
-        status: "done",
-        progress: 100,
-        message: message || "done",
-        updatedAt: Date.now(),
-    });
+    return;
 };
 
 const failUploadJob = (jobId, message) => {
-    if (!jobId) return;
-    const job = uploadJobs.get(jobId);
-    uploadJobs.set(jobId, {
-        ...(job || {}),
-        status: "error",
-        progress: Math.max(0, Math.min(100, Number(job?.progress) || 0)),
-        message: message || "error",
-        updatedAt: Date.now(),
-    });
+    return;
 };
 
 const response = require("../../../utils/responseHelper");
 
 const getUploadStatus = async (req, res) => {
-    try {
-        cleanupOldJobs();
-        const { jobId } = req.query;
-        if (!jobId) {
-            return response.error(res, "jobId is required", "BAD_REQUEST", 400);
-        }
-        const job = uploadJobs.get(String(jobId));
-        if (!job) {
-            return response.error(res, "job not found", "NOT_FOUND", 404);
-        }
-        return response.success(res, job);
-    } catch (err) {
-        console.error("getUploadStatus error:", err);
-        return response.error(res, "status error");
-    }
+    return res.status(404).json({ error: "Job status polling is disabled" });
 };
 
 const getAllSyncDates = async (req, res) => {
