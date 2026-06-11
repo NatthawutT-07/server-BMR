@@ -131,17 +131,19 @@ exports.getStockLastUpdate = async (req, res) => {
     }
 
     // 3. เทียบหาเวลาที่ล่าสุดกว่า (Latest between Global and Branch-specific)
+    let latestRow = globalRow || null;
     let latestUpdate = globalRow?.updatedAt || null;
     if (branchRow?.updatedAt) {
       const bDate = new Date(branchRow.updatedAt);
       if (!latestUpdate || bDate > latestUpdate) {
+        latestRow = branchRow;
         latestUpdate = bDate;
       }
     }
 
     return res.json({
       updatedAt: latestUpdate ? toBangkokOffsetISOString(latestUpdate) : null,
-      rowCount: (branchRow?.rowCount || globalRow?.rowCount) || 0,
+      rowCount: latestRow?.rowCount ?? 0,
     });
   } catch (error) {
     console.error("getStockLastUpdate error:", error);

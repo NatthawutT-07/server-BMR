@@ -3,8 +3,10 @@ const { touchDataSync } = require('./uploadJob');
 
 exports.clearSku = async (req, res) => {
     try {
-        await prisma.$executeRaw`TRUNCATE TABLE "Sku"`;
-        await touchDataSync('sku', 0);
+        await prisma.$transaction(async (tx) => {
+            await tx.$executeRaw`TRUNCATE TABLE "Sku"`;
+            await touchDataSync('sku', 0, undefined, tx);
+        });
         return res.status(200).json({ message: "SKU cleared successfully" });
     } catch (err) {
         console.error("Clear SKU Error:", err);

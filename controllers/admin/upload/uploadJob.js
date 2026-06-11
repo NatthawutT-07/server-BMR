@@ -3,11 +3,11 @@ const prisma = require('../../../config/prisma');
 const uploadJobs = new Map();
 const MAX_JOB_AGE_MS = 6 * 60 * 60 * 1000;
 
-const touchDataSync = async (key, rowCount, branchCode) => {
+const touchDataSync = async (key, rowCount, branchCode, db = prisma) => {
     try {
         if (branchCode) {
             // อัปเดตเฉพาะรายสาขา (ไม่แตะ Global เพื่อไม่ให้สาขาอื่นเห็นเวลาที่ผิด)
-            await prisma.$executeRaw`
+            await db.$executeRaw`
                 INSERT INTO "BranchDataSync" ("branchCode", "key", "updatedAt", "rowCount")
                 VALUES (${branchCode}, ${key}, timezone('Asia/Bangkok', NOW()), ${rowCount ?? 0})
                 ON CONFLICT ("branchCode", "key")
@@ -15,7 +15,7 @@ const touchDataSync = async (key, rowCount, branchCode) => {
             `;
         } else {
             // อัปเดตเวลาภาพรวม (Global) — ใช้เมื่อ Admin upload เท่านั้น
-            await prisma.$executeRaw`
+            await db.$executeRaw`
                 INSERT INTO "DataSync" ("key", "updatedAt", "rowCount")
                 VALUES (${key}, timezone('Asia/Bangkok', NOW()), ${rowCount ?? 0})
                 ON CONFLICT ("key")
@@ -24,6 +24,7 @@ const touchDataSync = async (key, rowCount, branchCode) => {
         }
     } catch (err) {
         console.error(`DataSync update failed (${key}, ${branchCode}):`, err);
+        throw err;
     }
 };
 
