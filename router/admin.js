@@ -61,28 +61,6 @@ const { downloadTemplate, downloadSKU } = require('../controllers/admin/download
 router.get("/download-template", authCheck, downloadTemplate); //user
 router.get("/download-sku", authCheck, downloadSKU); //user
 
-const { getSearchBranchSales, getBranchListSales, getSearchBranchSalesDay
-    , getSearchBranchSalesProductMonth, getSearchBranchSalesProductDay,
-    searchProductSales,
-    getProductSalesDetail,
-    getCustomers,
-    getBillItems } = require("../controllers/admin/sales");
-//sales
-router.get('/sales-list-branch', authCheck, getBranchListSales); //user
-router.post('/sales-search-branch', authCheck, getSearchBranchSales);
-router.post('/sales-search-branch-day', authCheck, getSearchBranchSalesDay);
-router.post('/sales-search-branch-monthproduct', authCheck, getSearchBranchSalesProductMonth);
-router.post('/sales-search-branch-dayproduct', authCheck, getSearchBranchSalesProductDay);
-
-// member
-router.post('/sales-member', getCustomers,);
-router.get('/sales-bill-items/:billId', authCheck, getBillItems);
-
-
-// product search + sales detail
-router.get("/sales-product", authCheck, searchProductSales); // user
-router.post("/sales-product-detail", authCheck, getProductSalesDetail);
-
 // Dashboard
 const { getDashboardData, getDashboardProductList } = require("../controllers/admin/dashboard");
 router.get("/dashboard-data", authCheck, getDashboardData)
