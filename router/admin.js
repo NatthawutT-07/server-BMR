@@ -30,7 +30,6 @@ const {
     uploadSKU_XLSX,
     uploadBillXLSX,
     uploadGourmetXLSX,
-    uploadSI_XLSX,
     getUploadStatus,
     getAllSyncDates,
     clearStock,
@@ -48,7 +47,6 @@ router.post('/upload-template', authCheck, adminCheck, upload.single('file'), up
 router.post('/upload-sku', authCheck, adminCheck, upload.single('file'), uploadSKU_XLSX)
 router.post('/upload-bill', authCheck, adminCheck, upload.single('file'), uploadBillXLSX)
 router.post('/upload-gourmets', authCheck, adminCheck, upload.single('file'), uploadGourmetXLSX)
-router.post('/upload-si', authCheck, adminCheck, upload.single('file'), uploadSI_XLSX)
 router.delete('/clear-stock', authCheck, adminCheck, clearStock)
 router.delete('/clear-sku', authCheck, adminCheck, clearSku)
 router.delete('/clear-template', authCheck, adminCheck, clearTemplate)

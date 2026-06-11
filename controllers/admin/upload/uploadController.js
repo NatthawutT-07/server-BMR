@@ -8,7 +8,6 @@ module.exports = {
     ...require('./uploadGourmet'),
     ...require('./uploadSKU'),
     ...require('./uploadBill'),
-    ...require('./uploadSI'),
     ...require('./clearStock'),
     ...require('./clearSku'),
     ...require('./clearTemplate'),

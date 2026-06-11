@@ -30,7 +30,7 @@ model LoginLog {
   userId    Int?
   ip        String?
   userAgent String?
-  status    String // "success" | "failed"
+  status    String // success | failed
   message   String?
   createdAt DateTime @default(now())
 }
@@ -58,7 +58,7 @@ model Stock {
 }
 
 model DataSync {
-  key       String   @id // เช่น "stock"
+  key       String   @id 
   updatedAt DateTime @default(now())
   rowCount  Int?
 }
@@ -278,7 +278,7 @@ model ShelfUpdate {
   @@index([branchCode])
 }
 
-//  เก็บยอดขายของกรูเม่ (Gourmet)
+//  เก็บยอดขายของกรูเม่
 model Gourmet {
   id           Int      @id @default(autoincrement())
   date         DateTime
@@ -302,7 +302,7 @@ model ShelfChangeLog {
   branchCode  String
   shelfCode   String
   updateId    String // UUID group บันทึกพร้อมกัน
-  action      String // "add" | "delete" | "move"
+  action      String // add | delete | move
   codeProduct Int
   productName String?
 
@@ -327,54 +327,6 @@ model ShelfChangeLog {
   @@index([updateId])
 }
 
-model OrderSI {
-  id               Int      @id @default(autoincrement())
-  branchCode       String   @map("branch_code")
-  branchName       String   @map("branch_name")
-  siNo             String   @map("si_no")
-  orderDate        DateTime @map("order_date")
-  deliveryDate     DateTime @map("delivery_date")
-  vendorCode       String   @map("vendor_code")
-  vendorName       String   @map("vendor_name")
-  productCode      String   @map("product_code")
-  productName      String   @map("product_name")
-  barcode          String   @map("barcode")
-  itemType         String   @map("item_type")
-  quantity         Int      @map("quantity")
-  priceExV         Float    @map("price_ex_v")
-  priceInV         Float    @map("price_in_v")
-  amountExV        Float    @map("amount_ex_v")
-  amountInV        Float    @map("amount_in_v")
-  vatGroup         String   @map("vat_group")
-  shippingLocation String   @map("shipping_location")
-  terms            String   @map("terms")
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-
-  @@unique([branchCode, siNo, productCode, barcode])
-  @@index([branchCode])
-  @@index([siNo])
-  @@index([productCode])
-  @@index([orderDate])
-}
-
-model TempSku {
-  id          Int    @id @default(autoincrement())
-  branchCode  String
-  shelfCode   String
-  rowNo       Int
-  codeProduct Int
-  index       Int
-}
-
-model TempTamplate {
-  id         Int     @id @default(autoincrement())
-  branchCode String
-  shelfCode  String
-  fullName   String?
-  rowQty     Int
-  type       String?
-}
 
 // ========== HQ System Models ==========
 
