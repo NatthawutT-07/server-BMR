@@ -235,7 +235,7 @@ exports.updateItems = async (items, userName) => {
 };
 
 exports.getTemplates = async () => {
-  return await prisma.tamplate.findMany({
+  return await prisma.Template.findMany({
     orderBy: { id: "asc" },
   });
 };
@@ -376,7 +376,7 @@ exports.getShelfSales = async (branchCode) => {
 
   const rows = await prisma.$queryRaw`
       WITH sku_rows AS (SELECT "branchCode", "shelfCode", "codeProduct" FROM "Sku" WHERE "branchCode" = ${branchCode}),
-      shelf_names AS (SELECT "branchCode", "shelfCode", "fullName" FROM "Tamplate" WHERE "branchCode" = ${branchCode}),
+      shelf_names AS (SELECT "branchCode", "shelfCode", "fullName" FROM "Template" WHERE "branchCode" = ${branchCode}),
       stock_map AS (SELECT "branchCode", "codeProduct", SUM("quantity")::float8 AS stock_qty FROM "Stock" WHERE "branchCode" = ${branchCode} GROUP BY "branchCode", "codeProduct"),
       withdraw_map AS (
           SELECT "branchCode", "codeProduct", SUM("value")::float8 AS withdraw_value

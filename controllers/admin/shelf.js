@@ -79,12 +79,12 @@ exports.itemUpdate = async (req, res) => {
 };
 
 
-exports.tamplate = async (req, res) => {
+exports.Template = async (req, res) => {
   try {
     const result = await shelfService.getTemplates();
     return response.success(res, result);
   } catch (error) {
-    console.error("tamplate error:", error);
+    console.error("Template error:", error);
     return response.error(res, "Failed to load templates");
   }
 };

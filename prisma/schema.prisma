@@ -109,7 +109,7 @@ model ListOfItemHold {
   @@index([codeProduct])
 }
 
-model Tamplate {
+model Template {
   id         Int     @id @default(autoincrement())
   branchCode String
   shelfCode  String

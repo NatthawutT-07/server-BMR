@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const { authCheck, adminCheck } = require('../middlewares/authCheck')
-const { tamplate, sku, itemDelete, itemCreate, itemUpdate, getMasterItem, getShelfDashboardSummary, getShelfDashboardShelfSales } = require("../controllers/admin/shelf");
+const { Template, sku, itemDelete, itemCreate, itemUpdate, getMasterItem, getShelfDashboardSummary, getShelfDashboardShelfSales } = require("../controllers/admin/shelf");
 
 // //Manege
 // User Management
@@ -59,11 +59,11 @@ const { downloadTemplate, downloadSKU } = require('../controllers/admin/download
 router.get("/download-template", authCheck, downloadTemplate); //user
 router.get("/download-sku", authCheck, downloadSKU); //user
 
-//Tamplate
+//Template
 const { validate } = require("../middlewares/validate");
 const { createShelfItemSchema, deleteShelfItemSchema, updateShelfItemSchema, getSkuSchema } = require("../schemas/shelfSchema");
 
-router.get("/shelf-template", authCheck, tamplate); //Tamplate //user
+router.get("/shelf-template", authCheck, Template); //Template //user
 router.get("/shelf-getMasterItem", authCheck, getMasterItem);
 router.post("/shelf-sku", authCheck, validate(getSkuSchema), sku); //Item Search //user // date , withdraw , sales
 router.delete("/shelf-delete", authCheck, validate(deleteShelfItemSchema), itemDelete);

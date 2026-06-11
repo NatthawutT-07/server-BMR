@@ -151,7 +151,7 @@ exports.getStockLastUpdate = async (req, res) => {
 
 // ======================================================
 // NEW: ดึง shelf templates ของสาขา (สำหรับ dropdown)
-// - ดึงจาก Tamplate table (โครงสร้าง shelf)
+// - ดึงจาก Template table (โครงสร้าง shelf)
 // - รวม SKU items สำหรับคำนวณ available index
 // ======================================================
 exports.getBranchShelves = async (req, res) => {
@@ -169,7 +169,7 @@ exports.getBranchShelves = async (req, res) => {
     });
 
     // ดึง shelf templates
-    const templates = await prisma.tamplate.findMany({
+    const templates = await prisma.Template.findMany({
       where: { branchCode },
       orderBy: { shelfCode: "asc" },
       select: {
@@ -218,7 +218,7 @@ exports.getBranchShelves = async (req, res) => {
 // ======================================================
 // UserTemplateItem
 // - ส่ง branchName แค่ครั้งเดียว (meta)
-// - JOIN Tamplate เพื่อเอา fullName (ชื่อ shelf)
+// - JOIN Template เพื่อเอา fullName (ชื่อ shelf)
 // ======================================================
 exports.UserTemplateItem = async (req, res) => {
   const { branchCode } = req.body;
@@ -249,7 +249,7 @@ exports.UserTemplateItem = async (req, res) => {
           s."rowNo",
           s."index",
 
-          -- ชื่อ shelf จาก Tamplate
+          -- ชื่อ shelf จาก Template
           t."fullName" AS "fullName",
 
           p."nameProduct",
@@ -266,8 +266,8 @@ exports.UserTemplateItem = async (req, res) => {
 
       FROM "Sku" s
 
-      -- Tamplate (ชื่อ shelf)
-      LEFT JOIN "Tamplate" t
+      -- Template (ชื่อ shelf)
+      LEFT JOIN "Template" t
         ON t."branchCode" = s."branchCode"
        AND t."shelfCode"  = s."shelfCode"
 
@@ -301,7 +301,7 @@ exports.UserTemplateItem = async (req, res) => {
       rowNo: r.rowNo,
       index: r.index,
 
-      // ชื่อ shelf จาก Tamplate
+      // ชื่อ shelf จาก Template
       fullName: r.fullName ?? null,
 
       codeProduct:

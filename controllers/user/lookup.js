@@ -48,7 +48,7 @@ const lookupByBarcode = async (req, res) => {
 
     const shelfCodes = [...new Set(loc.map((x) => x.shelfCode))];
 
-    const shelves = await prisma.tamplate.findMany({
+    const shelves = await prisma.Template.findMany({
       where: { branchCode, shelfCode: { in: shelfCodes } },
       select: { shelfCode: true, fullName: true, rowQty: true },
     });

@@ -51,7 +51,7 @@ exports.uploadTemplateXLSX = async (req, res) => {
 
         // 2. เช็คว่าต้องลบตัวไหนออก (มีใน DB แต่ไม่มีในไฟล์) โดยตรวจจับเฉพาะสาขาที่มีในไฟล์อัปโหลด
         const branchesInFile = [...new Set(templateData.map(t => t.branchCode))];
-        const existingInDb = await prisma.tamplate.findMany({
+        const existingInDb = await prisma.Template.findMany({
             where: { branchCode: { in: branchesInFile } },
             select: { id: true, branchCode: true, shelfCode: true }
         });
@@ -69,7 +69,7 @@ exports.uploadTemplateXLSX = async (req, res) => {
             // Delete รายการที่หายไปเป็น Batch
             if (toDeleteIds.length > 0) {
                 for (let i = 0; i < toDeleteIds.length; i += CHUNK_SIZE) {
-                    await tx.tamplate.deleteMany({
+                    await tx.Template.deleteMany({
                         where: { id: { in: toDeleteIds.slice(i, i + CHUNK_SIZE) } }
                     });
                 }
@@ -80,7 +80,7 @@ exports.uploadTemplateXLSX = async (req, res) => {
                 const chunk = templateData.slice(i, i + CHUNK_SIZE);
                 
                 const upsertPromises = chunk.map(item => 
-                    tx.tamplate.upsert({
+                    tx.Template.upsert({
                         where: {
                             branchCode_shelfCode: {
                                 branchCode: item.branchCode,

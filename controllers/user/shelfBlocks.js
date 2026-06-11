@@ -8,7 +8,7 @@ const getShelfBlocks = async (req, res) => {
       return res.status(400).json({ message: "branchCode, shelfCode required" });
     }
 
-    const shelf = await prisma.tamplate.findUnique({
+    const shelf = await prisma.Template.findUnique({
       where: { branchCode_shelfCode: { branchCode, shelfCode } },
       select: { shelfCode: true, fullName: true, rowQty: true, type: true },
     });

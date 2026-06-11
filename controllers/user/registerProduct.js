@@ -118,7 +118,7 @@ exports.getShelvesForRegister = async (req, res) => {
 
     try {
         // ดึง shelf templates ของสาขา
-        const templates = await prisma.tamplate.findMany({
+        const templates = await prisma.Template.findMany({
             where: { branchCode },
             orderBy: { shelfCode: "asc" },
             select: {
