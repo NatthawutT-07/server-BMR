@@ -121,13 +121,4 @@ router.post("/shelf-change-logs-acknowledge-all/:branchCode", authCheck, acknowl
 // Admin: Monitor branch acknowledgment status
 router.get("/branch-ack-status", authCheck, adminCheck, getAllBranchAckStatus);
 
-// Analysis (SKU / Brand / Store / Store Summary)
-const { getAnalysisFilters, getSkuAnalysis, getStoreAnalysis, getBrandAnalysis, getStoreSummary } = require('../controllers/admin/analysis');
-router.get("/analysis-filters", authCheck, getAnalysisFilters);
-router.post("/analysis-sku", authCheck, getSkuAnalysis);
-router.post("/analysis-store", authCheck, getStoreAnalysis);
-router.post("/analysis-brand", authCheck, getBrandAnalysis);
-router.post("/analysis-store-summary", authCheck, getStoreSummary);
-
-
 module.exports = router;
