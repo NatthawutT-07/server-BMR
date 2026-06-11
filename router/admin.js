@@ -61,11 +61,6 @@ const { downloadTemplate, downloadSKU } = require('../controllers/admin/download
 router.get("/download-template", authCheck, downloadTemplate); //user
 router.get("/download-sku", authCheck, downloadSKU); //user
 
-// Dashboard
-const { getDashboardData, getDashboardProductList } = require("../controllers/admin/dashboard");
-router.get("/dashboard-data", authCheck, getDashboardData)
-router.get("/dashboard-product-list", authCheck, getDashboardProductList)
-
 //Tamplate
 const { validate } = require("../middlewares/validate");
 const { createShelfItemSchema, deleteShelfItemSchema, updateShelfItemSchema, getSkuSchema } = require("../schemas/shelfSchema");
