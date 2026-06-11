@@ -423,7 +423,7 @@ model branch_hq {
 model log_hq {
   id            Int         @id @default(autoincrement())
   employee_code String
-  employee      employee_hq @relation(fields: [employee_code], references: [employee_code])
+  employee      employee_hq @relation(fields: [employee_code], references: [employee_code], onDelete: Cascade)
   branch_code   String?
   branch_name   String?
   date          DateTime

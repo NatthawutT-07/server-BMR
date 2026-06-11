@@ -278,14 +278,32 @@ const deleteEmployee = async (req, res) => {
   try {
     const { id } = req.params;
 
-    await prisma.employee_hq.delete({
+    // ค้นหาข้อมูลพนักงานก่อน เพื่อได้ employee_code
+    const employee = await prisma.employee_hq.findUnique({
       where: { id: parseInt(id) },
+      select: { employee_code: true, nickname: true },
     });
+
+    if (!employee) {
+      return response.error(res, "ไม่พบข้อมูลพนักงานที่ต้องการลบ", "NOT_FOUND", 404);
+    }
+
+    // ลบ log ที่เกี่ยวข้อง และลบพนักงาน ใน transaction เดียวกัน
+    const [deletedLogs] = await prisma.$transaction([
+      prisma.log_hq.deleteMany({
+        where: { employee_code: employee.employee_code },
+      }),
+      prisma.employee_hq.delete({
+        where: { id: parseInt(id) },
+      }),
+    ]);
+
+    console.log(`Deleted employee ${employee.employee_code} (${employee.nickname}) with ${deletedLogs.count} related logs`);
 
     // Clear cache
     employeeCache.flushAll();
 
-    return response.success(res, null, null, "ลบพนักงานสำเร็จ");
+    return response.success(res, null, null, `ลบพนักงานสำเร็จ (ลบ log ที่เกี่ยวข้อง ${deletedLogs.count} รายการ)`);
   } catch (error) {
     console.error("Delete employee error:", error);
     if (error.code === "P2025") {
