@@ -88,11 +88,6 @@ const { getDashboardData, getDashboardProductList } = require("../controllers/ad
 router.get("/dashboard-data", authCheck, getDashboardData)
 router.get("/dashboard-product-list", authCheck, getDashboardProductList)
 
-// stock
-const { getStock } = require("../controllers/admin/stock");
-router.get("/stock-data", authCheck, getStock)
-
-
 //Tamplate
 const { validate } = require("../middlewares/validate");
 const { createShelfItemSchema, deleteShelfItemSchema, updateShelfItemSchema, getSkuSchema } = require("../schemas/shelfSchema");
