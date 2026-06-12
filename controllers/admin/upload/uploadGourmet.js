@@ -19,7 +19,7 @@ exports.uploadGourmetXLSX = async (req, res) => {
             date: ["date", "วันที่"],
             branch_code: ["branch_code", "รหัสสาขา", "สาขา"],
             item_code: ["productcode", "รหัสสินค้า", "sku"],
-            quantity: ["quantity", "qty", "จำนวน", "saleqty"],
+            quantity_sale_gourmet: ["quantity", "qty", "จำนวน", "saleqty"],
             sales: ["sales", "ยอดขาย", "ยอดขายรวม", "netsales", "salesamount", "ยอดขายสุทธิ"],
         };
 
@@ -53,8 +53,8 @@ exports.uploadGourmetXLSX = async (req, res) => {
         }
 
         if (headerRowIndex === -1 || !headerMap) {
-            failUploadJob(jobId, "ไม่พบ header gourmet (date, branch, product, quantity, sales)");
-            return res.status(400).send("ไม่พบ header gourmet (date, branch, product, quantity, sales)");
+            failUploadJob(jobId, "ไม่พบ header gourmet (date, branch, product, quantity_sale_gourmet, sales)");
+            return res.status(400).send("ไม่พบ header gourmet (date, branch, product, quantity_sale_gourmet, sales)");
         }
 
         const excelDateToJS = (value) => {
@@ -87,8 +87,8 @@ exports.uploadGourmetXLSX = async (req, res) => {
 
             if (!branch_code || !productCode || !dateVal) return;
 
-            let quantity = parseInt(String(row[headerMap.quantity]).replace(/,/g, ""), 10);
-            if (Number.isNaN(quantity)) quantity = 0;
+            let quantity_sale_gourmet = parseInt(String(row[headerMap.quantity_sale_gourmet]).replace(/,/g, ""), 10);
+            if (Number.isNaN(quantity_sale_gourmet)) quantity_sale_gourmet = 0;
 
             const salesRaw = String(row[headerMap.sales]).replace(/,/g, "");
             let sales = parseFloat(salesRaw);
@@ -100,14 +100,14 @@ exports.uploadGourmetXLSX = async (req, res) => {
             const dd = String(dateVal.getUTCDate()).padStart(2, "0");
             const dateStr = `${yyyy}-${mm}-${dd}`;
 
-            const key = `${dateStr}_${branch_code}_${productCode}_${quantity}`;
+            const key = `${dateStr}_${branch_code}_${productCode}_${quantity_sale_gourmet}`;
             if (!seen.has(key)) {
                 seen.add(key);
                 mapped.push({
                     date: dateVal,
                     branch_code: branch_code,
                     item_code: productCode,
-                    quantity,
+                    quantity_sale_gourmet,
                     sales,
                 });
             }

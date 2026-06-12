@@ -153,7 +153,7 @@ const parseStock = (raw) => {
             if (isNaN(qty) || qty > INT32_MAX || qty < INT32_MIN) qty = 0;
             qty = Math.floor(qty);
             if (qty === 0) return null;
-            return { item_code, branch_code, quantity: qty };
+            return { item_code, branch_code, quantity_stock: qty };
         })
         .filter(Boolean);
 
@@ -211,7 +211,7 @@ const parseWithdraw = (raw) => {
                 date: (row["วันที่"] || "").toString().trim() || null,
                 docStatus: (row["สถานะเอกสาร"] || "").toString().trim() || null,
                 reason: (row["เหตุผล"] || "").toString().trim() || null,
-                quantity: qty,
+                quantity_stock: qty,
                 value: val,
             };
         })

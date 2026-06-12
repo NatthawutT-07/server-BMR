@@ -121,10 +121,10 @@ exports.sku = async (req, res) => {
         max_stock: r.max_stock !== null && r.max_stock !== undefined ? Number(r.max_stock) : null,
         pack_order: r.pack_order !== null && r.pack_order !== undefined ? Number(r.pack_order) : null,
         groupName: r.groupName ?? null,
-        stockQuantity: Number(r.stockQuantity ?? 0),
-        withdrawQuantity: Number(r.withdrawQuantity ?? 0),
+        quantity_stock: Number(r.quantity_stock ?? 0),
+        quantity_withdraw: Number(r.quantity_withdraw ?? 0),
         withdrawValue: Number(r.withdrawValue ?? 0),
-        salesQuantity: Number(r.salesQuantity ?? 0),
+        quantity_sale_bill: Number(r.quantity_sale_bill ?? 0),
         salesTotalPrice: Number(r.salesTotalPrice ?? 0),
         dayOff: r.dayOff !== null && r.dayOff !== undefined ? Number(r.dayOff) : null,
       };

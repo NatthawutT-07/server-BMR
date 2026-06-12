@@ -40,7 +40,7 @@ exports.stockBrandLookup = async (req, res) => {
       await prisma.$queryRaw`
         SELECT
           LPAD(COALESCE(NULLIF(regexp_replace(rb."item_code", '[^0-9]', '', 'g'), ''), '0'), 5, '0') AS "item_code",
-          COALESCE(SUM(rb."quantity"), 0)      AS "salesQty",
+          COALESCE(SUM(rb."quantity_sale_bill"), 0)      AS "quantity_sale_bill",
           COALESCE(SUM(rb."total_sales"), 0)   AS "salesValue"
         FROM "RawBill" rb
         WHERE rb."item_code" IS NOT NULL
@@ -58,7 +58,7 @@ exports.stockBrandLookup = async (req, res) => {
       await prisma.$queryRaw`
         SELECT
           "item_code",
-          COALESCE(SUM("quantity"), 0)::int AS "withdrawQty"
+          COALESCE(SUM("quantity"), 0)::int AS "quantity_withdraw"
         FROM "withdraw"
         WHERE "docStatus" = 'อนุมัติแล้ว'
           AND "reason" = 'เบิกหมดอายุ'
@@ -73,7 +73,7 @@ exports.stockBrandLookup = async (req, res) => {
       await prisma.$queryRaw`
         SELECT
           "item_code",
-          COALESCE(SUM("quantity"), 0)::int AS "stockQty"
+          COALESCE(SUM("quantity"), 0)::int AS "quantity_stock"
         FROM "Stock"
         GROUP BY "item_code"
       `
@@ -83,18 +83,18 @@ exports.stockBrandLookup = async (req, res) => {
     const salesMap = new Map();
     for (const r of salesRows) {
       if (r.item_code !== null && r.item_code !== undefined) {
-        const existing = salesMap.get(r.item_code) || { salesQty: 0, salesValue: 0 };
+        const existing = salesMap.get(r.item_code) || { quantity_sale_bill: 0, salesValue: 0 };
         salesMap.set(r.item_code, {
-          salesQty: existing.salesQty + (Number(r.salesQty) || 0),
+          quantity_sale_bill: existing.quantity_sale_bill + (Number(r.quantity_sale_bill) || 0),
           salesValue: existing.salesValue + (Number(r.salesValue) || 0),
         });
       }
     }
     const withdrawMap = new Map(
-      withdrawRows.map((r) => [r.item_code, r.withdrawQty])
+      withdrawRows.map((r) => [r.item_code, r.quantity_withdraw])
     );
     const stockMap = new Map(
-      stockRows.map((r) => [r.item_code, r.stockQty])
+      stockRows.map((r) => [r.item_code, r.quantity_stock])
     );
 
     // ─── Merge & group by nameBrand ───
@@ -108,7 +108,7 @@ exports.stockBrandLookup = async (req, res) => {
       }
       const code = item.item_code;
 
-      const sales = salesMap.get(code) || { salesQty: 0, salesValue: 0 };
+      const sales = salesMap.get(code) || { quantity_sale_bill: 0, salesValue: 0 };
       const wdQty = withdrawMap.get(code) || 0;
       const skQty = stockMap.get(code) || 0;
 
@@ -116,18 +116,18 @@ exports.stockBrandLookup = async (req, res) => {
         brandMap.set(brand, {
           nameBrand: brand,
           consingItem: item.consingItem || "-",
-          stockQty: 0,
-          salesQty: 0,
+          quantity_stock: 0,
+          quantity_sale_bill: 0,
           salesValue: 0,
-          withdrawQty: 0,
+          quantity_withdraw: 0,
         });
       }
 
       const b = brandMap.get(brand);
-      b.stockQty += skQty;
-      b.salesQty += Number(sales.salesQty) || 0;
+      b.quantity_stock += skQty;
+      b.quantity_sale_bill += Number(sales.quantity_sale_bill) || 0;
       b.salesValue += Number(sales.salesValue) || 0;
-      b.withdrawQty += wdQty;
+      b.quantity_withdraw += wdQty;
     }
 
     const rows = Array.from(brandMap.values());
@@ -138,9 +138,9 @@ exports.stockBrandLookup = async (req, res) => {
     // ─── KPI totals ───
     const kpi = {
       totalSalesValue: rows.reduce((s, r) => s + r.salesValue, 0),
-      totalSalesQty: rows.reduce((s, r) => s + r.salesQty, 0),
-      totalWithdrawQty: rows.reduce((s, r) => s + r.withdrawQty, 0),
-      totalStockQty: rows.reduce((s, r) => s + r.stockQty, 0),
+      totalSalesQty: rows.reduce((s, r) => s + r.quantity_sale_bill, 0),
+      totalWithdrawQty: rows.reduce((s, r) => s + r.quantity_withdraw, 0),
+      totalStockQty: rows.reduce((s, r) => s + r.quantity_stock, 0),
     };
 
     return response.success(res, { kpi, rows });

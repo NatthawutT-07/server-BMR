@@ -249,10 +249,10 @@ exports.getSkuData = async (branch_code) => {
             p."nameProduct", p."nameBrand", p."purchasePriceExcVAT", p."salesPriceIncVAT", p."shelfLife", p."barcode",
             p."groupName",
             im."min_stock", im."max_stock", im."pack_order",
-            COALESCE(st."stockQuantity", 0)::int AS "stockQuantity",
-            COALESCE(wd."withdrawQuantity", 0)::int   AS "withdrawQuantity",
+            COALESCE(st."quantity_stock", 0)::int AS "quantity_stock",
+            COALESCE(wd."quantity_withdraw", 0)::int   AS "quantity_withdraw",
             COALESCE(wd."withdrawValue", 0)::float8   AS "withdrawValue",
-            COALESCE(bs."quantity_total", 0)::int     AS "salesQuantity",
+            COALESCE(bs."quantity_sale_bill", 0)::int     AS "quantity_sale_bill",
             COALESCE(bs."net_sales_total", 0)::float8 AS "salesTotalPrice",
             CASE
               WHEN ls."lastSaleDate" IS NOT NULL THEN
@@ -261,18 +261,18 @@ exports.getSkuData = async (branch_code) => {
             END AS "dayOff"
         FROM "Sku" s
         LEFT JOIN (
-            SELECT "branch_code", "item_code", SUM("quantity")::int AS "stockQuantity"
+            SELECT "branch_code", "item_code", SUM("quantity_stock")::int AS "quantity_stock"
             FROM "Stock" WHERE "branch_code" = ${branch_code} GROUP BY "branch_code", "item_code"
         ) st ON s."branch_code" = st."branch_code" AND s."item_code" = st."item_code"
         LEFT JOIN (
-            SELECT "branch_code", "item_code", SUM("quantity")::int AS "withdrawQuantity", SUM("value"::numeric)::float8 AS "withdrawValue"
+            SELECT "branch_code", "item_code", SUM("quantity_withdraw")::int AS "quantity_withdraw", SUM("value"::numeric)::float8 AS "withdrawValue"
             FROM "withdraw"
             WHERE "branch_code" = ${branch_code} AND "docStatus" = 'อนุมัติแล้ว' AND "reason" != 'เบิกเพื่อขาย'
               AND to_date("date", 'DD/MM/YYYY') >= to_date(${startDateStr}, 'YYYY-MM-DD') AND to_date("date", 'DD/MM/YYYY') <= to_date(${endDateStr}, 'YYYY-MM-DD')
             GROUP BY "branch_code", "item_code"
         ) wd ON s."branch_code" = wd."branch_code" AND s."item_code" = wd."item_code"
         LEFT JOIN (
-            SELECT br."branch_code" AS "branch_code", bi."item_code" AS "item_code", SUM(bi."quantity")::int AS "quantity_total", SUM(bi."net_sales")::float8 AS "net_sales_total"
+            SELECT br."branch_code" AS "branch_code", bi."item_code" AS "item_code", SUM(bi."quantity_sale_bill")::int AS "quantity_sale_bill", SUM(bi."net_sales")::float8 AS "net_sales_total"
             FROM "BillItem" bi
             JOIN "Bill" b ON bi."billId" = b."id"
             JOIN "Branch" br ON b."branchId" = br."id"
@@ -301,7 +301,7 @@ exports.getDashboardSummary = async () => {
 
   const rows = await prisma.$queryRaw`
       WITH sku_rows AS (SELECT "branch_code", "shelfCode", "item_code" FROM "Sku"),
-      stock_map AS (SELECT "branch_code", "item_code", SUM("quantity")::float8 AS stock_qty FROM "Stock" GROUP BY "branch_code", "item_code"),
+      stock_map AS (SELECT "branch_code", "item_code", SUM("quantity_stock")::float8 AS stock_qty FROM "Stock" GROUP BY "branch_code", "item_code"),
       withdraw_map AS (
           SELECT "branch_code", "item_code", SUM("value")::float8 AS withdraw_value
           FROM "withdraw"
@@ -374,7 +374,7 @@ exports.getShelfSales = async (branch_code) => {
   const rows = await prisma.$queryRaw`
       WITH sku_rows AS (SELECT "branch_code", "shelfCode", "item_code" FROM "Sku" WHERE "branch_code" = ${branch_code}),
       shelf_names AS (SELECT "branch_code", "shelfCode", "fullName" FROM "Template" WHERE "branch_code" = ${branch_code}),
-      stock_map AS (SELECT "branch_code", "item_code", SUM("quantity")::float8 AS stock_qty FROM "Stock" WHERE "branch_code" = ${branch_code} GROUP BY "branch_code", "item_code"),
+      stock_map AS (SELECT "branch_code", "item_code", SUM("quantity_stock")::float8 AS stock_qty FROM "Stock" WHERE "branch_code" = ${branch_code} GROUP BY "branch_code", "item_code"),
       withdraw_map AS (
           SELECT "branch_code", "item_code", SUM("value")::float8 AS withdraw_value
           FROM "withdraw"

@@ -53,7 +53,7 @@ function parseFloatWithComma(v) {
 
 const isItemLine = (r) => {
     const code = String(r.item_code || "").trim();
-    const qty = parseFloatWithComma(r.quantity);
+    const qty = parseFloatWithComma(r.quantity_sale_bill);
     return code !== "" && Math.abs(qty) > EPS;
 };
 
@@ -69,7 +69,7 @@ const headerMap = {
     "ลูกค้า": "customer",
     "รหัสสินค้า": "item_code",
     "ชื่อสินค้า": "product_name",
-    "จำนวน": "quantity",
+    "จำนวน": "quantity_sale_bill",
     "หน่วย": "unit",
     "ราคา/หน่วย": "price_per_unit",
     "ยอดขาย": "sales_amount",
@@ -223,7 +223,7 @@ exports.uploadBillXLSX = async (req, res) => {
                 pendingBillItems.push({
                     bill_number: billNo,
                     item_code: productCodeClean,
-                    quantity: parseFloatWithComma(row.quantity),
+                    quantity_sale_bill: parseFloatWithComma(row.quantity_sale_bill),
                     unit: row.unit || null,
                     price_per_unit: parseFloatWithComma(row.price_per_unit),
                     sales_amount: parseFloatWithComma(row.sales_amount),
@@ -260,7 +260,7 @@ exports.uploadBillXLSX = async (req, res) => {
             .map((i) => ({
                 billId: billIdMapAll[i.bill_number],
                 item_code: i.item_code,
-                quantity: i.quantity,
+                quantity_sale_bill: i.quantity_sale_bill,
                 unit: i.unit,
                 price_per_unit: i.price_per_unit,
                 sales_amount: i.sales_amount,

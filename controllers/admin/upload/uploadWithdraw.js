@@ -46,7 +46,7 @@ exports.uploadWithdrawXLSX = async (req, res) => {
                     docNumber: r.docNumber,
                     branch_code: r.branch_code,
                     item_code: r.item_code,
-                    quantity: r.quantity,
+                    quantity_withdraw: r.quantity_withdraw,
                     value: r.value,
                     existingIndex: uniqueMap.get(key)
                 });
@@ -80,12 +80,12 @@ exports.uploadWithdrawXLSX = async (req, res) => {
                 const docStatus = r.docStatus || "";
                 const reason = r.reason || "";
 
-                return Prisma.sql`(${r.item_code}, ${r.branch_code}, ${r.docNumber}, ${r.date}, ${docStatus}, ${reason}, ${r.quantity}, ${r.value})`;
+                return Prisma.sql`(${r.item_code}, ${r.branch_code}, ${r.docNumber}, ${r.date}, ${docStatus}, ${reason}, ${r.quantity_withdraw}, ${r.value})`;
             });
 
             const sql = Prisma.sql`
                 INSERT INTO "withdraw"
-                ("item_code", "branch_code", "docNumber", "date", "docStatus", "reason", "quantity", "value")
+                ("item_code", "branch_code", "docNumber", "date", "docStatus", "reason", "quantity_withdraw", "value")
                 VALUES ${Prisma.join(values)}
                 ON CONFLICT ("docNumber", "branch_code", "item_code") 
                 DO NOTHING

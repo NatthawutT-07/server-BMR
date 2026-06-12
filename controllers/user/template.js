@@ -243,7 +243,7 @@ exports.UserTemplateItem = async (req, res) => {
           im."pack_order",
 
           --  Stock ปัจจุบัน
-          COALESCE(st."stockQuantity", 0)::int AS "stockQuantity"
+          COALESCE(st."quantity_stock", 0)::int AS "quantity_stock"
 
       FROM "Sku" s
 
@@ -255,7 +255,7 @@ exports.UserTemplateItem = async (req, res) => {
       -- Stock ปัจจุบัน (ตามตาราง Stock)
       LEFT JOIN (
           SELECT "branch_code", "item_code",
-              SUM("quantity")::int AS "stockQuantity"
+              SUM("quantity_stock")::int AS "quantity_stock"
           FROM "Stock"
           WHERE "branch_code" = ${branch_code}
           GROUP BY "branch_code", "item_code"
@@ -303,7 +303,7 @@ exports.UserTemplateItem = async (req, res) => {
       max_stock: r.max_stock !== null && r.max_stock !== undefined ? Number(r.max_stock) : null,
       pack_order: r.pack_order !== null && r.pack_order !== undefined ? Number(r.pack_order) : null,
 
-      stockQuantity: Number(r.stockQuantity ?? 0),
+      quantity_stock: Number(r.quantity_stock ?? 0),
     }));
 
     // ส่ง branchName แค่ครั้งเดียว
@@ -360,7 +360,7 @@ exports.UserTemplateItem = async (req, res) => {
 //           im."max_stock",
 
 //           --  Stock ปัจจุบัน
-//           COALESCE(st."stockQuantity", 0)::int AS "stockQuantity",
+//           COALESCE(st."quantity_stock", 0)::int AS "quantity_stock",
 
 //           --  ยอดขาย 3 เดือนก่อนหน้า (ตามเดือนเวลาไทย)
 //           COALESCE(p3."sales3mQty", 0)::int AS "sales3mQty",
@@ -369,14 +369,14 @@ exports.UserTemplateItem = async (req, res) => {
 //           COALESCE(cm."salesCurrentMonthQty", 0)::int AS "salesCurrentMonthQty",
 
 //           --  Withdraw (เฉพาะ docStatus = 'อนุมัติแล้ว')
-//           COALESCE(wd."withdrawQuantity", 0)::int AS "withdrawQuantity"
+//           COALESCE(wd."quantity_withdraw", 0)::int AS "quantity_withdraw"
 
 //       FROM "Sku" s
 
 //       -- Stock ปัจจุบัน (ตามตาราง Stock)
 //       LEFT JOIN (
 //           SELECT "branch_code", "item_code",
-//               SUM("quantity")::int AS "stockQuantity"
+//               SUM("quantity_stock")::int AS "quantity_stock"
 //           FROM "Stock"
 //           WHERE "branch_code" = ${branch_code}
 //           GROUP BY "branch_code", "item_code"
@@ -389,7 +389,7 @@ exports.UserTemplateItem = async (req, res) => {
 //           SELECT
 //               br."branch_code"            AS "branch_code",
 //               (prod."item_code")::int  AS "item_code",
-//               SUM(bi."quantity")::int     AS "sales3mQty"
+//               SUM(bi."quantity_sale_bill")::int     AS "sales3mQty"
 //           FROM "BillItem" bi
 //           JOIN "Bill" b
 //               ON bi."billId" = b."id"
@@ -426,7 +426,7 @@ exports.UserTemplateItem = async (req, res) => {
 //           SELECT
 //               br."branch_code"            AS "branch_code",
 //               (prod."item_code")::int  AS "item_code",
-//               SUM(bi."quantity")::int     AS "salesCurrentMonthQty"
+//               SUM(bi."quantity_sale_bill")::int     AS "salesCurrentMonthQty"
 //           FROM "BillItem" bi
 //           JOIN "Bill" b
 //               ON bi."billId" = b."id"
@@ -449,7 +449,7 @@ exports.UserTemplateItem = async (req, res) => {
 //           SELECT
 //               "branch_code",
 //               "item_code",
-//               SUM("quantity")::int AS "withdrawQuantity"
+//               SUM("quantity_withdraw")::int AS "quantity_withdraw"
 //           FROM "withdraw"
 //           WHERE "branch_code" = ${branch_code}
 //             AND "docStatus" = 'อนุมัติแล้ว'
@@ -499,7 +499,7 @@ exports.UserTemplateItem = async (req, res) => {
 //                 min_stock: r.min_stock !== null && r.min_stock !== undefined ? Number(r.min_stock) : null,
 //                 max_stock: r.max_stock !== null && r.max_stock !== undefined ? Number(r.max_stock) : null,
 
-//                 stockQuantity: Number(r.stockQuantity ?? 0),
+//                 quantity_stock: Number(r.quantity_stock ?? 0),
 
 //                 // 🔹 ยอดขาย 3 เดือนก่อนหน้า (รวม 3 เดือน)
 //                 sales3mQty,
@@ -511,7 +511,7 @@ exports.UserTemplateItem = async (req, res) => {
 //                 salesCurrentMonthQty: Number(r.salesCurrentMonthQty ?? 0),
 
 //                 // 🔹 Withdraw (เฉพาะอนุมัติแล้ว)
-//                 withdrawQuantity: Number(r.withdrawQuantity ?? 0),
+//                 quantity_withdraw: Number(r.quantity_withdraw ?? 0),
 //             };
 //         });
 

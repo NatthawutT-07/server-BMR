@@ -30,60 +30,60 @@ model LoginLog {
   userId    Int?
   ip        String?
   userAgent String?
-  status    String // success | failed
+  status    String // success|failed
   message   String?
   createdAt DateTime @default(now())
 }
 
 model ItemMinMax {
   id          Int    @id @default(autoincrement())
-  branch_code  String
+  branch_code String
   item_code   String
-  min_stock    Int
-  max_stock    Int
-  pack_order   Int?
+  min_stock   Int
+  max_stock   Int
+  pack_order  Int?
 
   @@unique([branch_code, item_code])
   @@index([branch_code, item_code])
 }
 
 model Stock {
-  id          Int    @id @default(autoincrement())
-  item_code   String
-  branch_code  String
-  quantity    Int
+  id             Int    @id @default(autoincrement())
+  item_code      String
+  branch_code    String
+  quantity_stock Int
 
   @@unique([branch_code, item_code])
   @@index([branch_code, item_code])
 }
 
 model DataSync {
-  key       String   @id 
+  key       String   @id
   updatedAt DateTime @default(now())
   rowCount  Int?
 }
 
 model BranchDataSync {
   branch_code String
-  key        String
-  updatedAt  DateTime @default(now())
-  rowCount   Int?
+  key         String
+  updatedAt   DateTime @default(now())
+  rowCount    Int?
 
   @@id([branch_code, key])
 }
 
 model withdraw {
-  id          Int    @id @default(autoincrement())
-  item_code   String
-  branch_code  String
-  docNumber   String
-  date        String
-  docStatus   String
-  reason      String
-  quantity    Int
-  value       Float
+  id                Int    @id @default(autoincrement())
+  item_code         String
+  branch_code       String
+  docNumber         String
+  date              String
+  docStatus         String
+  reason            String
+  quantity_withdraw Int
+  value             Float
 
-  @@unique([docNumber, branch_code, item_code, quantity, value])
+  @@unique([docNumber, branch_code, item_code, quantity_withdraw, value])
   @@index([branch_code, item_code])
   @@index([branch_code, docStatus, item_code])
 }
@@ -110,12 +110,12 @@ model ListOfItemHold {
 }
 
 model Template {
-  id         Int     @id @default(autoincrement())
+  id          Int     @id @default(autoincrement())
   branch_code String
-  shelfCode  String
-  fullName   String?
-  rowQty     Int
-  type       String?
+  shelfCode   String
+  fullName    String?
+  rowQty      Int
+  type        String?
 
   @@unique([branch_code, shelfCode])
   @@index([branch_code, shelfCode, fullName])
@@ -123,7 +123,7 @@ model Template {
 
 model Sku {
   id          Int    @id @default(autoincrement())
-  branch_code  String
+  branch_code String
   shelfCode   String
   rowNo       Int
   item_code   String
@@ -132,7 +132,7 @@ model Sku {
   @@unique([branch_code, item_code])
   @@index([branch_code, shelfCode, rowNo, index])
   @@index([branch_code, shelfCode, index])
-  @@index([branch_code, item_code]) //   UserTemplateItem ไวขึ้น
+  @@index([branch_code, item_code]) 
 }
 
 model Branch {
@@ -141,9 +141,6 @@ model Branch {
   branch_name String
   bills       Bill[]
 }
-
-
-
 
 model Bill {
   id                   Int      @id @default(autoincrement())
@@ -162,8 +159,8 @@ model Bill {
   total_sales          Float
   total_payment        Float
 
-  branch       Branch       @relation(fields: [branchId], references: [id])
-  billItems    BillItem[]
+  branch    Branch     @relation(fields: [branchId], references: [id])
+  billItems BillItem[]
 
   @@index([branchId, doc_type, date])
   @@index([sales_channel])
@@ -174,16 +171,16 @@ model Bill {
 }
 
 model BillItem {
-  id             Int     @id @default(autoincrement())
-  billId         Int
-  item_code      String
-  quantity       Float
-  unit           String?
-  price_per_unit Float
-  sales_amount   Float
-  discount       Float
-  net_sales      Float
-  bill           Bill    @relation(fields: [billId], references: [id])
+  id                 Int     @id @default(autoincrement())
+  billId             Int
+  item_code          String
+  quantity_sale_bill Float
+  unit               String?
+  price_per_unit     Float
+  sales_amount       Float
+  discount           Float
+  net_sales          Float
+  bill               Bill    @relation(fields: [billId], references: [id])
 
   @@index([item_code])
   @@index([billId])
@@ -192,8 +189,8 @@ model BillItem {
 
 model PogRequest {
   id          Int     @id @default(autoincrement())
-  branch_code  String
-  action      String // "add" | "swap" | "delete"
+  branch_code String
+  action      String // add|move|delete
   barcode     String
   productName String?
 
@@ -223,28 +220,27 @@ model PogRequest {
 
 // เก็บสถานะการอัพเดท shelf ของแต่ละสาขา (สำหรับแจ้งเตือน mobile)
 model ShelfUpdate {
-  id         Int      @id @default(autoincrement())
+  id          Int      @id @default(autoincrement())
   branch_code String   @unique
-  hasUpdate  Boolean  @default(true)
-  updatedAt  DateTime @updatedAt
-  updatedBy  String?
+  hasUpdate   Boolean  @default(true)
+  updatedAt   DateTime @updatedAt
+  updatedBy   String?
 
   @@index([branch_code])
 }
 
-//  เก็บยอดขายของกรูเม่
 model Gourmet {
-  id           Int      @id @default(autoincrement())
-  date         DateTime
-  branch_code  String
-  item_code    String
-  quantity     Int
-  sales        Float
+  id                    Int      @id @default(autoincrement())
+  date                  DateTime
+  branch_code           String
+  item_code             String
+  quantity_sale_gourmet Int
+  sales                 Float
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([date, branch_code, item_code, quantity])
+  @@unique([date, branch_code, item_code, quantity_sale_gourmet])
   @@index([date])
   @@index([branch_code])
   @@index([item_code])
@@ -253,7 +249,7 @@ model Gourmet {
 // เก็บ log รายละเอียดการเปลี่ยนแปลง shelf (add/delete/move)
 model ShelfChangeLog {
   id          Int     @id @default(autoincrement())
-  branch_code  String
+  branch_code String
   shelfCode   String
   updateId    String // UUID group บันทึกพร้อมกัน
   action      String // add | delete | move
@@ -280,7 +276,6 @@ model ShelfChangeLog {
   @@index([branch_code, acknowledged])
   @@index([updateId])
 }
-
 
 // ========== HQ System Models ==========
 
