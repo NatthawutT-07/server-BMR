@@ -17,7 +17,7 @@ const getShelfBlocks = async (req, res) => {
 
     const skus = await prisma.sku.findMany({
       where: { branchCode, shelfCode },
-      select: { rowNo: true, index: true, codeProduct: true },
+      select: { rowNo: true, index: true, item_code: true },
       orderBy: [{ rowNo: "asc" }, { index: "asc" }],
     });
 
@@ -25,12 +25,12 @@ const getShelfBlocks = async (req, res) => {
       return res.json({ shelf, rows: [] });
     }
 
-    const codeProducts = [...new Set(skus.map((x) => x.codeProduct))];
+    const item_codes = [...new Set(skus.map((x) => x.item_code))];
 
     const items = await prisma.listOfItemHold.findMany({
-      where: { codeProduct: { in: codeProducts } },
+      where: { item_code: { in: item_codes } },
       select: {
-        codeProduct: true,
+        item_code: true,
         nameProduct: true,
         nameBrand: true,
         barcode: true,
@@ -38,15 +38,15 @@ const getShelfBlocks = async (req, res) => {
       },
     });
 
-    const itemMap = new Map(items.map((it) => [it.codeProduct, it]));
+    const itemMap = new Map(items.map((it) => [it.item_code, it]));
 
     const rows = {};
     for (const s of skus) {
       if (!rows[s.rowNo]) rows[s.rowNo] = [];
-      const it = itemMap.get(s.codeProduct);
+      const it = itemMap.get(s.item_code);
 
       rows[s.rowNo].push({
-        codeProduct: s.codeProduct,
+        item_code: s.item_code,
         index: s.index,
         barcode: it?.barcode ?? null,
         name: it?.nameProduct ?? null,

@@ -225,7 +225,7 @@ exports.UserTemplateItem = async (req, res) => {
     const rawResult = await prisma.$queryRaw`
       SELECT 
           s."branchCode",
-          s."codeProduct",
+          s."item_code",
           s."shelfCode",
           s."rowNo",
           s."index",
@@ -254,23 +254,23 @@ exports.UserTemplateItem = async (req, res) => {
 
       -- Stock ปัจจุบัน (ตามตาราง Stock)
       LEFT JOIN (
-          SELECT "branchCode", "codeProduct",
+          SELECT "branchCode", "item_code",
               SUM("quantity")::int AS "stockQuantity"
           FROM "Stock"
           WHERE "branchCode" = ${branchCode}
-          GROUP BY "branchCode", "codeProduct"
+          GROUP BY "branchCode", "item_code"
       ) st 
       ON s."branchCode" = st."branchCode" 
-      AND s."codeProduct" = st."codeProduct"
+      AND s."item_code" = st."item_code"
 
       -- ข้อมูลสินค้า
       LEFT JOIN "ListOfItemHold" p 
-          ON s."codeProduct" = p."codeProduct"
+          ON s."item_code" = p."item_code"
 
       -- Min / Max
       LEFT JOIN "ItemMinMax" im 
           ON s."branchCode" = im."branchCode" 
-          AND s."codeProduct" = im."codeProduct"
+          AND s."item_code" = im."item_code"
 
       WHERE s."branchCode" = ${branchCode}
       ORDER BY s."shelfCode", s."index", s."rowNo"
@@ -285,8 +285,8 @@ exports.UserTemplateItem = async (req, res) => {
       // ชื่อ shelf จาก Template
       fullName: r.fullName ?? null,
 
-      codeProduct:
-        r.codeProduct !== null && r.codeProduct !== undefined ? Number(r.codeProduct) : null,
+      item_code:
+        r.item_code !== null && r.item_code !== undefined ? r.item_code : null,
 
       nameProduct: r.nameProduct ?? null,
       nameBrand: r.nameBrand ?? null,
@@ -347,7 +347,7 @@ exports.UserTemplateItem = async (req, res) => {
 //         const rawResult = await prisma.$queryRaw`
 //       SELECT
 //           s."branchCode",
-//           s."codeProduct",
+//           s."item_code",
 //           s."shelfCode",
 //           s."rowNo",
 //           s."index",
@@ -375,20 +375,20 @@ exports.UserTemplateItem = async (req, res) => {
 
 //       -- Stock ปัจจุบัน (ตามตาราง Stock)
 //       LEFT JOIN (
-//           SELECT "branchCode", "codeProduct",
+//           SELECT "branchCode", "item_code",
 //               SUM("quantity")::int AS "stockQuantity"
 //           FROM "Stock"
 //           WHERE "branchCode" = ${branchCode}
-//           GROUP BY "branchCode", "codeProduct"
+//           GROUP BY "branchCode", "item_code"
 //       ) st
 //       ON s."branchCode" = st."branchCode"
-//       AND s."codeProduct" = st."codeProduct"
+//       AND s."item_code" = st."item_code"
 
 //       --  Sales 3 เดือนก่อนหน้า จาก Bill / BillItem (รวมทุก channel)
 //       LEFT JOIN (
 //           SELECT
 //               br."branch_code"            AS "branchCode",
-//               (prod."product_code")::int  AS "codeProduct",
+//               (prod."item_code")::int  AS "item_code",
 //               SUM(bi."quantity")::int     AS "sales3mQty"
 //           FROM "BillItem" bi
 //           JOIN "Bill" b
@@ -416,16 +416,16 @@ exports.UserTemplateItem = async (req, res) => {
 //             )
 //           GROUP BY
 //               br."branch_code",
-//               (prod."product_code")::int
+//               (prod."item_code")::int
 //       ) p3
 //       ON s."branchCode" = p3."branchCode"
-//       AND s."codeProduct" = p3."codeProduct"
+//       AND s."item_code" = p3."item_code"
 
 //       --  Sales เดือนปัจจุบัน จาก Bill / BillItem
 //       LEFT JOIN (
 //           SELECT
 //               br."branch_code"            AS "branchCode",
-//               (prod."product_code")::int  AS "codeProduct",
+//               (prod."item_code")::int  AS "item_code",
 //               SUM(bi."quantity")::int     AS "salesCurrentMonthQty"
 //           FROM "BillItem" bi
 //           JOIN "Bill" b
@@ -439,33 +439,33 @@ exports.UserTemplateItem = async (req, res) => {
 //             AND b."date" <= ${currentMonthEndUtc}
 //           GROUP BY
 //               br."branch_code",
-//               (prod."product_code")::int
+//               (prod."item_code")::int
 //       ) cm
 //       ON s."branchCode" = cm."branchCode"
-//       AND s."codeProduct" = cm."codeProduct"
+//       AND s."item_code" = cm."item_code"
 
 //       --  Withdraw: เฉพาะ docStatus = 'อนุมัติแล้ว'
 //       LEFT JOIN (
 //           SELECT
 //               "branchCode",
-//               "codeProduct",
+//               "item_code",
 //               SUM("quantity")::int AS "withdrawQuantity"
 //           FROM "withdraw"
 //           WHERE "branchCode" = ${branchCode}
 //             AND "docStatus" = 'อนุมัติแล้ว'
-//           GROUP BY "branchCode", "codeProduct"
+//           GROUP BY "branchCode", "item_code"
 //       ) wd
 //       ON s."branchCode" = wd."branchCode"
-//       AND s."codeProduct" = wd."codeProduct"
+//       AND s."item_code" = wd."item_code"
 
 //       -- ข้อมูลสินค้า
 //       LEFT JOIN "ListOfItemHold" p
-//           ON s."codeProduct" = p."codeProduct"
+//           ON s."item_code" = p."item_code"
 
 //       -- Min / Max
 //       LEFT JOIN "ItemMinMax" im
 //           ON s."branchCode" = im."branchCode"
-//           AND s."codeProduct" = im."codeProduct"
+//           AND s."item_code" = im."item_code"
 
 //       WHERE s."branchCode" = ${branchCode}
 //       ORDER BY s."shelfCode", s."index", s."rowNo"
@@ -482,8 +482,8 @@ exports.UserTemplateItem = async (req, res) => {
 //                 rowNo: r.rowNo,
 //                 index: r.index,
 
-//                 codeProduct:
-//                     r.codeProduct !== null && r.codeProduct !== undefined ? Number(r.codeProduct) : null,
+//                 item_code:
+//                     r.item_code !== null && r.item_code !== undefined ? r.item_code : null,
 
 //                 nameProduct: r.nameProduct ?? null,
 //                 nameBrand: r.nameBrand ?? null,

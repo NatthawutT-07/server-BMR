@@ -3,14 +3,14 @@ const prisma = new PrismaClient();
 const response = require("../../utils/responseHelper");
 const { lockKey, acquireLock, releaseLock } = require("../../utils/lock");
 
-// Helper: Get codeProduct from barcode
+// Helper: Get item_code from barcode
 const getCodeProduct = async (barcode) => {
     if (!barcode) return null;
     const item = await prisma.listOfItemHold.findFirst({
         where: { barcode: String(barcode) },
-        select: { codeProduct: true },
+        select: { item_code: true },
     });
-    return item?.codeProduct || null;
+    return item?.item_code || null;
 };
 
 // Helper: Apply Change to SKU Table
@@ -31,7 +31,7 @@ const applyPogChange = async (reqItem) => {
         await acquireLock(prisma, key);
         try {
             const deleted = await prisma.sku.deleteMany({
-                where: { branchCode, shelfCode: fromShelf, rowNo: fromRow, codeProduct: code },
+                where: { branchCode, shelfCode: fromShelf, rowNo: fromRow, item_code: code },
             });
             if (deleted.count === 0) throw new Error(`ไม่พบสินค้า ${barcode} ใน ${fromShelf}/Row${fromRow}`);
 
@@ -70,7 +70,7 @@ const applyPogChange = async (reqItem) => {
                 await prisma.$transaction(shiftUpdates);
             }
             await prisma.sku.create({
-                data: { branchCode, shelfCode: toShelf, rowNo: toRow, index: toIndex, codeProduct: code }
+                data: { branchCode, shelfCode: toShelf, rowNo: toRow, index: toIndex, item_code: code }
             });
             const allItems = await prisma.sku.findMany({
                 where: { branchCode, shelfCode: toShelf, rowNo: toRow },
@@ -107,10 +107,10 @@ const applyPogChange = async (reqItem) => {
                     where: { branchCode, shelfCode: fromShelf, rowNo: Number(fromRow) },
                     orderBy: { index: "asc" }
                 });
-                const itemToMove = allItems.find(i => i.codeProduct === code);
+                const itemToMove = allItems.find(i => i.item_code === code);
                 if (!itemToMove) throw new Error(`ไม่พบสินค้า ${barcode} ใน ${fromShelf}/Row${fromRow}`);
 
-                const otherItems = allItems.filter(i => i.codeProduct !== code);
+                const otherItems = allItems.filter(i => i.item_code !== code);
                 const insertPosition = Math.min(Number(toIndex) - 1, otherItems.length);
                 const newOrder = [
                     ...otherItems.slice(0, insertPosition),
@@ -123,7 +123,7 @@ const applyPogChange = async (reqItem) => {
                 await prisma.$transaction(updates);
             } else {
                 const deleted = await prisma.sku.deleteMany({
-                    where: { branchCode, shelfCode: fromShelf, rowNo: Number(fromRow), codeProduct: code }
+                    where: { branchCode, shelfCode: fromShelf, rowNo: Number(fromRow), item_code: code }
                 });
                 if (deleted.count === 0) throw new Error(`ไม่พบสินค้า ${barcode} ใน ${fromShelf}/Row${fromRow}`);
 
@@ -149,7 +149,7 @@ const applyPogChange = async (reqItem) => {
                     await prisma.$transaction(shiftUpdates);
                 }
                 await prisma.sku.create({
-                    data: { branchCode, shelfCode: toShelf, rowNo: Number(toRow), index: Number(toIndex), codeProduct: code }
+                    data: { branchCode, shelfCode: toShelf, rowNo: Number(toRow), index: Number(toIndex), item_code: code }
                 });
                 const targetAll = await prisma.sku.findMany({
                     where: { branchCode, shelfCode: toShelf, rowNo: Number(toRow) },

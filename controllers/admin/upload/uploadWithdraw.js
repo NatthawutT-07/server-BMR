@@ -39,13 +39,13 @@ exports.uploadWithdrawXLSX = async (req, res) => {
         const duplicates = [];
 
         mapped.forEach((r, index) => {
-            const key = `${r.docNumber}-${r.branchCode}-${r.codeProduct}`;
+            const key = `${r.docNumber}-${r.branchCode}-${r.item_code}`;
             if (uniqueMap.has(key)) {
                 duplicates.push({
                     index,
                     docNumber: r.docNumber,
                     branchCode: r.branchCode,
-                    codeProduct: r.codeProduct,
+                    item_code: r.item_code,
                     quantity: r.quantity,
                     value: r.value,
                     existingIndex: uniqueMap.get(key)
@@ -59,7 +59,7 @@ exports.uploadWithdrawXLSX = async (req, res) => {
             // console.log(` Found ${duplicates.length} duplicate records in batch:`, duplicates.slice(0, 5));
             // เก็บเฉพาะข้อมูลที่ไม่ซ้ำ (เก็บตัวแรกที่เจอ)
             mapped = mapped.filter((r, index) => {
-                const key = `${r.docNumber}-${r.branchCode}-${r.codeProduct}`;
+                const key = `${r.docNumber}-${r.branchCode}-${r.item_code}`;
                 return uniqueMap.get(key) === index;
             });
             // console.log(`After deduplication: ${mapped.length} unique records`);
@@ -80,14 +80,14 @@ exports.uploadWithdrawXLSX = async (req, res) => {
                 const docStatus = r.docStatus || "";
                 const reason = r.reason || "";
 
-                return Prisma.sql`(${r.codeProduct}, ${r.branchCode}, ${r.docNumber}, ${r.date}, ${docStatus}, ${reason}, ${r.quantity}, ${r.value})`;
+                return Prisma.sql`(${r.item_code}, ${r.branchCode}, ${r.docNumber}, ${r.date}, ${docStatus}, ${reason}, ${r.quantity}, ${r.value})`;
             });
 
             const sql = Prisma.sql`
                 INSERT INTO "withdraw"
-                ("codeProduct", "branchCode", "docNumber", "date", "docStatus", "reason", "quantity", "value")
+                ("item_code", "branchCode", "docNumber", "date", "docStatus", "reason", "quantity", "value")
                 VALUES ${Prisma.join(values)}
-                ON CONFLICT ("docNumber", "branchCode", "codeProduct") 
+                ON CONFLICT ("docNumber", "branchCode", "item_code") 
                 DO NOTHING
             `;
 

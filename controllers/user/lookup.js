@@ -13,7 +13,7 @@ const lookupByBarcode = async (req, res) => {
     const item = await prisma.listOfItemHold.findFirst({
       where: { barcode: String(barcode) },
       select: {
-        codeProduct: true,
+        item_code: true,
         barcode: true,
         nameProduct: true,
         nameBrand: true,
@@ -26,7 +26,7 @@ const lookupByBarcode = async (req, res) => {
     }
 
     const loc = await prisma.sku.findMany({
-      where: { branchCode, codeProduct: item.codeProduct },
+      where: { branchCode, item_code: item.item_code },
       select: { shelfCode: true, rowNo: true, index: true },
       orderBy: [{ shelfCode: "asc" }, { rowNo: "asc" }, { index: "asc" }],
       take: 10,
@@ -37,7 +37,7 @@ const lookupByBarcode = async (req, res) => {
         found: false,
         reason: "NO_LOCATION_IN_POG",
         product: {
-          codeProduct: item.codeProduct,
+          item_code: item.item_code,
           barcode: item.barcode,
           name: item.nameProduct,
           brand: item.nameBrand,
@@ -58,7 +58,7 @@ const lookupByBarcode = async (req, res) => {
     return res.json({
       found: true,
       product: {
-        codeProduct: item.codeProduct,
+        item_code: item.item_code,
         barcode: item.barcode,
         name: item.nameProduct,
         brand: item.nameBrand,

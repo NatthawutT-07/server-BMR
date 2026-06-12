@@ -42,8 +42,8 @@ const parseItemMinMax = (raw) => {
         if (isNaN(num)) return null;
 
         const branchCode = prefix + num.toString().padStart(3, "0");
-        const codeProduct = parseInt(item, 10);
-        if (isNaN(codeProduct)) return null;
+        const item_code = String(item).trim().padStart(5, "0");
+        if (!item_code || item_code === "00000" || item_code.includes("NaN")) return null;
 
         let min = parseInt(obj.MinStock, 10);
         let max = parseInt(obj.MaxStock, 10);
@@ -53,7 +53,7 @@ const parseItemMinMax = (raw) => {
         let packOrder = parseInt(obj.PackOrder, 10);
         if (isNaN(packOrder)) packOrder = null;
 
-        return { branchCode, codeProduct, minStore: min, maxStore: max, packOrder };
+        return { branchCode, item_code, minStore: min, maxStore: max, packOrder };
     }).filter(v => v !== null);
 
     return { data: mapped };
@@ -89,9 +89,9 @@ const parseMasterItem = (raw) => {
     });
 
     const mapped = cleaned.map(row => {
-        const itemNo = String(row["Item No."]).trim();
+        const itemNo = String(row["Item No."]).trim().padStart(5, "0");
         return {
-            codeProduct: parseInt(itemNo, 10),
+            item_code: itemNo,
             nameProduct: row["Item Description"] || null,
             groupName: row["Group Name"] || null,
             status: row["Status"] || null,
@@ -147,13 +147,13 @@ const parseStock = (raw) => {
         })
         .map(row => {
             const rawCode = (row["รหัสสินค้า"] || "").toString().trim();
-            const codeProduct = parseInt(rawCode, 10);
+            const item_code = rawCode.padStart(5, "0");
             const branchCode = (row["รหัสสาขา"] || "").toString().trim();
             let qty = parseFloat(row["จำนวนคงเหลือ"]);
             if (isNaN(qty) || qty > INT32_MAX || qty < INT32_MIN) qty = 0;
             qty = Math.floor(qty);
             if (qty === 0) return null;
-            return { codeProduct, branchCode, quantity: qty };
+            return { item_code, branchCode, quantity: qty };
         })
         .filter(Boolean);
 
@@ -188,8 +188,9 @@ const parseWithdraw = (raw) => {
             row["สาขา"]
         )
         .map(row => {
-            const codeProduct = parseInt(row["รหัสสินค้า"], 10);
-            if (!codeProduct) return null;
+            const rawCode = (row["รหัสสินค้า"] || "").toString().trim();
+            const item_code = rawCode.padStart(5, "0");
+            if (!item_code || item_code === "00000" || item_code.includes("NaN")) return null;
 
             const branchCode = row["สาขา"]
                 ?.split(")")[0]
@@ -204,7 +205,7 @@ const parseWithdraw = (raw) => {
             if (isNaN(val)) val = 0;
 
             return {
-                codeProduct,
+                item_code,
                 branchCode,
                 docNumber: (row["เลขที่เอกสาร"] || "").toString().trim() || null,
                 date: (row["วันที่"] || "").toString().trim() || null,

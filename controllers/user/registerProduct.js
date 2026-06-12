@@ -24,11 +24,11 @@ exports.checkProductExists = async (req, res) => {
     }
 
     try {
-        // หา codeProduct จาก barcode
+        // หา item_code จาก barcode
         const product = await prisma.listOfItemHold.findFirst({
             where: { barcode: String(barcode) },
             select: {
-                codeProduct: true,
+                item_code: true,
                 nameProduct: true,
                 nameBrand: true,
                 barcode: true,
@@ -48,7 +48,7 @@ exports.checkProductExists = async (req, res) => {
         const existingItem = await prisma.sku.findFirst({
             where: {
                 branchCode,
-                codeProduct: product.codeProduct
+                item_code: product.item_code
             },
             select: {
                 shelfCode: true,
@@ -63,7 +63,7 @@ exports.checkProductExists = async (req, res) => {
                 found: true,
                 exists: true,
                 product: {
-                    codeProduct: product.codeProduct,
+                    item_code: product.item_code,
                     nameProduct: product.nameProduct,
                     nameBrand: product.nameBrand,
                     barcode: product.barcode,
@@ -84,7 +84,7 @@ exports.checkProductExists = async (req, res) => {
             found: true,
             exists: false,
             product: {
-                codeProduct: product.codeProduct,
+                item_code: product.item_code,
                 nameProduct: product.nameProduct,
                 nameBrand: product.nameBrand,
                 barcode: product.barcode,
@@ -202,11 +202,11 @@ exports.registerProduct = async (req, res) => {
     }
 
     try {
-        // 1. หา codeProduct จาก barcode
+        // 1. หา item_code จาก barcode
         const product = await prisma.listOfItemHold.findFirst({
             where: { barcode: String(barcode) },
             select: {
-                codeProduct: true,
+                item_code: true,
                 nameProduct: true,
             }
         });
@@ -222,7 +222,7 @@ exports.registerProduct = async (req, res) => {
         const existingItem = await prisma.sku.findFirst({
             where: {
                 branchCode,
-                codeProduct: product.codeProduct
+                item_code: product.item_code
             }
         });
 
@@ -257,7 +257,7 @@ exports.registerProduct = async (req, res) => {
                 shelfCode,
                 rowNo: Number(rowNo),
                 index: nextIndex,
-                codeProduct: product.codeProduct,
+                item_code: product.item_code,
             }
         });
 
@@ -268,7 +268,7 @@ exports.registerProduct = async (req, res) => {
             msg: "ลงทะเบียนสินค้าสำเร็จ",
             data: {
                 id: newSku.id,
-                codeProduct: product.codeProduct,
+                item_code: product.item_code,
                 nameProduct: product.nameProduct,
                 shelfCode,
                 rowNo: Number(rowNo),

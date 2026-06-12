@@ -33,7 +33,7 @@ exports.uploadMasterItemXLSX = async (req, res) => {
         const dbMap = new Map();
 
         existingRows.forEach(x => {
-            dbMap.set(x.codeProduct, x);
+            dbMap.set(x.item_code, x);
         });
 
         //------------------------------------------
@@ -43,21 +43,21 @@ exports.uploadMasterItemXLSX = async (req, res) => {
         const toUpdate = [];
         let skipped = 0;
 
-        // Debug: Check if specific codeProducts are in mapped data
+        // Debug: Check if specific item_codes are in mapped data
         const debugCodes = [5229, 913];
-        const foundInMapped = mapped.filter(item => debugCodes.includes(item.codeProduct));
-        // console.log(`[DEBUG] Looking for codes ${debugCodes.join(', ')} in mapped data:`, foundInMapped.length > 0 ? foundInMapped.map(i => i.codeProduct) : 'NONE FOUND');
+        const foundInMapped = mapped.filter(item => debugCodes.includes(item.item_code));
+        // console.log(`[DEBUG] Looking for codes ${debugCodes.join(', ')} in mapped data:`, foundInMapped.length > 0 ? foundInMapped.map(i => i.item_code) : 'NONE FOUND');
         // console.log(`[DEBUG] Total mapped items: ${mapped.length}`);
         // console.log(`[DEBUG] Existing DB items: ${dbMap.size}`);
 
         for (const item of mapped) {
-            const old = dbMap.get(item.codeProduct);
+            const old = dbMap.get(item.item_code);
 
             if (!old) {
                 toInsert.push(item);
                 // Debug specific codes
-                if (debugCodes.includes(item.codeProduct)) {
-                    // console.log(`[DEBUG] Code ${item.codeProduct} → TO INSERT (not in DB)`);
+                if (debugCodes.includes(item.item_code)) {
+                    // console.log(`[DEBUG] Code ${item.item_code} → TO INSERT (not in DB)`);
                 }
                 continue;
             }
@@ -67,15 +67,15 @@ exports.uploadMasterItemXLSX = async (req, res) => {
 
             if (!changed) {
                 skipped++;
-                if (debugCodes.includes(item.codeProduct)) {
-                    // console.log(`[DEBUG] Code ${item.codeProduct} → SKIPPED (no changes)`);
+                if (debugCodes.includes(item.item_code)) {
+                    // console.log(`[DEBUG] Code ${item.item_code} → SKIPPED (no changes)`);
                 }
                 continue;
             }
 
             toUpdate.push(item);
-            if (debugCodes.includes(item.codeProduct)) {
-                // console.log(`[DEBUG] Code ${item.codeProduct} → TO UPDATE`);
+            if (debugCodes.includes(item.item_code)) {
+                // console.log(`[DEBUG] Code ${item.item_code} → TO UPDATE`);
             }
         }
 
@@ -86,7 +86,7 @@ exports.uploadMasterItemXLSX = async (req, res) => {
         //------------------------------------------
         if (toInsert.length > 0) {
             const cleanedInserts = toInsert.map(r => ({
-                codeProduct: parseInt(r.codeProduct, 10),
+                item_code: String(r.item_code).trim().padStart(5, "0"),
                 nameProduct: r.nameProduct != null ? String(r.nameProduct) : null,
                 groupName: r.groupName != null ? String(r.groupName) : null,
                 status: r.status != null ? String(r.status) : null,
@@ -104,7 +104,7 @@ exports.uploadMasterItemXLSX = async (req, res) => {
             }));
 
             // Debug: Log what we're about to insert
-            // console.log('[DEBUG] Inserting items:', cleanedInserts.map(i => i.codeProduct));
+            // console.log('[DEBUG] Inserting items:', cleanedInserts.map(i => i.item_code));
 
             try {
                 const insertResult = await prisma.listOfItemHold.createMany({
@@ -119,8 +119,8 @@ exports.uploadMasterItemXLSX = async (req, res) => {
 
             // Verify insert worked for debug codes
             const verifyInserts = await prisma.listOfItemHold.findMany({
-                where: { codeProduct: { in: [913, 5229] } },
-                select: { codeProduct: true, nameProduct: true }
+                where: { item_code: { in: [913, 5229] } },
+                select: { item_code: true, nameProduct: true }
             });
             // console.log('[DEBUG] Verification - found in DB after insert:', verifyInserts);
         }
@@ -136,7 +136,7 @@ exports.uploadMasterItemXLSX = async (req, res) => {
 
                 const values = chunk.map((r) => {
                     // Force consistent types for all fields
-                    const codeProduct = parseInt(r.codeProduct, 10);
+                    const item_code = String(r.item_code).trim().padStart(5, "0");
                     const purchasePriceExcVAT = parseFloat(r.purchasePriceExcVAT) || 0;
                     const salesPriceIncVAT = parseInt(r.salesPriceIncVAT, 10) || 0;
                     const GP = r.GP != null ? String(r.GP) : null;
@@ -153,7 +153,7 @@ exports.uploadMasterItemXLSX = async (req, res) => {
                     const nameProduct = r.nameProduct != null ? String(r.nameProduct) : null;
 
                     return Prisma.sql`(
-                        ${codeProduct},
+                        ${item_code},
                         ${purchasePriceExcVAT},
                         ${salesPriceIncVAT},
                         ${GP},
@@ -190,11 +190,11 @@ exports.uploadMasterItemXLSX = async (req, res) => {
                         "nameProduct" = v.nameproduct
                     FROM (VALUES ${Prisma.join(values)})
                     AS v(
-                        codeProduct, purchase, saleprice, gp, shelf,
+                        item_code, purchase, saleprice, gp, shelf,
                         proddate, vat, status, barcode, brand,
                         vendor, vendorname, consign, groupname, nameproduct
                     )
-                    WHERE t."codeProduct" = v.codeProduct::int
+                    WHERE t."item_code" = v.item_code
                 `;
 
                 await prisma.$executeRaw(sql);

@@ -50,14 +50,14 @@ exports.getMasterItem = async (qRaw) => {
         { nameBrand: { contains: qRaw, mode: "insensitive" } },
       ],
     },
-    select: { codeProduct: true, barcode: true, nameProduct: true, nameBrand: true },
+    select: { item_code: true, barcode: true, nameProduct: true, nameBrand: true },
     take: 50,
   });
 
   let normalized = [];
   if (qDigits.length >= 6) {
     normalized = await prisma.$queryRaw`
-        SELECT "codeProduct", "barcode", "nameProduct", "nameBrand"
+        SELECT "item_code", "barcode", "nameProduct", "nameBrand"
         FROM "ListOfItemHold"
         WHERE regexp_replace(COALESCE("barcode", ''), '\\D', '', 'g') LIKE ${"%" + qDigits + "%"}
         LIMIT 50;
@@ -66,7 +66,7 @@ exports.getMasterItem = async (qRaw) => {
 
   const map = new Map();
   [...normal, ...normalized].forEach((it) => {
-    if (it?.codeProduct != null) map.set(Number(it.codeProduct), it);
+    if (it?.item_code != null) map.set(it.item_code, it);
   });
 
   return Array.from(map.values()).slice(0, 20);
@@ -82,7 +82,7 @@ exports.createItems = async (items, userName) => {
 
     const itemsToInsert = items.map((item) => ({
       branchCode: item.branchCode,
-      codeProduct: Number(item.codeProduct),
+      item_code: item.item_code,
       shelfCode: item.shelfCode,
       rowNo: Number(item.rowNo),
       index: Number(item.index),
@@ -110,7 +110,7 @@ exports.createItems = async (items, userName) => {
 
 exports.deleteItem = async (deleteData, userName) => {
   let key = null;
-  const { id, branchCode, shelfCode, rowNo, codeProduct, index } = deleteData;
+  const { id, branchCode, shelfCode, rowNo, item_code, index } = deleteData;
 
   let bc = branchCode;
   let sc = shelfCode;
@@ -135,7 +135,7 @@ exports.deleteItem = async (deleteData, userName) => {
         shelfCode: sc,
         rowNo: Number(rowNo),
         index: Number(index),
-        codeProduct: Number(codeProduct),
+        item_code: item_code,
       };
     }
 
@@ -147,7 +147,7 @@ exports.deleteItem = async (deleteData, userName) => {
           branchCode: bc,
           shelfCode: sc,
           rowNo: Number(rowNo),
-          codeProduct: Number(codeProduct),
+          item_code: item_code,
           index: Number(index),
         },
       });
@@ -197,7 +197,7 @@ exports.updateItems = async (items, userName) => {
 
     const oldItems = await prisma.sku.findMany({
       where: { branchCode, shelfCode },
-      select: { codeProduct: true, rowNo: true, index: true },
+      select: { item_code: true, rowNo: true, index: true },
     });
 
     const itemsToInsert = items.map((item) => ({
@@ -205,7 +205,7 @@ exports.updateItems = async (items, userName) => {
       shelfCode: item.shelfCode,
       rowNo: Number(item.rowNo),
       index: Number(item.index),
-      codeProduct: Number(item.codeProduct),
+      item_code: item.item_code,
     }));
 
     await prisma.$transaction([
@@ -214,7 +214,7 @@ exports.updateItems = async (items, userName) => {
     ]);
 
     const newItems = itemsToInsert.map((i) => ({
-      codeProduct: i.codeProduct,
+      item_code: i.item_code,
       rowNo: i.rowNo,
       index: i.index,
     }));
@@ -245,7 +245,7 @@ exports.getSkuData = async (branchCode) => {
 
   const rawResult = await prisma.$queryRaw`
         SELECT 
-            s."branchCode", s."codeProduct", s."shelfCode", s."rowNo", s."index",
+            s."branchCode", s."item_code", s."shelfCode", s."rowNo", s."index",
             p."nameProduct", p."nameBrand", p."purchasePriceExcVAT", p."salesPriceIncVAT", p."shelfLife", p."barcode",
             p."groupName",
             im."minStore", im."maxStore", im."packOrder",
@@ -261,34 +261,34 @@ exports.getSkuData = async (branchCode) => {
             END AS "dayOff"
         FROM "Sku" s
         LEFT JOIN (
-            SELECT "branchCode", "codeProduct", SUM("quantity")::int AS "stockQuantity"
-            FROM "Stock" WHERE "branchCode" = ${branchCode} GROUP BY "branchCode", "codeProduct"
-        ) st ON s."branchCode" = st."branchCode" AND s."codeProduct" = st."codeProduct"
+            SELECT "branchCode", "item_code", SUM("quantity")::int AS "stockQuantity"
+            FROM "Stock" WHERE "branchCode" = ${branchCode} GROUP BY "branchCode", "item_code"
+        ) st ON s."branchCode" = st."branchCode" AND s."item_code" = st."item_code"
         LEFT JOIN (
-            SELECT "branchCode", "codeProduct", SUM("quantity")::int AS "withdrawQuantity", SUM("value"::numeric)::float8 AS "withdrawValue"
+            SELECT "branchCode", "item_code", SUM("quantity")::int AS "withdrawQuantity", SUM("value"::numeric)::float8 AS "withdrawValue"
             FROM "withdraw"
             WHERE "branchCode" = ${branchCode} AND "docStatus" = 'อนุมัติแล้ว' AND "reason" != 'เบิกเพื่อขาย'
               AND to_date("date", 'DD/MM/YYYY') >= to_date(${startDateStr}, 'YYYY-MM-DD') AND to_date("date", 'DD/MM/YYYY') <= to_date(${endDateStr}, 'YYYY-MM-DD')
-            GROUP BY "branchCode", "codeProduct"
-        ) wd ON s."branchCode" = wd."branchCode" AND s."codeProduct" = wd."codeProduct"
+            GROUP BY "branchCode", "item_code"
+        ) wd ON s."branchCode" = wd."branchCode" AND s."item_code" = wd."item_code"
         LEFT JOIN (
-            SELECT br."branch_code" AS "branchCode", (bi."product_code")::int AS "codeProduct", SUM(bi."quantity")::int AS "quantity_total", SUM(bi."net_sales")::float8 AS "net_sales_total"
+            SELECT br."branch_code" AS "branchCode", bi."item_code" AS "item_code", SUM(bi."quantity")::int AS "quantity_total", SUM(bi."net_sales")::float8 AS "net_sales_total"
             FROM "BillItem" bi
             JOIN "Bill" b ON bi."billId" = b."id"
             JOIN "Branch" br ON b."branchId" = br."id"
             WHERE br."branch_code" = ${branchCode} AND b."date" >= ${startUtc} AND b."date" <= ${endUtc}
-            GROUP BY br."branch_code", (bi."product_code")::int
-        ) bs ON s."branchCode" = bs."branchCode" AND s."codeProduct" = bs."codeProduct"
+            GROUP BY br."branch_code", bi."item_code"
+        ) bs ON s."branchCode" = bs."branchCode" AND s."item_code" = bs."item_code"
         LEFT JOIN (
-            SELECT br."branch_code" AS "branchCode", (bi."product_code")::int AS "codeProduct", MAX(b."date") AS "lastSaleDate"
+            SELECT br."branch_code" AS "branchCode", bi."item_code" AS "item_code", MAX(b."date") AS "lastSaleDate"
             FROM "BillItem" bi
             JOIN "Bill" b ON bi."billId" = b."id"
             JOIN "Branch" br ON b."branchId" = br."id"
             WHERE br."branch_code" = ${branchCode} AND b."date" >= ${startUtc} AND b."date" <= ${endUtc}
-            GROUP BY br."branch_code", (bi."product_code")::int
-        ) ls ON s."branchCode" = ls."branchCode" AND s."codeProduct" = ls."codeProduct"
-        LEFT JOIN "ListOfItemHold" p ON s."codeProduct" = p."codeProduct"
-        LEFT JOIN "ItemMinMax" im ON s."branchCode" = im."branchCode" AND s."codeProduct" = im."codeProduct"
+            GROUP BY br."branch_code", bi."item_code"
+        ) ls ON s."branchCode" = ls."branchCode" AND s."item_code" = ls."item_code"
+        LEFT JOIN "ListOfItemHold" p ON s."item_code" = p."item_code"
+        LEFT JOIN "ItemMinMax" im ON s."branchCode" = im."branchCode" AND s."item_code" = im."item_code"
         WHERE s."branchCode" = ${branchCode}
         ORDER BY s."shelfCode", s."index", s."rowNo"
     `;
@@ -300,32 +300,32 @@ exports.getDashboardSummary = async () => {
   const { startUtc, endUtc, startDateStr, endDateStr } = get90DaysRangeUtc();
 
   const rows = await prisma.$queryRaw`
-      WITH sku_rows AS (SELECT "branchCode", "shelfCode", "codeProduct" FROM "Sku"),
-      stock_map AS (SELECT "branchCode", "codeProduct", SUM("quantity")::float8 AS stock_qty FROM "Stock" GROUP BY "branchCode", "codeProduct"),
+      WITH sku_rows AS (SELECT "branchCode", "shelfCode", "item_code" FROM "Sku"),
+      stock_map AS (SELECT "branchCode", "item_code", SUM("quantity")::float8 AS stock_qty FROM "Stock" GROUP BY "branchCode", "item_code"),
       withdraw_map AS (
-          SELECT "branchCode", "codeProduct", SUM("value")::float8 AS withdraw_value
+          SELECT "branchCode", "item_code", SUM("value")::float8 AS withdraw_value
           FROM "withdraw"
           WHERE "docStatus" = 'อนุมัติแล้ว' AND "reason" != 'เบิกเพื่อขาย'
             AND to_date("date", 'DD/MM/YYYY') >= to_date(${startDateStr}, 'YYYY-MM-DD') AND to_date("date", 'DD/MM/YYYY') <= to_date(${endDateStr}, 'YYYY-MM-DD')
-          GROUP BY "branchCode", "codeProduct"
+          GROUP BY "branchCode", "item_code"
       ),
       sales_map AS (
-          SELECT br."branch_code" AS "branchCode", (bi."product_code")::int AS "codeProduct", SUM(bi."net_sales")::float8 AS sales_total
+          SELECT br."branch_code" AS "branchCode", bi."item_code" AS "item_code", SUM(bi."net_sales")::float8 AS sales_total
           FROM "BillItem" bi
           JOIN "Bill" b ON bi."billId" = b."id"
           JOIN "Branch" br ON b."branchId" = br."id"
           WHERE b."date" >= ${startUtc} AND b."date" <= ${endUtc}
-          GROUP BY br."branch_code", (bi."product_code")::int
+          GROUP BY br."branch_code", bi."item_code"
       ),
       branch_sums AS (
-          SELECT sr."branchCode" AS branch_code, COUNT(DISTINCT sr."shelfCode")::int AS shelf_count, COUNT(DISTINCT sr."codeProduct")::int AS product_count,
+          SELECT sr."branchCode" AS branch_code, COUNT(DISTINCT sr."shelfCode")::int AS shelf_count, COUNT(DISTINCT sr."item_code")::int AS product_count,
               SUM(CASE WHEN COALESCE(sm.stock_qty, 0) > 0 THEN COALESCE(sm.stock_qty, 0) * COALESCE(p."purchasePriceExcVAT", 0) ELSE 0 END)::float8 AS stock_cost,
               SUM(COALESCE(wm.withdraw_value, 0))::float8 AS withdraw_value, SUM(COALESCE(sa.sales_total, 0))::float8 AS sales_total
           FROM sku_rows sr
-          LEFT JOIN stock_map sm ON sm."branchCode" = sr."branchCode" AND sm."codeProduct" = sr."codeProduct"
-          LEFT JOIN "ListOfItemHold" p ON p."codeProduct" = sr."codeProduct"
-          LEFT JOIN withdraw_map wm ON wm."branchCode" = sr."branchCode" AND wm."codeProduct" = sr."codeProduct"
-          LEFT JOIN sales_map sa ON sa."branchCode" = sr."branchCode" AND sa."codeProduct" = sr."codeProduct"
+          LEFT JOIN stock_map sm ON sm."branchCode" = sr."branchCode" AND sm."item_code" = sr."item_code"
+          LEFT JOIN "ListOfItemHold" p ON p."item_code" = sr."item_code"
+          LEFT JOIN withdraw_map wm ON wm."branchCode" = sr."branchCode" AND wm."item_code" = sr."item_code"
+          LEFT JOIN sales_map sa ON sa."branchCode" = sr."branchCode" AND sa."item_code" = sr."item_code"
           GROUP BY sr."branchCode"
       )
       SELECT b."branch_code" AS "branchCode", b."branch_name" AS "branchName", COALESCE(bs.shelf_count, 0)::int AS "shelfCount",
@@ -336,7 +336,7 @@ exports.getDashboardSummary = async () => {
 
   // Query for the overall unique SKU count across the entire system
   const overallSkuResult = await prisma.$queryRaw`
-      SELECT COUNT(DISTINCT "codeProduct")::int AS "overallUniqueSkus"
+      SELECT COUNT(DISTINCT "item_code")::int AS "overallUniqueSkus"
       FROM "Sku"
   `;
   const overallUniqueSkus = overallSkuResult[0]?.overallUniqueSkus || 0;
@@ -372,31 +372,31 @@ exports.getShelfSales = async (branchCode) => {
   const { startUtc, endUtc, startDateStr, endDateStr } = get90DaysRangeUtc();
 
   const rows = await prisma.$queryRaw`
-      WITH sku_rows AS (SELECT "branchCode", "shelfCode", "codeProduct" FROM "Sku" WHERE "branchCode" = ${branchCode}),
+      WITH sku_rows AS (SELECT "branchCode", "shelfCode", "item_code" FROM "Sku" WHERE "branchCode" = ${branchCode}),
       shelf_names AS (SELECT "branchCode", "shelfCode", "fullName" FROM "Template" WHERE "branchCode" = ${branchCode}),
-      stock_map AS (SELECT "branchCode", "codeProduct", SUM("quantity")::float8 AS stock_qty FROM "Stock" WHERE "branchCode" = ${branchCode} GROUP BY "branchCode", "codeProduct"),
+      stock_map AS (SELECT "branchCode", "item_code", SUM("quantity")::float8 AS stock_qty FROM "Stock" WHERE "branchCode" = ${branchCode} GROUP BY "branchCode", "item_code"),
       withdraw_map AS (
-          SELECT "branchCode", "codeProduct", SUM("value")::float8 AS withdraw_value
+          SELECT "branchCode", "item_code", SUM("value")::float8 AS withdraw_value
           FROM "withdraw"
           WHERE "docStatus" = 'อนุมัติแล้ว' AND "reason" != 'เบิกเพื่อขาย' AND "branchCode" = ${branchCode}
             AND to_date("date", 'DD/MM/YYYY') >= to_date(${startDateStr}, 'YYYY-MM-DD') AND to_date("date", 'DD/MM/YYYY') <= to_date(${endDateStr}, 'YYYY-MM-DD')
-          GROUP BY "branchCode", "codeProduct"
+          GROUP BY "branchCode", "item_code"
       ),
       sales_map AS (
-          SELECT br."branch_code" AS "branchCode", (bi."product_code")::int AS "codeProduct", SUM(bi."net_sales")::float8 AS sales_total
+          SELECT br."branch_code" AS "branchCode", bi."item_code" AS "item_code", SUM(bi."net_sales")::float8 AS sales_total
           FROM "BillItem" bi JOIN "Bill" b ON bi."billId" = b."id" JOIN "Branch" br ON b."branchId" = br."id"
           WHERE br."branch_code" = ${branchCode} AND b."date" >= ${startUtc} AND b."date" <= ${endUtc}
-          GROUP BY br."branch_code", (bi."product_code")::int
+          GROUP BY br."branch_code", bi."item_code"
       ),
       shelf_sums AS (
-          SELECT sr."branchCode" AS branch_code, sr."shelfCode" AS shelf_code, COUNT(DISTINCT sr."codeProduct")::int AS sku_count,
+          SELECT sr."branchCode" AS branch_code, sr."shelfCode" AS shelf_code, COUNT(DISTINCT sr."item_code")::int AS sku_count,
               SUM(CASE WHEN COALESCE(sm.stock_qty, 0) > 0 THEN COALESCE(sm.stock_qty, 0) * COALESCE(p."purchasePriceExcVAT", 0) ELSE 0 END)::float8 AS stock_cost,
               SUM(COALESCE(wm.withdraw_value, 0))::float8 AS withdraw_value, SUM(COALESCE(sa.sales_total, 0))::float8 AS sales_total
           FROM sku_rows sr
-          LEFT JOIN stock_map sm ON sm."branchCode" = sr."branchCode" AND sm."codeProduct" = sr."codeProduct"
-          LEFT JOIN "ListOfItemHold" p ON p."codeProduct" = sr."codeProduct"
-          LEFT JOIN withdraw_map wm ON wm."branchCode" = sr."branchCode" AND wm."codeProduct" = sr."codeProduct"
-          LEFT JOIN sales_map sa ON sa."branchCode" = sr."branchCode" AND sa."codeProduct" = sr."codeProduct"
+          LEFT JOIN stock_map sm ON sm."branchCode" = sr."branchCode" AND sm."item_code" = sr."item_code"
+          LEFT JOIN "ListOfItemHold" p ON p."item_code" = sr."item_code"
+          LEFT JOIN withdraw_map wm ON wm."branchCode" = sr."branchCode" AND wm."item_code" = sr."item_code"
+          LEFT JOIN sales_map sa ON sa."branchCode" = sr."branchCode" AND sa."item_code" = sr."item_code"
           GROUP BY sr."branchCode", sr."shelfCode"
       )
       SELECT ss.branch_code AS "branchCode", ss.shelf_code AS "shelfCode", sn."fullName" AS "shelfName",

@@ -39,7 +39,7 @@ exports.downloadSKU = async (req, res) => {
                 branchCode: true,
                 shelfCode: true,
                 rowNo: true,
-                codeProduct: true,
+                item_code: true,
                 index: true
             },
             orderBy: [

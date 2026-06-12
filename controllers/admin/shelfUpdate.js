@@ -92,7 +92,7 @@ exports.getShelfChangeLogs = async (req, res) => {
                 shelfCode: true,
                 updateId: true,
                 action: true,
-                codeProduct: true,
+                item_code: true,
                 productName: true,
                 fromRow: true,
                 fromIndex: true,
@@ -217,14 +217,14 @@ exports.createSingleChangeLog = async (branchCode, shelfCode, action, items, cre
         const updateId = uuidv4();
 
         // ดึงชื่อสินค้าจาก ListOfItemHold
-        const codesToLookup = items.map((i) => Number(i.codeProduct));
+        const codesToLookup = items.map((i) => i.item_code).filter(Boolean);
         const products = await prisma.listOfItemHold.findMany({
-            where: { codeProduct: { in: codesToLookup } },
-            select: { codeProduct: true, nameProduct: true, nameBrand: true },
+            where: { item_code: { in: codesToLookup } },
+            select: { item_code: true, nameProduct: true, nameBrand: true },
         });
         const productNameMap = new Map();
         products.forEach((p) => {
-            productNameMap.set(p.codeProduct, p.nameProduct || p.nameBrand || `รหัส ${p.codeProduct}`);
+            productNameMap.set(p.item_code, p.nameProduct || p.nameBrand || `รหัส ${p.item_code}`);
         });
 
         const logs = items.map((item) => ({
@@ -232,8 +232,8 @@ exports.createSingleChangeLog = async (branchCode, shelfCode, action, items, cre
             shelfCode: item.shelfCode || shelfCode,
             updateId,
             action,
-            codeProduct: Number(item.codeProduct),
-            productName: productNameMap.get(Number(item.codeProduct)) || null,
+            item_code: item.item_code,
+            productName: productNameMap.get(item.item_code) || null,
             fromRow: action === "delete" ? Number(item.rowNo) : null,
             fromIndex: action === "delete" ? Number(item.index) : null,
             toRow: action === "add" ? Number(item.rowNo) : null,
@@ -262,25 +262,25 @@ exports.createShelfChangeLogs = async (branchCode, shelfCode, oldItems, newItems
         // สร้าง map สำหรับ lookup
         const oldMap = new Map();
         oldItems.forEach((item) => {
-            const key = `${item.codeProduct}`;
+            const key = `${item.item_code}`;
             oldMap.set(key, item);
         });
 
         const newMap = new Map();
         newItems.forEach((item) => {
-            const key = `${item.codeProduct}`;
+            const key = `${item.item_code}`;
             newMap.set(key, item);
         });
 
         // ดึงชื่อสินค้าจาก ListOfItemHold
         const allCodes = [...new Set([...oldMap.keys(), ...newMap.keys()])].map(Number);
         const products = await prisma.listOfItemHold.findMany({
-            where: { codeProduct: { in: allCodes } },
-            select: { codeProduct: true, nameProduct: true, nameBrand: true },
+            where: { item_code: { in: allCodes } },
+            select: { item_code: true, nameProduct: true, nameBrand: true },
         });
         const productNameMap = new Map();
         products.forEach((p) => {
-            productNameMap.set(p.codeProduct, p.nameProduct || p.nameBrand || `รหัส ${p.codeProduct}`);
+            productNameMap.set(p.item_code, p.nameProduct || p.nameBrand || `รหัส ${p.item_code}`);
         });
 
         // หา DELETE: อยู่ใน old แต่ไม่อยู่ใน new
@@ -291,8 +291,8 @@ exports.createShelfChangeLogs = async (branchCode, shelfCode, oldItems, newItems
                     shelfCode,
                     updateId,
                     action: "delete",
-                    codeProduct: Number(oldItem.codeProduct),
-                    productName: productNameMap.get(Number(oldItem.codeProduct)) || null,
+                    item_code: oldItem.item_code,
+                    productName: productNameMap.get(oldItem.item_code) || null,
                     fromRow: oldItem.rowNo,
                     fromIndex: oldItem.index,
                     toRow: null,
@@ -310,8 +310,8 @@ exports.createShelfChangeLogs = async (branchCode, shelfCode, oldItems, newItems
                     shelfCode,
                     updateId,
                     action: "add",
-                    codeProduct: Number(newItem.codeProduct),
-                    productName: productNameMap.get(Number(newItem.codeProduct)) || null,
+                    item_code: newItem.item_code,
+                    productName: productNameMap.get(newItem.item_code) || null,
                     fromRow: null,
                     fromIndex: null,
                     toRow: newItem.rowNo,
@@ -331,8 +331,8 @@ exports.createShelfChangeLogs = async (branchCode, shelfCode, oldItems, newItems
                         shelfCode,
                         updateId,
                         action: "move",
-                        codeProduct: Number(oldItem.codeProduct),
-                        productName: productNameMap.get(Number(oldItem.codeProduct)) || null,
+                        item_code: oldItem.item_code,
+                        productName: productNameMap.get(oldItem.item_code) || null,
                         fromRow: oldItem.rowNo,
                         fromIndex: oldItem.index,
                         toRow: newItem.rowNo,

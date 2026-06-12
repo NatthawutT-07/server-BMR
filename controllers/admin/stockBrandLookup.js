@@ -27,7 +27,7 @@ exports.stockBrandLookup = async (req, res) => {
     // ─── 1) ListOfItemHold: สินค้าทั้งหมด ───
     const items = await prisma.listOfItemHold.findMany({
       select: {
-        codeProduct: true,
+        item_code: true,
         nameProduct: true,
         nameBrand: true,
         consingItem: true,
@@ -39,17 +39,17 @@ exports.stockBrandLookup = async (req, res) => {
     const salesRows = serialize(
       await prisma.$queryRaw`
         SELECT
-          NULLIF(regexp_replace(rb."product_code", '[^0-9]', '', 'g'), '')::int AS "codeProduct",
+          LPAD(COALESCE(NULLIF(regexp_replace(rb."item_code", '[^0-9]', '', 'g'), ''), '0'), 5, '0') AS "item_code",
           COALESCE(SUM(rb."quantity"), 0)      AS "salesQty",
           COALESCE(SUM(rb."total_sales"), 0)   AS "salesValue"
         FROM "RawBill" rb
-        WHERE rb."product_code" IS NOT NULL
-          AND rb."product_code" != ''
+        WHERE rb."item_code" IS NOT NULL
+          AND rb."item_code" != ''
           AND rb."date" IS NOT NULL
           AND rb."date" != ''
           AND to_date(rb."date", 'DD/MM/YYYY') >= to_date(${startDate}, 'YYYY-MM-DD')
           AND to_date(rb."date", 'DD/MM/YYYY') <= to_date(${endDate}, 'YYYY-MM-DD')
-        GROUP BY NULLIF(regexp_replace(rb."product_code", '[^0-9]', '', 'g'), '')::int
+        GROUP BY LPAD(COALESCE(NULLIF(regexp_replace(rb."item_code", '[^0-9]', '', 'g'), ''), '0'), 5, '0')
       `
     );
 
@@ -57,14 +57,14 @@ exports.stockBrandLookup = async (req, res) => {
     const withdrawRows = serialize(
       await prisma.$queryRaw`
         SELECT
-          "codeProduct",
+          "item_code",
           COALESCE(SUM("quantity"), 0)::int AS "withdrawQty"
         FROM "withdraw"
         WHERE "docStatus" = 'อนุมัติแล้ว'
           AND "reason" = 'เบิกหมดอายุ'
           AND to_date("date", 'DD/MM/YYYY') >= to_date(${startDate}, 'YYYY-MM-DD')
           AND to_date("date", 'DD/MM/YYYY') <= to_date(${endDate}, 'YYYY-MM-DD')
-        GROUP BY "codeProduct"
+        GROUP BY "item_code"
       `
     );
 
@@ -72,29 +72,29 @@ exports.stockBrandLookup = async (req, res) => {
     const stockRows = serialize(
       await prisma.$queryRaw`
         SELECT
-          "codeProduct",
+          "item_code",
           COALESCE(SUM("quantity"), 0)::int AS "stockQty"
         FROM "Stock"
-        GROUP BY "codeProduct"
+        GROUP BY "item_code"
       `
     );
 
     // ─── Build lookup maps ───
     const salesMap = new Map();
     for (const r of salesRows) {
-      if (r.codeProduct !== null && r.codeProduct !== undefined) {
-        const existing = salesMap.get(r.codeProduct) || { salesQty: 0, salesValue: 0 };
-        salesMap.set(r.codeProduct, {
+      if (r.item_code !== null && r.item_code !== undefined) {
+        const existing = salesMap.get(r.item_code) || { salesQty: 0, salesValue: 0 };
+        salesMap.set(r.item_code, {
           salesQty: existing.salesQty + (Number(r.salesQty) || 0),
           salesValue: existing.salesValue + (Number(r.salesValue) || 0),
         });
       }
     }
     const withdrawMap = new Map(
-      withdrawRows.map((r) => [r.codeProduct, r.withdrawQty])
+      withdrawRows.map((r) => [r.item_code, r.withdrawQty])
     );
     const stockMap = new Map(
-      stockRows.map((r) => [r.codeProduct, r.stockQty])
+      stockRows.map((r) => [r.item_code, r.stockQty])
     );
 
     // ─── Merge & group by nameBrand ───
@@ -106,7 +106,7 @@ exports.stockBrandLookup = async (req, res) => {
       if (!brand || brand === "ไม่ระบุ") {
         continue;
       }
-      const code = item.codeProduct;
+      const code = item.item_code;
 
       const sales = salesMap.get(code) || { salesQty: 0, salesValue: 0 };
       const wdQty = withdrawMap.get(code) || 0;

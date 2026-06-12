@@ -32,7 +32,7 @@ exports.uploadItemMinMaxXLSX = async (req, res) => {
         const dbMap = new Map();
 
         existingRows.forEach(x => {
-            dbMap.set(x.branchCode + "|" + x.codeProduct, x);
+            dbMap.set(x.branchCode + "|" + x.item_code, x);
         });
 
         // ---------------------------
@@ -42,7 +42,7 @@ exports.uploadItemMinMaxXLSX = async (req, res) => {
         const toUpdate = [];
 
         for (const row of mapped) {
-            const key = row.branchCode + "|" + row.codeProduct;
+            const key = row.branchCode + "|" + row.item_code;
             const old = dbMap.get(key);
 
             if (!old) {
@@ -74,7 +74,7 @@ exports.uploadItemMinMaxXLSX = async (req, res) => {
         // ---------------------------
         if (toUpdate.length > 0) {
             const values = toUpdate.map((r) =>
-                Prisma.sql`(${r.branchCode}, ${r.codeProduct}, ${r.minStore}, ${r.maxStore}, ${r.packOrder})`
+                Prisma.sql`(${r.branchCode}, ${r.item_code}, ${r.minStore}, ${r.maxStore}, ${r.packOrder})`
             );
 
             const sql = Prisma.sql`
@@ -83,10 +83,10 @@ exports.uploadItemMinMaxXLSX = async (req, res) => {
                     "maxStore" = v."maxStore",
                     "packOrder" = v."packOrder"
                 FROM (VALUES ${Prisma.join(values)})
-                AS v("branchCode", "codeProduct", "minStore", "maxStore", "packOrder")
+                AS v("branchCode", "item_code", "minStore", "maxStore", "packOrder")
                 WHERE
                     t."branchCode" = v."branchCode"
-                    AND t."codeProduct" = v."codeProduct"
+                    AND t."item_code" = v."item_code"
             `;
 
             await prisma.$executeRaw(sql);

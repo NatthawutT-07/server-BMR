@@ -14,11 +14,11 @@ exports.uploadGourmetXLSX = async (req, res) => {
         const raw = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
         setUploadJob(jobId, 20, "parsing rows");
 
-        const requiredFields = ["date", "branch_code", "product_code", "quantity", "sales"];
+        const requiredFields = ["date", "branch_code", "item_code", "quantity", "sales"];
         const aliases = {
             date: ["date", "วันที่"],
             branch_code: ["branchcode", "รหัสสาขา", "สาขา"],
-            product_code: ["productcode", "รหัสสินค้า", "sku"],
+            item_code: ["productcode", "รหัสสินค้า", "sku"],
             quantity: ["quantity", "qty", "จำนวน", "saleqty"],
             sales: ["sales", "ยอดขาย", "ยอดขายรวม", "netsales", "salesamount", "ยอดขายสุทธิ"],
         };
@@ -82,7 +82,7 @@ exports.uploadGourmetXLSX = async (req, res) => {
 
         raw.slice(headerRowIndex + 1).forEach((row) => {
             const branchCode = String(row[headerMap.branch_code] || "").trim();
-            const productCode = String(row[headerMap.product_code] || "").trim();
+            const productCode = String(row[headerMap.item_code] || "").trim();
             const dateVal = excelDateToJS(row[headerMap.date]);
 
             if (!branchCode || !productCode || !dateVal) return;
@@ -106,7 +106,7 @@ exports.uploadGourmetXLSX = async (req, res) => {
                 mapped.push({
                     date: dateVal,
                     branch_code: branchCode,
-                    product_code: productCode,
+                    item_code: productCode,
                     quantity,
                     sales,
                 });
