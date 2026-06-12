@@ -248,7 +248,7 @@ exports.getSkuData = async (branch_code) => {
             s."branch_code", s."item_code", s."shelfCode", s."rowNo", s."index",
             p."nameProduct", p."nameBrand", p."purchasePriceExcVAT", p."salesPriceIncVAT", p."shelfLife", p."barcode",
             p."groupName",
-            im."minStore", im."maxStore", im."packOrder",
+            im."min_stock", im."max_stock", im."pack_order",
             COALESCE(st."stockQuantity", 0)::int AS "stockQuantity",
             COALESCE(wd."withdrawQuantity", 0)::int   AS "withdrawQuantity",
             COALESCE(wd."withdrawValue", 0)::float8   AS "withdrawValue",

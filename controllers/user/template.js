@@ -238,9 +238,9 @@ exports.UserTemplateItem = async (req, res) => {
           p."shelfLife",
           p."salesPriceIncVAT",
           p."barcode",
-          im."minStore",
-          im."maxStore",
-          im."packOrder",
+          im."min_stock",
+          im."max_stock",
+          im."pack_order",
 
           --  Stock ปัจจุบัน
           COALESCE(st."stockQuantity", 0)::int AS "stockQuantity"
@@ -299,9 +299,9 @@ exports.UserTemplateItem = async (req, res) => {
 
       barcode: r.barcode ?? null,
 
-      minStore: r.minStore !== null && r.minStore !== undefined ? Number(r.minStore) : null,
-      maxStore: r.maxStore !== null && r.maxStore !== undefined ? Number(r.maxStore) : null,
-      packOrder: r.packOrder !== null && r.packOrder !== undefined ? Number(r.packOrder) : null,
+      min_stock: r.min_stock !== null && r.min_stock !== undefined ? Number(r.min_stock) : null,
+      max_stock: r.max_stock !== null && r.max_stock !== undefined ? Number(r.max_stock) : null,
+      pack_order: r.pack_order !== null && r.pack_order !== undefined ? Number(r.pack_order) : null,
 
       stockQuantity: Number(r.stockQuantity ?? 0),
     }));
@@ -356,8 +356,8 @@ exports.UserTemplateItem = async (req, res) => {
 //           p."shelfLife",
 //           p."salesPriceIncVAT",
 //           p."barcode",
-//           im."minStore",
-//           im."maxStore",
+//           im."min_stock",
+//           im."max_stock",
 
 //           --  Stock ปัจจุบัน
 //           COALESCE(st."stockQuantity", 0)::int AS "stockQuantity",
@@ -496,8 +496,8 @@ exports.UserTemplateItem = async (req, res) => {
 
 //                 barcode: r.barcode ?? null,
 
-//                 minStore: r.minStore !== null && r.minStore !== undefined ? Number(r.minStore) : null,
-//                 maxStore: r.maxStore !== null && r.maxStore !== undefined ? Number(r.maxStore) : null,
+//                 min_stock: r.min_stock !== null && r.min_stock !== undefined ? Number(r.min_stock) : null,
+//                 max_stock: r.max_stock !== null && r.max_stock !== undefined ? Number(r.max_stock) : null,
 
 //                 stockQuantity: Number(r.stockQuantity ?? 0),
 

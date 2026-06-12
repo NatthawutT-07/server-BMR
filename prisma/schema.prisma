@@ -39,9 +39,9 @@ model ItemMinMax {
   id          Int    @id @default(autoincrement())
   branch_code  String
   item_code   String
-  minStore    Int
-  maxStore    Int
-  packOrder   Int?
+  min_stock    Int
+  max_stock    Int
+  pack_order   Int?
 
   @@unique([branch_code, item_code])
   @@index([branch_code, item_code])

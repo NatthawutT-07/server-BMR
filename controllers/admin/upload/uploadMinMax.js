@@ -51,9 +51,9 @@ exports.uploadItemMinMaxXLSX = async (req, res) => {
             }
 
             if (
-                old.minStore !== row.minStore ||
-                old.maxStore !== row.maxStore ||
-                old.packOrder !== row.packOrder
+                old.min_stock !== row.min_stock ||
+                old.max_stock !== row.max_stock ||
+                old.pack_order !== row.pack_order
             ) {
                 toUpdate.push(row);
             }
@@ -74,16 +74,16 @@ exports.uploadItemMinMaxXLSX = async (req, res) => {
         // ---------------------------
         if (toUpdate.length > 0) {
             const values = toUpdate.map((r) =>
-                Prisma.sql`(${r.branch_code}, ${r.item_code}, ${r.minStore}, ${r.maxStore}, ${r.packOrder})`
+                Prisma.sql`(${r.branch_code}, ${r.item_code}, ${r.min_stock}, ${r.max_stock}, ${r.pack_order})`
             );
 
             const sql = Prisma.sql`
                 UPDATE "ItemMinMax" AS t SET
-                    "minStore" = v."minStore",
-                    "maxStore" = v."maxStore",
-                    "packOrder" = v."packOrder"
+                    "min_stock" = v."min_stock",
+                    "max_stock" = v."max_stock",
+                    "pack_order" = v."pack_order"
                 FROM (VALUES ${Prisma.join(values)})
-                AS v("branch_code", "item_code", "minStore", "maxStore", "packOrder")
+                AS v("branch_code", "item_code", "min_stock", "max_stock", "pack_order")
                 WHERE
                     t."branch_code" = v."branch_code"
                     AND t."item_code" = v."item_code"

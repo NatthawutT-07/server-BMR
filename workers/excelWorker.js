@@ -50,10 +50,10 @@ const parseItemMinMax = (raw) => {
         if (isNaN(min)) min = null;
         if (isNaN(max)) max = null;
         
-        let packOrder = parseInt(obj.PackOrder, 10);
-        if (isNaN(packOrder)) packOrder = null;
+        let pack_order = parseInt(obj.pack_order, 10);
+        if (isNaN(pack_order)) pack_order = null;
 
-        return { branch_code, item_code, minStore: min, maxStore: max, packOrder };
+        return { branch_code, item_code, min_stock: min, max_stock: max, pack_order };
     }).filter(v => v !== null);
 
     return { data: mapped };
