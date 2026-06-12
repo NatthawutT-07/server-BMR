@@ -14,12 +14,12 @@ const prisma = require("../../config/prisma");
 // เช็คว่าสินค้ามีใน planogram ของสาขานี้หรือยัง
 // ======================================================
 exports.checkProductExists = async (req, res) => {
-    const { branchCode, barcode } = req.query;
+    const { branch_code, barcode } = req.query;
 
-    if (!branchCode || !barcode) {
+    if (!branch_code || !barcode) {
         return res.status(400).json({
             ok: false,
-            msg: "branchCode และ barcode จำเป็นต้องระบุ"
+            msg: "branch_code และ barcode จำเป็นต้องระบุ"
         });
     }
 
@@ -47,7 +47,7 @@ exports.checkProductExists = async (req, res) => {
         // เช็คว่ามีใน planogram ของสาขานี้หรือยัง
         const existingItem = await prisma.sku.findFirst({
             where: {
-                branchCode,
+                branch_code,
                 item_code: product.item_code
             },
             select: {
@@ -107,19 +107,19 @@ exports.checkProductExists = async (req, res) => {
 // ใช้สำหรับ dropdown เลือก shelf
 // ======================================================
 exports.getShelvesForRegister = async (req, res) => {
-    const { branchCode } = req.query;
+    const { branch_code } = req.query;
 
-    if (!branchCode) {
+    if (!branch_code) {
         return res.status(400).json({
             ok: false,
-            msg: "branchCode จำเป็นต้องระบุ"
+            msg: "branch_code จำเป็นต้องระบุ"
         });
     }
 
     try {
         // ดึง shelf templates ของสาขา
         const templates = await prisma.Template.findMany({
-            where: { branchCode },
+            where: { branch_code },
             orderBy: { shelfCode: "asc" },
             select: {
                 shelfCode: true,
@@ -152,19 +152,19 @@ exports.getShelvesForRegister = async (req, res) => {
 // Get Next Index (หา index ถัดไปของ row)
 // ======================================================
 exports.getNextIndex = async (req, res) => {
-    const { branchCode, shelfCode, rowNo } = req.query;
+    const { branch_code, shelfCode, rowNo } = req.query;
 
-    if (!branchCode || !shelfCode || !rowNo) {
+    if (!branch_code || !shelfCode || !rowNo) {
         return res.status(400).json({
             ok: false,
-            msg: "branchCode, shelfCode, rowNo จำเป็นต้องระบุ"
+            msg: "branch_code, shelfCode, rowNo จำเป็นต้องระบุ"
         });
     }
 
     try {
         const maxIndex = await prisma.sku.aggregate({
             where: {
-                branchCode,
+                branch_code,
                 shelfCode,
                 rowNo: Number(rowNo)
             },
@@ -192,12 +192,12 @@ exports.getNextIndex = async (req, res) => {
 // Register Product (บันทึกสินค้าลง DB โดยตรง)
 // ======================================================
 exports.registerProduct = async (req, res) => {
-    const { branchCode, barcode, shelfCode, rowNo } = req.body;
+    const { branch_code, barcode, shelfCode, rowNo } = req.body;
 
-    if (!branchCode || !barcode || !shelfCode || !rowNo) {
+    if (!branch_code || !barcode || !shelfCode || !rowNo) {
         return res.status(400).json({
             ok: false,
-            msg: "กรุณาระบุข้อมูลให้ครบ (branchCode, barcode, shelfCode, rowNo)"
+            msg: "กรุณาระบุข้อมูลให้ครบ (branch_code, barcode, shelfCode, rowNo)"
         });
     }
 
@@ -221,7 +221,7 @@ exports.registerProduct = async (req, res) => {
         // 2. เช็คว่ามีใน planogram ของสาขานี้หรือยัง
         const existingItem = await prisma.sku.findFirst({
             where: {
-                branchCode,
+                branch_code,
                 item_code: product.item_code
             }
         });
@@ -241,7 +241,7 @@ exports.registerProduct = async (req, res) => {
         // 3. หา index ถัดไปของ row นี้
         const maxIndex = await prisma.sku.aggregate({
             where: {
-                branchCode,
+                branch_code,
                 shelfCode,
                 rowNo: Number(rowNo)
             },
@@ -253,7 +253,7 @@ exports.registerProduct = async (req, res) => {
         // 4. บันทึกลง SKU table
         const newSku = await prisma.sku.create({
             data: {
-                branchCode,
+                branch_code,
                 shelfCode,
                 rowNo: Number(rowNo),
                 index: nextIndex,

@@ -31,7 +31,7 @@ exports.uploadStockXLSX = async (req, res) => {
         const user = req.user;
 
         // ดึงรายการสาขาที่ไม่ซ้ำกันในไฟล์
-        const uniqueBranches = [...new Set(mapped.map(r => r.branchCode))];
+        const uniqueBranches = [...new Set(mapped.map(r => r.branch_code))];
 
         // Security Check: ถ้าไม่ใช่ admin ต้องอัปโหลดได้เฉพาะสาขาตัวเองเท่านั้น
         if (user.role !== 'admin') {
@@ -43,7 +43,7 @@ exports.uploadStockXLSX = async (req, res) => {
 
             // --- NEW: Rate Limit 1 ชั่วโมง สำหรับ User ทั่วไป ---
             const lastSync = await prisma.branchDataSync.findUnique({
-                where: { branchCode_key: { branchCode: user.name, key: 'stock' } }
+                where: { branch_code_key: { branch_code: user.name, key: 'stock' } }
             });
 
             if (lastSync) {
@@ -68,7 +68,7 @@ exports.uploadStockXLSX = async (req, res) => {
         // ล้างข้อมูลเก่า "เฉพาะสาขาที่มีอยู่ในไฟล์"
         await prisma.stock.deleteMany({
             where: {
-                branchCode: { in: uniqueBranches }
+                branch_code: { in: uniqueBranches }
             }
         });
 
@@ -91,7 +91,7 @@ exports.uploadStockXLSX = async (req, res) => {
 
         // อัปเดตเวลาอัปเดตรายสาขา
         for (const bc of uniqueBranches) {
-            const branchRows = mapped.filter(r => r.branchCode === bc).length;
+            const branchRows = mapped.filter(r => r.branch_code === bc).length;
             await touchDataSync('stock', branchRows, bc);
         }
 

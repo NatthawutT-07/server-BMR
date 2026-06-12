@@ -37,24 +37,24 @@ model LoginLog {
 
 model ItemMinMax {
   id          Int    @id @default(autoincrement())
-  branchCode  String
+  branch_code  String
   item_code   String
   minStore    Int
   maxStore    Int
   packOrder   Int?
 
-  @@unique([branchCode, item_code])
-  @@index([branchCode, item_code])
+  @@unique([branch_code, item_code])
+  @@index([branch_code, item_code])
 }
 
 model Stock {
   id          Int    @id @default(autoincrement())
   item_code   String
-  branchCode  String
+  branch_code  String
   quantity    Int
 
-  @@unique([branchCode, item_code])
-  @@index([branchCode, item_code])
+  @@unique([branch_code, item_code])
+  @@index([branch_code, item_code])
 }
 
 model DataSync {
@@ -64,18 +64,18 @@ model DataSync {
 }
 
 model BranchDataSync {
-  branchCode String
+  branch_code String
   key        String
   updatedAt  DateTime @default(now())
   rowCount   Int?
 
-  @@id([branchCode, key])
+  @@id([branch_code, key])
 }
 
 model withdraw {
   id          Int    @id @default(autoincrement())
   item_code   String
-  branchCode  String
+  branch_code  String
   docNumber   String
   date        String
   docStatus   String
@@ -83,9 +83,9 @@ model withdraw {
   quantity    Int
   value       Float
 
-  @@unique([docNumber, branchCode, item_code, quantity, value])
-  @@index([branchCode, item_code])
-  @@index([branchCode, docStatus, item_code])
+  @@unique([docNumber, branch_code, item_code, quantity, value])
+  @@index([branch_code, item_code])
+  @@index([branch_code, docStatus, item_code])
 }
 
 model ListOfItemHold {
@@ -111,28 +111,28 @@ model ListOfItemHold {
 
 model Template {
   id         Int     @id @default(autoincrement())
-  branchCode String
+  branch_code String
   shelfCode  String
   fullName   String?
   rowQty     Int
   type       String?
 
-  @@unique([branchCode, shelfCode])
-  @@index([branchCode, shelfCode, fullName])
+  @@unique([branch_code, shelfCode])
+  @@index([branch_code, shelfCode, fullName])
 }
 
 model Sku {
   id          Int    @id @default(autoincrement())
-  branchCode  String
+  branch_code  String
   shelfCode   String
   rowNo       Int
   item_code   String
   index       Int
 
-  @@unique([branchCode, item_code])
-  @@index([branchCode, shelfCode, rowNo, index])
-  @@index([branchCode, shelfCode, index])
-  @@index([branchCode, item_code]) //   UserTemplateItem ไวขึ้น
+  @@unique([branch_code, item_code])
+  @@index([branch_code, shelfCode, rowNo, index])
+  @@index([branch_code, shelfCode, index])
+  @@index([branch_code, item_code]) //   UserTemplateItem ไวขึ้น
 }
 
 model Branch {
@@ -192,7 +192,7 @@ model BillItem {
 
 model PogRequest {
   id          Int     @id @default(autoincrement())
-  branchCode  String
+  branch_code  String
   action      String // "add" | "swap" | "delete"
   barcode     String
   productName String?
@@ -216,7 +216,7 @@ model PogRequest {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([branchCode, status])
+  @@index([branch_code, status])
   @@index([status])
   @@index([createdAt])
 }
@@ -224,12 +224,12 @@ model PogRequest {
 // เก็บสถานะการอัพเดท shelf ของแต่ละสาขา (สำหรับแจ้งเตือน mobile)
 model ShelfUpdate {
   id         Int      @id @default(autoincrement())
-  branchCode String   @unique
+  branch_code String   @unique
   hasUpdate  Boolean  @default(true)
   updatedAt  DateTime @updatedAt
   updatedBy  String?
 
-  @@index([branchCode])
+  @@index([branch_code])
 }
 
 //  เก็บยอดขายของกรูเม่
@@ -253,7 +253,7 @@ model Gourmet {
 // เก็บ log รายละเอียดการเปลี่ยนแปลง shelf (add/delete/move)
 model ShelfChangeLog {
   id          Int     @id @default(autoincrement())
-  branchCode  String
+  branch_code  String
   shelfCode   String
   updateId    String // UUID group บันทึกพร้อมกัน
   action      String // add | delete | move
@@ -275,9 +275,9 @@ model ShelfChangeLog {
   acknowledged   Boolean   @default(false)
   acknowledgedAt DateTime?
 
-  @@index([branchCode, shelfCode])
-  @@index([branchCode, createdAt])
-  @@index([branchCode, acknowledged])
+  @@index([branch_code, shelfCode])
+  @@index([branch_code, createdAt])
+  @@index([branch_code, acknowledged])
   @@index([updateId])
 }
 

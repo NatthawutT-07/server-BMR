@@ -3,20 +3,20 @@ const response = require("../../utils/responseHelper");
 
 exports.downloadTemplate = async (req, res) => {
     try {
-        const { branchCode } = req.query;
-        const whereClause = branchCode ? { branchCode: String(branchCode) } : {};
+        const { branch_code } = req.query;
+        const whereClause = branch_code ? { branch_code: String(branch_code) } : {};
 
         const templates = await prisma.Template.findMany({
             where: whereClause,
             select: {
-                branchCode: true,
+                branch_code: true,
                 shelfCode: true,
                 fullName: true,
                 rowQty: true,
                 type: true
             },
             orderBy: [
-                { branchCode: 'asc' },
+                { branch_code: 'asc' },
                 { shelfCode: 'asc' }
             ],
         });
@@ -30,20 +30,20 @@ exports.downloadTemplate = async (req, res) => {
 
 exports.downloadSKU = async (req, res) => {
     try {
-        const { branchCode } = req.query;
-        const whereClause = branchCode ? { branchCode: String(branchCode) } : {};
+        const { branch_code } = req.query;
+        const whereClause = branch_code ? { branch_code: String(branch_code) } : {};
 
         const skus = await prisma.sku.findMany({
             where: whereClause,
             select: {
-                branchCode: true,
+                branch_code: true,
                 shelfCode: true,
                 rowNo: true,
                 item_code: true,
                 index: true
             },
             orderBy: [
-                { branchCode: 'asc' },
+                { branch_code: 'asc' },
                 { shelfCode: 'asc' },
                 { rowNo: 'asc' },
                 { index: 'asc' }

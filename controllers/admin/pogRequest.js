@@ -15,7 +15,7 @@ const getCodeProduct = async (barcode) => {
 
 // Helper: Apply Change to SKU Table
 const applyPogChange = async (reqItem) => {
-    const { branchCode, action, barcode } = reqItem;
+    const { branch_code, action, barcode } = reqItem;
     const fromShelf = reqItem.fromShelf;
     const fromRow = Number(reqItem.fromRow || 0);
     const toShelf = reqItem.toShelf;
@@ -27,16 +27,16 @@ const applyPogChange = async (reqItem) => {
         const code = await getCodeProduct(barcode);
         if (!code) throw new Error(`Product not found for barcode: ${barcode}`);
 
-        const key = lockKey(branchCode, fromShelf);
+        const key = lockKey(branch_code, fromShelf);
         await acquireLock(prisma, key);
         try {
             const deleted = await prisma.sku.deleteMany({
-                where: { branchCode, shelfCode: fromShelf, rowNo: fromRow, item_code: code },
+                where: { branch_code, shelfCode: fromShelf, rowNo: fromRow, item_code: code },
             });
             if (deleted.count === 0) throw new Error(`ไม่พบสินค้า ${barcode} ใน ${fromShelf}/Row${fromRow}`);
 
             const remaining = await prisma.sku.findMany({
-                where: { branchCode, shelfCode: fromShelf, rowNo: fromRow },
+                where: { branch_code, shelfCode: fromShelf, rowNo: fromRow },
                 orderBy: { index: "asc" },
             });
             if (remaining.length > 0) {
@@ -56,11 +56,11 @@ const applyPogChange = async (reqItem) => {
         const code = await getCodeProduct(barcode);
         if (!code) throw new Error(`Product not found for barcode: ${barcode}`);
 
-        const key = lockKey(branchCode, toShelf);
+        const key = lockKey(branch_code, toShelf);
         await acquireLock(prisma, key);
         try {
             const itemsToShift = await prisma.sku.findMany({
-                where: { branchCode, shelfCode: toShelf, rowNo: toRow, index: { gte: toIndex } },
+                where: { branch_code, shelfCode: toShelf, rowNo: toRow, index: { gte: toIndex } },
                 orderBy: { index: "desc" }
             });
             if (itemsToShift.length > 0) {
@@ -70,10 +70,10 @@ const applyPogChange = async (reqItem) => {
                 await prisma.$transaction(shiftUpdates);
             }
             await prisma.sku.create({
-                data: { branchCode, shelfCode: toShelf, rowNo: toRow, index: toIndex, item_code: code }
+                data: { branch_code, shelfCode: toShelf, rowNo: toRow, index: toIndex, item_code: code }
             });
             const allItems = await prisma.sku.findMany({
-                where: { branchCode, shelfCode: toShelf, rowNo: toRow },
+                where: { branch_code, shelfCode: toShelf, rowNo: toRow },
                 orderBy: { index: "asc" }
             });
             if (allItems.length > 0) {
@@ -95,8 +95,8 @@ const applyPogChange = async (reqItem) => {
         if (!code) throw new Error(`Product not found for barcode: ${barcode}`);
 
         const isSameRow = (fromShelf === toShelf && Number(fromRow) === Number(toRow));
-        const key1 = lockKey(branchCode, fromShelf);
-        const key2 = fromShelf !== toShelf ? lockKey(branchCode, toShelf) : null;
+        const key1 = lockKey(branch_code, fromShelf);
+        const key2 = fromShelf !== toShelf ? lockKey(branch_code, toShelf) : null;
 
         await acquireLock(prisma, key1);
         if (key2) await acquireLock(prisma, key2);
@@ -104,7 +104,7 @@ const applyPogChange = async (reqItem) => {
         try {
             if (isSameRow) {
                 const allItems = await prisma.sku.findMany({
-                    where: { branchCode, shelfCode: fromShelf, rowNo: Number(fromRow) },
+                    where: { branch_code, shelfCode: fromShelf, rowNo: Number(fromRow) },
                     orderBy: { index: "asc" }
                 });
                 const itemToMove = allItems.find(i => i.item_code === code);
@@ -123,12 +123,12 @@ const applyPogChange = async (reqItem) => {
                 await prisma.$transaction(updates);
             } else {
                 const deleted = await prisma.sku.deleteMany({
-                    where: { branchCode, shelfCode: fromShelf, rowNo: Number(fromRow), item_code: code }
+                    where: { branch_code, shelfCode: fromShelf, rowNo: Number(fromRow), item_code: code }
                 });
                 if (deleted.count === 0) throw new Error(`ไม่พบสินค้า ${barcode} ใน ${fromShelf}/Row${fromRow}`);
 
                 const sourceRemaining = await prisma.sku.findMany({
-                    where: { branchCode, shelfCode: fromShelf, rowNo: Number(fromRow) },
+                    where: { branch_code, shelfCode: fromShelf, rowNo: Number(fromRow) },
                     orderBy: { index: "asc" }
                 });
                 if (sourceRemaining.length > 0) {
@@ -139,7 +139,7 @@ const applyPogChange = async (reqItem) => {
                 }
 
                 const itemsToShift = await prisma.sku.findMany({
-                    where: { branchCode, shelfCode: toShelf, rowNo: Number(toRow), index: { gte: Number(toIndex) } },
+                    where: { branch_code, shelfCode: toShelf, rowNo: Number(toRow), index: { gte: Number(toIndex) } },
                     orderBy: { index: "desc" }
                 });
                 if (itemsToShift.length > 0) {
@@ -149,10 +149,10 @@ const applyPogChange = async (reqItem) => {
                     await prisma.$transaction(shiftUpdates);
                 }
                 await prisma.sku.create({
-                    data: { branchCode, shelfCode: toShelf, rowNo: Number(toRow), index: Number(toIndex), item_code: code }
+                    data: { branch_code, shelfCode: toShelf, rowNo: Number(toRow), index: Number(toIndex), item_code: code }
                 });
                 const targetAll = await prisma.sku.findMany({
-                    where: { branchCode, shelfCode: toShelf, rowNo: Number(toRow) },
+                    where: { branch_code, shelfCode: toShelf, rowNo: Number(toRow) },
                     orderBy: { index: "asc" }
                 });
                 if (targetAll.length > 0) {
@@ -175,9 +175,9 @@ const applyPogChange = async (reqItem) => {
  */
 const getAllPogRequests = async (req, res) => {
     try {
-        const { branchCode, status, action, shelf, row, limit = 50, page = 1 } = req.query;
+        const { branch_code, status, action, shelf, row, limit = 50, page = 1 } = req.query;
         const where = {};
-        if (branchCode) where.branchCode = branchCode;
+        if (branch_code) where.branch_code = branch_code;
         if (status) where.status = status;
         if (action) where.action = action;
 
@@ -206,23 +206,23 @@ const getAllPogRequests = async (req, res) => {
 
         const statsGroup = await prisma.pogRequest.groupBy({
             by: ['status'],
-            where: { branchCode, action },
+            where: { branch_code, action },
             _count: { id: true }
         });
         const stats = { pending: 0, rejected: 0, completed: 0 };
         statsGroup.forEach(g => { if (stats[g.status] !== undefined) stats[g.status] = g._count.id; });
 
         const branchStatsGroup = await prisma.pogRequest.groupBy({
-            by: ['branchCode', 'action'],
+            by: ['branch_code', 'action'],
             where: { status: 'pending' },
             _count: { id: true }
         });
         const branchStats = {};
         branchStatsGroup.forEach(g => {
-            if (!branchStats[g.branchCode]) branchStats[g.branchCode] = { add: 0, move: 0, delete: 0, total: 0 };
+            if (!branchStats[g.branch_code]) branchStats[g.branch_code] = { add: 0, move: 0, delete: 0, total: 0 };
             if (['add', 'move', 'delete'].includes(g.action)) {
-                branchStats[g.branchCode][g.action] += g._count.id;
-                branchStats[g.branchCode].total += g._count.id;
+                branchStats[g.branch_code][g.action] += g._count.id;
+                branchStats[g.branch_code].total += g._count.id;
             }
         });
 
@@ -358,20 +358,20 @@ const bulkApprove = async (req, res) => {
 
                 if (req.action === "delete") {
                     await applyPogChange(req);
-                    affectedRows.add(`${req.branchCode}|${req.fromShelf}|${req.fromRow}`);
-                    recordChange(req.branchCode, req.fromShelf, req.fromRow, 'delete', originalFromIndex);
+                    affectedRows.add(`${req.branch_code}|${req.fromShelf}|${req.fromRow}`);
+                    recordChange(req.branch_code, req.fromShelf, req.fromRow, 'delete', originalFromIndex);
                 } else if (req.action === "add") {
-                    req.toIndex = calculateActualIndex(req.branchCode, req.toShelf, req.toRow, originalToIndex);
+                    req.toIndex = calculateActualIndex(req.branch_code, req.toShelf, req.toRow, originalToIndex);
                     await applyPogChange(req);
-                    affectedRows.add(`${req.branchCode}|${req.toShelf}|${req.toRow}`);
-                    recordChange(req.branchCode, req.toShelf, req.toRow, 'add', originalToIndex);
+                    affectedRows.add(`${req.branch_code}|${req.toShelf}|${req.toRow}`);
+                    recordChange(req.branch_code, req.toShelf, req.toRow, 'add', originalToIndex);
                 } else if (req.action === "move") {
-                    req.toIndex = calculateActualIndex(req.branchCode, req.toShelf, req.toRow, originalToIndex);
+                    req.toIndex = calculateActualIndex(req.branch_code, req.toShelf, req.toRow, originalToIndex);
                     await applyPogChange(req);
-                    affectedRows.add(`${req.branchCode}|${req.fromShelf}|${req.fromRow}`);
-                    affectedRows.add(`${req.branchCode}|${req.toShelf}|${req.toRow}`);
-                    recordChange(req.branchCode, req.fromShelf, req.fromRow, 'delete', originalFromIndex);
-                    recordChange(req.branchCode, req.toShelf, req.toRow, 'add', originalToIndex);
+                    affectedRows.add(`${req.branch_code}|${req.fromShelf}|${req.fromRow}`);
+                    affectedRows.add(`${req.branch_code}|${req.toShelf}|${req.toRow}`);
+                    recordChange(req.branch_code, req.fromShelf, req.fromRow, 'delete', originalFromIndex);
+                    recordChange(req.branch_code, req.toShelf, req.toRow, 'add', originalToIndex);
                 }
                 await prisma.pogRequest.update({ where: { id: req.id }, data: { status: "completed" } });
                 successCount++;

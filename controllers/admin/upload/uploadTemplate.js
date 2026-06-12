@@ -16,17 +16,17 @@ exports.uploadTemplateXLSX = async (req, res) => {
         const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
 
         const initialData = rows.map(row => {
-            let branchCode = row.branchCode?.trim() || row.StoreCode?.trim() || null;
-            if (branchCode) {
-                const match = branchCode.match(/^ST0*(\d{1,})$/);
-                if (match) branchCode = `ST${match[1].padStart(3, "0")}`;
+            let branch_code = row.branch_code?.trim() || row.StoreCode?.trim() || null;
+            if (branch_code) {
+                const match = branch_code.match(/^ST0*(\d{1,})$/);
+                if (match) branch_code = `ST${match[1].padStart(3, "0")}`;
             }
 
             const shelfCode = row.shelfCode?.trim() || null;
-            if (!branchCode || !shelfCode) return null;
+            if (!branch_code || !shelfCode) return null;
 
             return {
-                branchCode,
+                branch_code,
                 shelfCode,
                 fullName: row.fullName?.trim() || null,
                 rowQty: parseInt(row.rowQty || row.RowQty || 0, 10),
@@ -38,7 +38,7 @@ exports.uploadTemplateXLSX = async (req, res) => {
         const tempMap = new Map();
         const duplicates = [];
         for (const item of initialData) {
-            const key = `${item.branchCode}_${item.shelfCode}`;
+            const key = `${item.branch_code}_${item.shelfCode}`;
             if (tempMap.has(key)) duplicates.push(key);
             tempMap.set(key, item);
         }
@@ -50,15 +50,15 @@ exports.uploadTemplateXLSX = async (req, res) => {
         setUploadJob(jobId, 25, "analyzing sync delta");
 
         // 2. เช็คว่าต้องลบตัวไหนออก (มีใน DB แต่ไม่มีในไฟล์) โดยตรวจจับเฉพาะสาขาที่มีในไฟล์อัปโหลด
-        const branchesInFile = [...new Set(templateData.map(t => t.branchCode))];
+        const branchesInFile = [...new Set(templateData.map(t => t.branch_code))];
         const existingInDb = await prisma.Template.findMany({
-            where: { branchCode: { in: branchesInFile } },
-            select: { id: true, branchCode: true, shelfCode: true }
+            where: { branch_code: { in: branchesInFile } },
+            select: { id: true, branch_code: true, shelfCode: true }
         });
 
-        const fileKeys = new Set(templateData.map(t => `${t.branchCode}_${t.shelfCode}`));
+        const fileKeys = new Set(templateData.map(t => `${t.branch_code}_${t.shelfCode}`));
         const toDeleteIds = existingInDb
-            .filter(dbItem => !fileKeys.has(`${dbItem.branchCode}_${dbItem.shelfCode}`))
+            .filter(dbItem => !fileKeys.has(`${dbItem.branch_code}_${dbItem.shelfCode}`))
             .map(dbItem => dbItem.id);
 
         setUploadJob(jobId, 40, `deleting ${toDeleteIds.length} missing templates`);
@@ -82,8 +82,8 @@ exports.uploadTemplateXLSX = async (req, res) => {
                 const upsertPromises = chunk.map(item => 
                     tx.Template.upsert({
                         where: {
-                            branchCode_shelfCode: {
-                                branchCode: item.branchCode,
+                            branch_code_shelfCode: {
+                                branch_code: item.branch_code,
                                 shelfCode: item.shelfCode
                             }
                         },

@@ -2,21 +2,21 @@ const prisma = require("../../config/prisma");
 
 const getShelfBlocks = async (req, res) => {
   try {
-    const { branchCode, shelfCode } = req.query;
+    const { branch_code, shelfCode } = req.query;
 
-    if (!branchCode || !shelfCode) {
-      return res.status(400).json({ message: "branchCode, shelfCode required" });
+    if (!branch_code || !shelfCode) {
+      return res.status(400).json({ message: "branch_code, shelfCode required" });
     }
 
     const shelf = await prisma.Template.findUnique({
-      where: { branchCode_shelfCode: { branchCode, shelfCode } },
+      where: { branch_code_shelfCode: { branch_code, shelfCode } },
       select: { shelfCode: true, fullName: true, rowQty: true, type: true },
     });
 
     if (!shelf) return res.status(404).json({ message: "SHELF_NOT_FOUND" });
 
     const skus = await prisma.sku.findMany({
-      where: { branchCode, shelfCode },
+      where: { branch_code, shelfCode },
       select: { rowNo: true, index: true, item_code: true },
       orderBy: [{ rowNo: "asc" }, { index: "asc" }],
     });

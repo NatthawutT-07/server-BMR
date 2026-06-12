@@ -41,16 +41,16 @@ exports.itemCreate = async (req, res) => {
 
 exports.itemDelete = async (req, res) => {
   try {
-    const { id, branchCode, shelfCode, rowNo, item_code, index } = req.body;
+    const { id, branch_code, shelfCode, rowNo, item_code, index } = req.body;
 
     if (
       (id == null || id === "") &&
-      (!branchCode || !shelfCode || rowNo == null || item_code == null || index == null)
+      (!branch_code || !shelfCode || rowNo == null || item_code == null || index == null)
     ) {
       return response.error(res, "Missing delete identifiers", "BAD_REQUEST", 400);
     }
 
-    await shelfService.deleteItem({ id, branchCode, shelfCode, rowNo, item_code, index }, req.user?.name);
+    await shelfService.deleteItem({ id, branch_code, shelfCode, rowNo, item_code, index }, req.user?.name);
 
     return response.success(res, null, null, "Deleted and rearranged successfully");
   } catch (error) {
@@ -90,23 +90,23 @@ exports.Template = async (req, res) => {
 };
 
 exports.sku = async (req, res) => {
-  const { branchCode } = req.body;
+  const { branch_code } = req.body;
 
-  if (!branchCode) {
-    return response.error(res, "branchCode is required", "BAD_REQUEST", 400);
+  if (!branch_code) {
+    return response.error(res, "branch_code is required", "BAD_REQUEST", 400);
   }
 
-  const key = `sku-${branchCode}-${new Date().toISOString().slice(0, 10)}`;
+  const key = `sku-${branch_code}-${new Date().toISOString().slice(0, 10)}`;
 
   const cached = cache.get(key);
   if (cached) return response.success(res, cached);
 
   try {
-    const { result: rawResult } = await shelfService.getSkuData(branchCode);
+    const { result: rawResult } = await shelfService.getSkuData(branch_code);
 
     const result = rawResult.map((r) => {
       return {
-        branchCode: r.branchCode,
+        branch_code: r.branch_code,
         item_code: r.item_code !== null && r.item_code !== undefined ? r.item_code : null,
         shelfCode: r.shelfCode,
         rowNo: r.rowNo,
@@ -160,13 +160,13 @@ exports.getShelfDashboardSummary = async (req, res) => {
 };
 
 exports.getShelfDashboardShelfSales = async (req, res) => {
-  const branchCode = String(req.query.branchCode || "").trim();
-  if (!branchCode) {
-    return response.error(res, "branchCode is required", "BAD_REQUEST", 400);
+  const branch_code = String(req.query.branch_code || "").trim();
+  if (!branch_code) {
+    return response.error(res, "branch_code is required", "BAD_REQUEST", 400);
   }
 
   try {
-    const shelfSalesRows = await shelfService.getShelfSales(branchCode);
+    const shelfSalesRows = await shelfService.getShelfSales(branch_code);
 
     const shelves = shelfSalesRows.map((row) => ({
       shelfCode: row.shelfCode,
@@ -177,7 +177,7 @@ exports.getShelfDashboardShelfSales = async (req, res) => {
       stockCost: Number(row.stockCost || 0),
     }));
 
-    return response.success(res, { branchCode, shelves });
+    return response.success(res, { branch_code, shelves });
   } catch (error) {
     console.error("getShelfDashboardShelfSales error:", error);
     return response.error(res, "shelf dashboard shelf sales error");

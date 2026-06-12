@@ -5,14 +5,14 @@ const dateHelper = require("../../utils/dateHelper");
 // ตรวจสอบว่าสาขามี shelf update หรือไม่
 exports.checkShelfUpdate = async (req, res) => {
     try {
-        const { branchCode } = req.params;
+        const { branch_code } = req.params;
 
-        if (!branchCode) {
-            return response.error(res, "Missing branchCode", "BAD_REQUEST", 400);
+        if (!branch_code) {
+            return response.error(res, "Missing branch_code", "BAD_REQUEST", 400);
         }
 
         const record = await prisma.shelfUpdate.findUnique({
-            where: { branchCode }
+            where: { branch_code }
         });
 
         return response.success(res, {
@@ -29,15 +29,15 @@ exports.checkShelfUpdate = async (req, res) => {
 // สาขากด "รับทราบ" update แล้ว
 exports.acknowledgeShelfUpdate = async (req, res) => {
     try {
-        const { branchCode } = req.params;
+        const { branch_code } = req.params;
 
-        if (!branchCode) {
-            return response.error(res, "Missing branchCode", "BAD_REQUEST", 400);
+        if (!branch_code) {
+            return response.error(res, "Missing branch_code", "BAD_REQUEST", 400);
         }
 
         await prisma.shelfUpdate.upsert({
-            where: { branchCode },
-            create: { branchCode, hasUpdate: false },
+            where: { branch_code },
+            create: { branch_code, hasUpdate: false },
             update: { hasUpdate: false },
         });
 
@@ -49,11 +49,11 @@ exports.acknowledgeShelfUpdate = async (req, res) => {
 };
 
 // Helper function สำหรับ call จาก shelf controller
-exports.markShelfUpdated = async (branchCode, updatedBy = null) => {
+exports.markShelfUpdated = async (branch_code, updatedBy = null) => {
     try {
         await prisma.shelfUpdate.upsert({
-            where: { branchCode },
-            create: { branchCode, hasUpdate: true, updatedBy },
+            where: { branch_code },
+            create: { branch_code, hasUpdate: true, updatedBy },
             update: { hasUpdate: true, updatedBy },
         });
     } catch (error) {
@@ -65,18 +65,18 @@ exports.markShelfUpdated = async (branchCode, updatedBy = null) => {
 // ดึง change logs ที่ยังไม่รับทราบสำหรับสาขา (history mode + pagination)
 exports.getShelfChangeLogs = async (req, res) => {
     try {
-        const { branchCode } = req.params;
+        const { branch_code } = req.params;
         const showAll = req.query.all === "true"; // ?all=true = แสดงทั้งหมด
         const page = Math.max(1, parseInt(req.query.page) || 1);
         const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
         const skip = (page - 1) * limit;
 
-        if (!branchCode) {
-            return response.error(res, "Missing branchCode", "BAD_REQUEST", 400);
+        if (!branch_code) {
+            return response.error(res, "Missing branch_code", "BAD_REQUEST", 400);
         }
 
         const whereClause = {
-            branchCode,
+            branch_code,
             ...(showAll ? {} : { acknowledged: false }),
         };
 
@@ -108,7 +108,7 @@ exports.getShelfChangeLogs = async (req, res) => {
 
         // นับ unacknowledged
         const unacknowledgedCount = await prisma.shelfChangeLog.count({
-            where: { branchCode, acknowledged: false },
+            where: { branch_code, acknowledged: false },
         });
 
         return response.success(res, logs, {
@@ -150,14 +150,14 @@ exports.acknowledgeChangeLog = async (req, res) => {
 // รับทราบทั้งหมดของสาขา
 exports.acknowledgeAllChangeLogs = async (req, res) => {
     try {
-        const { branchCode } = req.params;
+        const { branch_code } = req.params;
 
-        if (!branchCode) {
-            return response.error(res, "Missing branchCode", "BAD_REQUEST", 400);
+        if (!branch_code) {
+            return response.error(res, "Missing branch_code", "BAD_REQUEST", 400);
         }
 
         const result = await prisma.shelfChangeLog.updateMany({
-            where: { branchCode, acknowledged: false },
+            where: { branch_code, acknowledged: false },
             data: { acknowledged: true, acknowledgedAt: dateHelper.getBangkokDate() },
         });
 
@@ -174,20 +174,20 @@ exports.getAllBranchAckStatus = async (req, res) => {
         // ดึงรายการสาขาทั้งหมดที่มี ShelfChangeLog
         const branchStats = await prisma.$queryRaw`
             SELECT 
-                "branchCode",
+                "branch_code",
                 COUNT(*) FILTER (WHERE "acknowledged" = false) as "pending",
                 COUNT(*) FILTER (WHERE "acknowledged" = true) as "acknowledged",
                 COUNT(*) as "total",
                 MAX("createdAt") as "lastChange",
                 MAX(CASE WHEN "acknowledged" = false THEN "createdAt" ELSE NULL END) as "oldestPending"
             FROM "ShelfChangeLog"
-            GROUP BY "branchCode"
-            ORDER BY "pending" DESC, "branchCode" ASC
+            GROUP BY "branch_code"
+            ORDER BY "pending" DESC, "branch_code" ASC
         `;
 
         // Format output
         const result = branchStats.map(row => ({
-            branchCode: row.branchCode,
+            branch_code: row.branch_code,
             pending: Number(row.pending) || 0,
             acknowledged: Number(row.acknowledged) || 0,
             total: Number(row.total) || 0,
@@ -211,7 +211,7 @@ exports.getAllBranchAckStatus = async (req, res) => {
 };
 
 // Helper: สร้าง single change log สำหรับ itemCreate/itemDelete
-exports.createSingleChangeLog = async (branchCode, shelfCode, action, items, createdBy = null) => {
+exports.createSingleChangeLog = async (branch_code, shelfCode, action, items, createdBy = null) => {
     try {
         const { v4: uuidv4 } = require("uuid");
         const updateId = uuidv4();
@@ -228,7 +228,7 @@ exports.createSingleChangeLog = async (branchCode, shelfCode, action, items, cre
         });
 
         const logs = items.map((item) => ({
-            branchCode,
+            branch_code,
             shelfCode: item.shelfCode || shelfCode,
             updateId,
             action,
@@ -253,7 +253,7 @@ exports.createSingleChangeLog = async (branchCode, shelfCode, action, items, cre
 };
 
 // Helper: สร้าง change logs จากการเปรียบเทียบ old vs new items
-exports.createShelfChangeLogs = async (branchCode, shelfCode, oldItems, newItems, createdBy = null) => {
+exports.createShelfChangeLogs = async (branch_code, shelfCode, oldItems, newItems, createdBy = null) => {
     try {
         const { v4: uuidv4 } = require("uuid");
         const updateId = uuidv4();
@@ -287,7 +287,7 @@ exports.createShelfChangeLogs = async (branchCode, shelfCode, oldItems, newItems
         for (const [key, oldItem] of oldMap) {
             if (!newMap.has(key)) {
                 logs.push({
-                    branchCode,
+                    branch_code,
                     shelfCode,
                     updateId,
                     action: "delete",
@@ -306,7 +306,7 @@ exports.createShelfChangeLogs = async (branchCode, shelfCode, oldItems, newItems
         for (const [key, newItem] of newMap) {
             if (!oldMap.has(key)) {
                 logs.push({
-                    branchCode,
+                    branch_code,
                     shelfCode,
                     updateId,
                     action: "add",
@@ -327,7 +327,7 @@ exports.createShelfChangeLogs = async (branchCode, shelfCode, oldItems, newItems
             if (newItem) {
                 if (oldItem.rowNo !== newItem.rowNo || oldItem.index !== newItem.index) {
                     logs.push({
-                        branchCode,
+                        branch_code,
                         shelfCode,
                         updateId,
                         action: "move",

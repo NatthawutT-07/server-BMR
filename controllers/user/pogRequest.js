@@ -9,7 +9,7 @@ const prisma = new PrismaClient();
 const createPogRequest = async (req, res) => {
     try {
         const {
-            branchCode,
+            branch_code,
             action,
             barcode,
             productName,
@@ -25,10 +25,10 @@ const createPogRequest = async (req, res) => {
         } = req.body;
 
         // Validate required fields
-        if (!branchCode || !action || !barcode) {
+        if (!branch_code || !action || !barcode) {
             return res.status(400).json({
                 ok: false,
-                message: "กรุณาระบุ branchCode, action และ barcode",
+                message: "กรุณาระบุ branch_code, action และ barcode",
             });
         }
 
@@ -45,7 +45,7 @@ const createPogRequest = async (req, res) => {
             // Check Pending Duplicate ใน transaction
             const existing = await tx.pogRequest.findFirst({
                 where: {
-                    branchCode,
+                    branch_code,
                     barcode,
                     status: "pending"
                 }
@@ -62,7 +62,7 @@ const createPogRequest = async (req, res) => {
             if (finalToIndex !== null && (action === "add" || action === "move")) {
                 const pendingSameRow = await tx.pogRequest.findMany({
                     where: {
-                        branchCode,
+                        branch_code,
                         toShelf: toShelf || "",
                         toRow: toRow ? Number(toRow) : 0,
                         status: "pending",
@@ -82,7 +82,7 @@ const createPogRequest = async (req, res) => {
             // Create ใน transaction เดียวกัน
             return await tx.pogRequest.create({
                 data: {
-                    branchCode,
+                    branch_code,
                     action,
                     barcode,
                     productName: productName || null,
@@ -115,17 +115,17 @@ const createPogRequest = async (req, res) => {
 };
 
 /**
- * GET /api/pog-request?branchCode=xxx&page=1&limit=20
+ * GET /api/pog-request?branch_code=xxx&page=1&limit=20
  * User ดู history ของสาขาตัวเอง (รองรับ Pagination)
  */
 const getMyPogRequests = async (req, res) => {
     try {
-        const { branchCode, page = 1, limit = 20 } = req.query;
+        const { branch_code, page = 1, limit = 20 } = req.query;
 
-        if (!branchCode) {
+        if (!branch_code) {
             return res.status(400).json({
                 ok: false,
-                message: "กรุณาระบุ branchCode",
+                message: "กรุณาระบุ branch_code",
             });
         }
 
@@ -135,11 +135,11 @@ const getMyPogRequests = async (req, res) => {
 
         // Get total count for pagination
         const total = await prisma.pogRequest.count({
-            where: { branchCode },
+            where: { branch_code },
         });
 
         const requests = await prisma.pogRequest.findMany({
-            where: { branchCode },
+            where: { branch_code },
             orderBy: { createdAt: "desc" },
             skip,
             take: limitNum,

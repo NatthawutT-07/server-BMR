@@ -81,11 +81,11 @@ router.put("/pog-requests/:id/position", authCheck, adminCheck, updatePogRequest
 
 // Shelf Update Notification - for mobile branch
 const { checkShelfUpdate, acknowledgeShelfUpdate, getShelfChangeLogs, acknowledgeChangeLog, acknowledgeAllChangeLogs, getAllBranchAckStatus } = require('../controllers/admin/shelfUpdate');
-router.get("/shelf-update-check/:branchCode", authCheck, checkShelfUpdate);
-router.post("/shelf-update-acknowledge/:branchCode", authCheck, acknowledgeShelfUpdate);
-router.get("/shelf-change-logs/:branchCode", authCheck, getShelfChangeLogs);
+router.get("/shelf-update-check/:branch_code", authCheck, checkShelfUpdate);
+router.post("/shelf-update-acknowledge/:branch_code", authCheck, acknowledgeShelfUpdate);
+router.get("/shelf-change-logs/:branch_code", authCheck, getShelfChangeLogs);
 router.post("/shelf-change-log-acknowledge/:id", authCheck, acknowledgeChangeLog);
-router.post("/shelf-change-logs-acknowledge-all/:branchCode", authCheck, acknowledgeAllChangeLogs);
+router.post("/shelf-change-logs-acknowledge-all/:branch_code", authCheck, acknowledgeAllChangeLogs);
 
 // Admin: Monitor branch acknowledgment status
 router.get("/branch-ack-status", authCheck, adminCheck, getAllBranchAckStatus);

@@ -1,5 +1,5 @@
-function lockKey(branchCode, shelfCode) {
-    const bc = parseInt(branchCode.replace(/\D/g, "")) || 0;
+function lockKey(branch_code, shelfCode) {
+    const bc = parseInt(branch_code.replace(/\D/g, "")) || 0;
     const sc = parseInt(shelfCode.replace(/\D/g, "")) || 0;
     return bc * 10000 + sc;
 }

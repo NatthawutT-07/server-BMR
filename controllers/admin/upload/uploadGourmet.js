@@ -17,7 +17,7 @@ exports.uploadGourmetXLSX = async (req, res) => {
         const requiredFields = ["date", "branch_code", "item_code", "quantity", "sales"];
         const aliases = {
             date: ["date", "วันที่"],
-            branch_code: ["branchcode", "รหัสสาขา", "สาขา"],
+            branch_code: ["branch_code", "รหัสสาขา", "สาขา"],
             item_code: ["productcode", "รหัสสินค้า", "sku"],
             quantity: ["quantity", "qty", "จำนวน", "saleqty"],
             sales: ["sales", "ยอดขาย", "ยอดขายรวม", "netsales", "salesamount", "ยอดขายสุทธิ"],
@@ -81,11 +81,11 @@ exports.uploadGourmetXLSX = async (req, res) => {
         const seen = new Set();
 
         raw.slice(headerRowIndex + 1).forEach((row) => {
-            const branchCode = String(row[headerMap.branch_code] || "").trim();
+            const branch_code = String(row[headerMap.branch_code] || "").trim();
             const productCode = String(row[headerMap.item_code] || "").trim();
             const dateVal = excelDateToJS(row[headerMap.date]);
 
-            if (!branchCode || !productCode || !dateVal) return;
+            if (!branch_code || !productCode || !dateVal) return;
 
             let quantity = parseInt(String(row[headerMap.quantity]).replace(/,/g, ""), 10);
             if (Number.isNaN(quantity)) quantity = 0;
@@ -100,12 +100,12 @@ exports.uploadGourmetXLSX = async (req, res) => {
             const dd = String(dateVal.getUTCDate()).padStart(2, "0");
             const dateStr = `${yyyy}-${mm}-${dd}`;
 
-            const key = `${dateStr}_${branchCode}_${productCode}_${quantity}`;
+            const key = `${dateStr}_${branch_code}_${productCode}_${quantity}`;
             if (!seen.has(key)) {
                 seen.add(key);
                 mapped.push({
                     date: dateVal,
-                    branch_code: branchCode,
+                    branch_code: branch_code,
                     item_code: productCode,
                     quantity,
                     sales,

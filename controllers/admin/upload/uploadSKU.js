@@ -18,24 +18,24 @@ exports.uploadSKU_XLSX = async (req, res) => {
         setUploadJob(jobId, 15, "validating data");
 
         // 1) Clean / Validate แถว (ต้องมีทุก field)
-        const missingRequired = rows.some(r => !r.branchCode || !r.shelfCode || r.rowNo == null || r.item_code == null || r.index == null);
+        const missingRequired = rows.some(r => !r.branch_code || !r.shelfCode || r.rowNo == null || r.item_code == null || r.index == null);
         if (missingRequired) {
-            throw new Error("พบบางแถวขาดข้อมูลที่จำเป็น (branchCode, shelfCode, rowNo, item_code, index)");
+            throw new Error("พบบางแถวขาดข้อมูลที่จำเป็น (branch_code, shelfCode, rowNo, item_code, index)");
         }
 
         const skuData = rows.map(row => ({
-            branchCode: String(row.branchCode).trim(),
+            branch_code: String(row.branch_code).trim(),
             shelfCode: String(row.shelfCode).trim(),
             rowNo: parseInt(row.rowNo, 10),
             item_code: String(row.item_code).trim().padStart(5, "0"),
             index: parseInt(row.index, 10),
         }));
 
-        // 2) ตรวจสอบ Duplicate Keys ในไฟล์ (branchCode + item_code ซ้ำกันในไฟล์)
+        // 2) ตรวจสอบ Duplicate Keys ในไฟล์ (branch_code + item_code ซ้ำกันในไฟล์)
         const skuMap = new Map();
         const duplicates = [];
         for (const item of skuData) {
-            const key = `${item.branchCode}_${item.item_code}`;
+            const key = `${item.branch_code}_${item.item_code}`;
             if (skuMap.has(key)) duplicates.push(key);
             skuMap.set(key, item);
         }
@@ -55,8 +55,8 @@ exports.uploadSKU_XLSX = async (req, res) => {
                 const upsertPromises = chunk.map(item => 
                     tx.sku.upsert({
                         where: {
-                            branchCode_item_code: {
-                                branchCode: item.branchCode,
+                            branch_code_item_code: {
+                                branch_code: item.branch_code,
                                 item_code: item.item_code
                             }
                         },

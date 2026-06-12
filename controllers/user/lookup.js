@@ -1,12 +1,12 @@
 const prisma = require("../../config/prisma");
 
-// GET /api/lookup?branchCode=ST002&barcode=8859566512531
+// GET /api/lookup?branch_code=ST002&barcode=8859566512531
 const lookupByBarcode = async (req, res) => {
   try {
-    const { branchCode, barcode } = req.query;
+    const { branch_code, barcode } = req.query;
 
-    if (!branchCode || !barcode) {
-      return res.status(400).json({ message: "branchCode, barcode required" });
+    if (!branch_code || !barcode) {
+      return res.status(400).json({ message: "branch_code, barcode required" });
     }
 
     // barcode ไม่ใช่ unique field ใช้ findFirst แทน
@@ -26,7 +26,7 @@ const lookupByBarcode = async (req, res) => {
     }
 
     const loc = await prisma.sku.findMany({
-      where: { branchCode, item_code: item.item_code },
+      where: { branch_code, item_code: item.item_code },
       select: { shelfCode: true, rowNo: true, index: true },
       orderBy: [{ shelfCode: "asc" }, { rowNo: "asc" }, { index: "asc" }],
       take: 10,
@@ -49,7 +49,7 @@ const lookupByBarcode = async (req, res) => {
     const shelfCodes = [...new Set(loc.map((x) => x.shelfCode))];
 
     const shelves = await prisma.Template.findMany({
-      where: { branchCode, shelfCode: { in: shelfCodes } },
+      where: { branch_code, shelfCode: { in: shelfCodes } },
       select: { shelfCode: true, fullName: true, rowQty: true },
     });
 

@@ -184,7 +184,7 @@ exports.getActiveBranches = async (req, res) => {
         enabled: true,
       },
       select: {
-        name: true, // name คือ branchCode เช่น "ST002"
+        name: true, // name คือ branch_code เช่น "ST002"
       },
     });
 
@@ -192,13 +192,13 @@ exports.getActiveBranches = async (req, res) => {
       return res.json([]);
     }
 
-    const branchCodes = activeUsers.map((u) => u.name);
+    const branch_codes = activeUsers.map((u) => u.name);
 
     // 2. ไปหาข้อมูลจากตาราง Branch เพื่อเอา branch_name
     const branchesInfo = await prisma.branch.findMany({
       where: {
         branch_code: {
-          in: branchCodes,
+          in: branch_codes,
         },
       },
       select: {

@@ -1,16 +1,16 @@
 const prisma = require('../../../config/prisma');
 const { normalizeLegacyBangkokStoredDate, toBangkokOffsetISOString } = require('../../../utils/dateHelper');
 
-const touchDataSync = async (key, rowCount, branchCode, db = prisma) => {
+const touchDataSync = async (key, rowCount, branch_code, db = prisma) => {
     try {
         const updatedAt = new Date();
         const safeRowCount = rowCount ?? 0;
 
-        if (branchCode) {
+        if (branch_code) {
             // อัปเดตเฉพาะรายสาขา (ไม่แตะ Global เพื่อไม่ให้สาขาอื่นเห็นเวลาที่ผิด)
             await db.branchDataSync.upsert({
-                where: { branchCode_key: { branchCode, key } },
-                create: { branchCode, key, updatedAt, rowCount: safeRowCount },
+                where: { branch_code_key: { branch_code, key } },
+                create: { branch_code, key, updatedAt, rowCount: safeRowCount },
                 update: { updatedAt, rowCount: safeRowCount },
             });
         } else {
@@ -22,7 +22,7 @@ const touchDataSync = async (key, rowCount, branchCode, db = prisma) => {
             });
         }
     } catch (err) {
-        console.error(`DataSync update failed (${key}, ${branchCode}):`, err);
+        console.error(`DataSync update failed (${key}, ${branch_code}):`, err);
         throw err;
     }
 };

@@ -15,7 +15,7 @@ const XLSX = require("xlsx");
 
 const parseItemMinMax = (raw) => {
     const headerRowIndex = raw.findIndex(row =>
-        row.includes("BranchCode") &&
+        row.includes("branch_code") &&
         row.includes("ItemCode") &&
         row.includes("MinStock") &&
         row.includes("MaxStock")
@@ -32,7 +32,7 @@ const parseItemMinMax = (raw) => {
         let obj = {};
         header.forEach((h, i) => obj[h] = r[i]);
 
-        const rawCode = obj.BranchCode?.trim();
+        const rawCode = obj.branch_code?.trim();
         const item = obj.ItemCode;
 
         if (!rawCode || !item) return null;
@@ -41,7 +41,7 @@ const parseItemMinMax = (raw) => {
         const num = parseInt(rawCode.slice(2), 10);
         if (isNaN(num)) return null;
 
-        const branchCode = prefix + num.toString().padStart(3, "0");
+        const branch_code = prefix + num.toString().padStart(3, "0");
         const item_code = String(item).trim().padStart(5, "0");
         if (!item_code || item_code === "00000" || item_code.includes("NaN")) return null;
 
@@ -53,7 +53,7 @@ const parseItemMinMax = (raw) => {
         let packOrder = parseInt(obj.PackOrder, 10);
         if (isNaN(packOrder)) packOrder = null;
 
-        return { branchCode, item_code, minStore: min, maxStore: max, packOrder };
+        return { branch_code, item_code, minStore: min, maxStore: max, packOrder };
     }).filter(v => v !== null);
 
     return { data: mapped };
@@ -148,12 +148,12 @@ const parseStock = (raw) => {
         .map(row => {
             const rawCode = (row["รหัสสินค้า"] || "").toString().trim();
             const item_code = rawCode.padStart(5, "0");
-            const branchCode = (row["รหัสสาขา"] || "").toString().trim();
+            const branch_code = (row["รหัสสาขา"] || "").toString().trim();
             let qty = parseFloat(row["จำนวนคงเหลือ"]);
             if (isNaN(qty) || qty > INT32_MAX || qty < INT32_MIN) qty = 0;
             qty = Math.floor(qty);
             if (qty === 0) return null;
-            return { item_code, branchCode, quantity: qty };
+            return { item_code, branch_code, quantity: qty };
         })
         .filter(Boolean);
 
@@ -192,11 +192,11 @@ const parseWithdraw = (raw) => {
             const item_code = rawCode.padStart(5, "0");
             if (!item_code || item_code === "00000" || item_code.includes("NaN")) return null;
 
-            const branchCode = row["สาขา"]
+            const branch_code = row["สาขา"]
                 ?.split(")")[0]
                 ?.replace("(", "")
                 ?.trim();
-            if (!branchCode) return null;
+            if (!branch_code) return null;
 
             let qty = parseFloat(row["จำนวน"]);
             if (isNaN(qty)) qty = 0;
@@ -206,7 +206,7 @@ const parseWithdraw = (raw) => {
 
             return {
                 item_code,
-                branchCode,
+                branch_code,
                 docNumber: (row["เลขที่เอกสาร"] || "").toString().trim() || null,
                 date: (row["วันที่"] || "").toString().trim() || null,
                 docStatus: (row["สถานะเอกสาร"] || "").toString().trim() || null,

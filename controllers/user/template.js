@@ -92,8 +92,8 @@ const getBangkokMonthMeta = () => {
 // ======================================================
 exports.getStockLastUpdate = async (req, res) => {
   try {
-    const { branchCode } = req.query;
-    const userBranch = branchCode || req.user?.storecode || req.user?.name;
+    const { branch_code } = req.query;
+    const userBranch = branch_code || req.user?.storecode || req.user?.name;
 
     // 1. ดึงเวลาส่วนกลาง (Admin upload / Global sync)
     const globalRow = await prisma.dataSync.findUnique({ where: { key: "stock" } });
@@ -103,7 +103,7 @@ exports.getStockLastUpdate = async (req, res) => {
     if (userBranch) {
       const bRows = await prisma.$queryRaw`
         SELECT "updatedAt", "rowCount" FROM "BranchDataSync" 
-        WHERE "branchCode" = ${userBranch} AND "key" = 'stock' 
+        WHERE "branch_code" = ${userBranch} AND "key" = 'stock' 
         LIMIT 1
       `;
       branchRow = bRows[0] || null;
@@ -136,22 +136,22 @@ exports.getStockLastUpdate = async (req, res) => {
 // - รวม SKU items สำหรับคำนวณ available index
 // ======================================================
 exports.getBranchShelves = async (req, res) => {
-  const { branchCode } = req.query;
+  const { branch_code } = req.query;
 
-  if (!branchCode) {
-    return res.status(400).json({ msg: "branchCode is required" });
+  if (!branch_code) {
+    return res.status(400).json({ msg: "branch_code is required" });
   }
 
   try {
     // ดึงชื่อสาขา
     const branch = await prisma.branch.findUnique({
-      where: { branch_code: branchCode },
+      where: { branch_code: branch_code },
       select: { branch_name: true },
     });
 
     // ดึง shelf templates
     const templates = await prisma.Template.findMany({
-      where: { branchCode },
+      where: { branch_code },
       orderBy: { shelfCode: "asc" },
       select: {
         shelfCode: true,
@@ -162,7 +162,7 @@ exports.getBranchShelves = async (req, res) => {
 
     // ดึง SKU items สำหรับคำนวณ index
     const skus = await prisma.sku.findMany({
-      where: { branchCode },
+      where: { branch_code },
       select: {
         shelfCode: true,
         rowNo: true,
@@ -186,7 +186,7 @@ exports.getBranchShelves = async (req, res) => {
     }));
 
     return res.json({
-      branchCode,
+      branch_code,
       branchName: branch?.branch_name || null,
       shelves,
     });
@@ -202,29 +202,29 @@ exports.getBranchShelves = async (req, res) => {
 // - JOIN Template เพื่อเอา fullName (ชื่อ shelf)
 // ======================================================
 exports.UserTemplateItem = async (req, res) => {
-  const { branchCode } = req.body;
+  const { branch_code } = req.body;
 
-  if (!branchCode) {
-    return res.status(400).json({ msg: "branchCode is required" });
+  if (!branch_code) {
+    return res.status(400).json({ msg: "branch_code is required" });
   }
 
   const { currentYear, currentMonth } = getBangkokMonthMeta();
 
   // key cache ผูกกับ branch + เดือนปี (กันการ reuse ข้ามเดือน)
-  const key = `template-item-v4-${branchCode}-${currentYear}-${currentMonth}`;
+  const key = `template-item-v4-${branch_code}-${currentYear}-${currentMonth}`;
   const cached = cache.get(key);
   if (cached) return res.json(cached);
 
   try {
     // ดึงชื่อสาขา "ครั้งเดียว" ไม่ต้องซ้ำในทุกแถว
     const br = await prisma.branch.findUnique({
-      where: { branch_code: branchCode },
+      where: { branch_code: branch_code },
       select: { branch_code: true, branch_name: true },
     });
 
     const rawResult = await prisma.$queryRaw`
       SELECT 
-          s."branchCode",
+          s."branch_code",
           s."item_code",
           s."shelfCode",
           s."rowNo",
@@ -249,18 +249,18 @@ exports.UserTemplateItem = async (req, res) => {
 
       -- Template (ชื่อ shelf)
       LEFT JOIN "Template" t
-        ON t."branchCode" = s."branchCode"
+        ON t."branch_code" = s."branch_code"
        AND t."shelfCode"  = s."shelfCode"
 
       -- Stock ปัจจุบัน (ตามตาราง Stock)
       LEFT JOIN (
-          SELECT "branchCode", "item_code",
+          SELECT "branch_code", "item_code",
               SUM("quantity")::int AS "stockQuantity"
           FROM "Stock"
-          WHERE "branchCode" = ${branchCode}
-          GROUP BY "branchCode", "item_code"
+          WHERE "branch_code" = ${branch_code}
+          GROUP BY "branch_code", "item_code"
       ) st 
-      ON s."branchCode" = st."branchCode" 
+      ON s."branch_code" = st."branch_code" 
       AND s."item_code" = st."item_code"
 
       -- ข้อมูลสินค้า
@@ -269,15 +269,15 @@ exports.UserTemplateItem = async (req, res) => {
 
       -- Min / Max
       LEFT JOIN "ItemMinMax" im 
-          ON s."branchCode" = im."branchCode" 
+          ON s."branch_code" = im."branch_code" 
           AND s."item_code" = im."item_code"
 
-      WHERE s."branchCode" = ${branchCode}
+      WHERE s."branch_code" = ${branch_code}
       ORDER BY s."shelfCode", s."index", s."rowNo"
     `;
 
     const items = rawResult.map((r) => ({
-      branchCode: r.branchCode,
+      branch_code: r.branch_code,
       shelfCode: r.shelfCode,
       rowNo: r.rowNo,
       index: r.index,
@@ -308,7 +308,7 @@ exports.UserTemplateItem = async (req, res) => {
 
     // ส่ง branchName แค่ครั้งเดียว
     const payload = {
-      branchCode,
+      branch_code,
       branchName: br?.branch_name ?? null,
       items,
     };
@@ -322,10 +322,10 @@ exports.UserTemplateItem = async (req, res) => {
 };
 
 // exports.UserTemplateItem = async (req, res) => {
-//     const { branchCode } = req.body;
+//     const { branch_code } = req.body;
 
-//     if (!branchCode) {
-//         return res.status(400).json({ msg: "branchCode is required" });
+//     if (!branch_code) {
+//         return res.status(400).json({ msg: "branch_code is required" });
 //     }
 
 //     const {
@@ -337,7 +337,7 @@ exports.UserTemplateItem = async (req, res) => {
 //     } = getBangkokMonthMeta();
 
 //     // key cache ผูกกับ branch + เดือนปี (กันการ reuse ข้ามเดือน)
-//     const key = `template-item-v2-${branchCode}-${currentYear}-${currentMonth}`;
+//     const key = `template-item-v2-${branch_code}-${currentYear}-${currentMonth}`;
 //     const cached = cache.get(key);
 //     if (cached) {
 //         return res.json(cached);
@@ -346,7 +346,7 @@ exports.UserTemplateItem = async (req, res) => {
 //     try {
 //         const rawResult = await prisma.$queryRaw`
 //       SELECT
-//           s."branchCode",
+//           s."branch_code",
 //           s."item_code",
 //           s."shelfCode",
 //           s."rowNo",
@@ -375,19 +375,19 @@ exports.UserTemplateItem = async (req, res) => {
 
 //       -- Stock ปัจจุบัน (ตามตาราง Stock)
 //       LEFT JOIN (
-//           SELECT "branchCode", "item_code",
+//           SELECT "branch_code", "item_code",
 //               SUM("quantity")::int AS "stockQuantity"
 //           FROM "Stock"
-//           WHERE "branchCode" = ${branchCode}
-//           GROUP BY "branchCode", "item_code"
+//           WHERE "branch_code" = ${branch_code}
+//           GROUP BY "branch_code", "item_code"
 //       ) st
-//       ON s."branchCode" = st."branchCode"
+//       ON s."branch_code" = st."branch_code"
 //       AND s."item_code" = st."item_code"
 
 //       --  Sales 3 เดือนก่อนหน้า จาก Bill / BillItem (รวมทุก channel)
 //       LEFT JOIN (
 //           SELECT
-//               br."branch_code"            AS "branchCode",
+//               br."branch_code"            AS "branch_code",
 //               (prod."item_code")::int  AS "item_code",
 //               SUM(bi."quantity")::int     AS "sales3mQty"
 //           FROM "BillItem" bi
@@ -397,7 +397,7 @@ exports.UserTemplateItem = async (req, res) => {
 //               ON b."branchId" = br."id"
 //           JOIN "Product" prod
 //               ON bi."productId" = prod."id"
-//           WHERE br."branch_code" = ${branchCode}
+//           WHERE br."branch_code" = ${branch_code}
 //             AND (
 //                   (
 //                       b."date" >= ${prevMonths[0].startUtc}
@@ -418,13 +418,13 @@ exports.UserTemplateItem = async (req, res) => {
 //               br."branch_code",
 //               (prod."item_code")::int
 //       ) p3
-//       ON s."branchCode" = p3."branchCode"
+//       ON s."branch_code" = p3."branch_code"
 //       AND s."item_code" = p3."item_code"
 
 //       --  Sales เดือนปัจจุบัน จาก Bill / BillItem
 //       LEFT JOIN (
 //           SELECT
-//               br."branch_code"            AS "branchCode",
+//               br."branch_code"            AS "branch_code",
 //               (prod."item_code")::int  AS "item_code",
 //               SUM(bi."quantity")::int     AS "salesCurrentMonthQty"
 //           FROM "BillItem" bi
@@ -434,28 +434,28 @@ exports.UserTemplateItem = async (req, res) => {
 //               ON b."branchId" = br."id"
 //           JOIN "Product" prod
 //               ON bi."productId" = prod."id"
-//           WHERE br."branch_code" = ${branchCode}
+//           WHERE br."branch_code" = ${branch_code}
 //             AND b."date" >= ${currentMonthStartUtc}
 //             AND b."date" <= ${currentMonthEndUtc}
 //           GROUP BY
 //               br."branch_code",
 //               (prod."item_code")::int
 //       ) cm
-//       ON s."branchCode" = cm."branchCode"
+//       ON s."branch_code" = cm."branch_code"
 //       AND s."item_code" = cm."item_code"
 
 //       --  Withdraw: เฉพาะ docStatus = 'อนุมัติแล้ว'
 //       LEFT JOIN (
 //           SELECT
-//               "branchCode",
+//               "branch_code",
 //               "item_code",
 //               SUM("quantity")::int AS "withdrawQuantity"
 //           FROM "withdraw"
-//           WHERE "branchCode" = ${branchCode}
+//           WHERE "branch_code" = ${branch_code}
 //             AND "docStatus" = 'อนุมัติแล้ว'
-//           GROUP BY "branchCode", "item_code"
+//           GROUP BY "branch_code", "item_code"
 //       ) wd
-//       ON s."branchCode" = wd."branchCode"
+//       ON s."branch_code" = wd."branch_code"
 //       AND s."item_code" = wd."item_code"
 
 //       -- ข้อมูลสินค้า
@@ -464,10 +464,10 @@ exports.UserTemplateItem = async (req, res) => {
 
 //       -- Min / Max
 //       LEFT JOIN "ItemMinMax" im
-//           ON s."branchCode" = im."branchCode"
+//           ON s."branch_code" = im."branch_code"
 //           AND s."item_code" = im."item_code"
 
-//       WHERE s."branchCode" = ${branchCode}
+//       WHERE s."branch_code" = ${branch_code}
 //       ORDER BY s."shelfCode", s."index", s."rowNo"
 //     `;
 
@@ -477,7 +477,7 @@ exports.UserTemplateItem = async (req, res) => {
 //             const salesTargetQty = sales3mAvgQty * 0.8; // 80% ของ avg
 
 //             return {
-//                 branchCode: r.branchCode,
+//                 branch_code: r.branch_code,
 //                 shelfCode: r.shelfCode,
 //                 rowNo: r.rowNo,
 //                 index: r.index,

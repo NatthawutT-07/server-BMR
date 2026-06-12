@@ -31,9 +31,9 @@ router.post('/register/product', authCheck, registerProduct);
 
 // Shelf Change Logs Notification - for user web
 const { getShelfChangeLogs, acknowledgeChangeLog, acknowledgeAllChangeLogs } = require('../controllers/admin/shelfUpdate');
-router.get("/shelf-change-logs/:branchCode", authCheck, getShelfChangeLogs);
+router.get("/shelf-change-logs/:branch_code", authCheck, getShelfChangeLogs);
 router.post("/shelf-change-log-acknowledge/:id", authCheck, acknowledgeChangeLog);
-router.post("/shelf-change-logs-acknowledge-all/:branchCode", authCheck, acknowledgeAllChangeLogs);
+router.post("/shelf-change-logs-acknowledge-all/:branch_code", authCheck, acknowledgeAllChangeLogs);
 
 module.exports = router;
 
