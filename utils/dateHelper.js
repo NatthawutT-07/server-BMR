@@ -1,35 +1,70 @@
 /**
- * Helper for Thailand Timezone (+07:00)
- * Centralizes all date/time logic to ensure consistency across dev and server environments.
+ * Date/time helper.
+ *
+ * Rule:
+ * - Store Date values as UTC instants.
+ * - Convert to Asia/Bangkok only for display or date-range boundaries.
  */
+
+const BANGKOK_TIME_ZONE = "Asia/Bangkok";
 
 /**
  * Get current time in Bangkok as ISO string with offset (+07:00)
  * Format: YYYY-MM-DDTHH:mm:ss+07:00
  */
 const getBangkokNowISO = () => {
-  const d = new Date();
+  return toBangkokOffsetISOString(new Date());
+};
+
+const toBangkokOffsetISOString = (value) => {
+  if (!value) return null;
+
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+
   const formatter = new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'Asia/Bangkok',
+    timeZone: BANGKOK_TIME_ZONE,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
-    hour12: false
+    hour12: false,
+    hourCycle: 'h23',
   });
+
   const parts = formatter.formatToParts(d);
   const getPart = (type) => parts.find(p => p.type === type).value;
-  return `${getPart('year')}-${getPart('month')}-${getPart('day')}T${getPart('hour')}:${getPart('minute')}:${getPart('second')}+07:00`;
+  const ms = String(d.getMilliseconds()).padStart(3, "0");
+
+  return `${getPart('year')}-${getPart('month')}-${getPart('day')}T${getPart('hour')}:${getPart('minute')}:${getPart('second')}.${ms}+07:00`;
 };
 
 /**
- * Get current date in Bangkok (Date object representing BKK time)
- * Useful for Prisma fields that expect a Date object.
+ * Get the current instant for Prisma DateTime fields.
+ * The returned Date is UTC internally; format it with Bangkok helpers for display.
  */
 const getBangkokDate = () => {
-  return new Date(getBangkokNowISO());
+  return new Date();
+};
+
+const normalizeLegacyBangkokStoredDate = (value) => {
+  if (!value) return null;
+
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+
+  const fiveHoursMs = 5 * 60 * 60 * 1000;
+  const sevenHoursMs = 7 * 60 * 60 * 1000;
+
+  // Older sync rows were written as Bangkok wall-clock time into DateTime fields.
+  // Prisma reads those values as UTC instants, making them appear about 7 hours in the future.
+  if (d.getTime() - Date.now() > fiveHoursMs) {
+    return new Date(d.getTime() - sevenHoursMs);
+  }
+
+  return d;
 };
 
 /**
@@ -40,7 +75,7 @@ const toBkkDateStr = (dateObj) => {
   const d = typeof dateObj === 'string' ? new Date(dateObj) : dateObj;
   if (isNaN(d.getTime())) return null;
   return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Bangkok",
+    timeZone: BANGKOK_TIME_ZONE,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -86,7 +121,7 @@ const getBangkok90DaysRange = () => {
   const now = new Date();
   
   const formatter = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Asia/Bangkok",
+    timeZone: BANGKOK_TIME_ZONE,
     year: "numeric",
     month: "numeric",
     day: "numeric",
@@ -118,8 +153,11 @@ const getBangkok90DaysRange = () => {
 };
 
 module.exports = {
+  BANGKOK_TIME_ZONE,
   getBangkokNowISO,
   getBangkokDate,
+  toBangkokOffsetISOString,
+  normalizeLegacyBangkokStoredDate,
   toBkkDateStr,
   getBangkokDayStart,
   diffDays,

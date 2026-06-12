@@ -1,6 +1,7 @@
 // controllers/admin/<your-file>.js
 const prisma = require("../../config/prisma");
 const cacheManager = require("../../utils/cacheManager");
+const { normalizeLegacyBangkokStoredDate, toBangkokOffsetISOString } = require("../../utils/dateHelper");
 const cache = cacheManager.getCache("user-template", { stdTTL: 60 }); // Increased from 5s to 60s for better performance
 
 /**
@@ -85,28 +86,6 @@ const getBangkokMonthMeta = () => {
   };
 };
 
-// แปลง Date ที่ Prisma ตีความเป็น UTC (แต่จริง ๆ คือเวลาไทยใน DB)
-// ให้กลายเป็น ISO ที่ติด +07:00 เพื่อให้แสดงตรงกับ DB
-const toBangkokOffsetISOString = (val) => {
-  if (!val) return null;
-
-  const d = val instanceof Date ? val : new Date(val);
-  if (Number.isNaN(d.getTime())) return null;
-
-  const pad2 = (n) => String(n).padStart(2, "0");
-  const pad3 = (n) => String(n).padStart(3, "0");
-
-  const y = d.getUTCFullYear();
-  const m = pad2(d.getUTCMonth() + 1);
-  const day = pad2(d.getUTCDate());
-  const hh = pad2(d.getUTCHours());
-  const mm = pad2(d.getUTCMinutes());
-  const ss = pad2(d.getUTCSeconds());
-  const ms = pad3(d.getUTCMilliseconds());
-
-  return `${y}-${m}-${day}T${hh}:${mm}:${ss}.${ms}+07:00`;
-};
-
 // ======================================================
 // NEW: ดึงเวลาอัปเดต Stock ล่าสุด (แค่ 1 ค่าไว้โชว์)
 // ต้องมี Prisma model: DataSync { key @id, updatedAt, rowCount? }
@@ -132,9 +111,9 @@ exports.getStockLastUpdate = async (req, res) => {
 
     // 3. เทียบหาเวลาที่ล่าสุดกว่า (Latest between Global and Branch-specific)
     let latestRow = globalRow || null;
-    let latestUpdate = globalRow?.updatedAt || null;
+    let latestUpdate = normalizeLegacyBangkokStoredDate(globalRow?.updatedAt);
     if (branchRow?.updatedAt) {
-      const bDate = new Date(branchRow.updatedAt);
+      const bDate = normalizeLegacyBangkokStoredDate(branchRow.updatedAt);
       if (!latestUpdate || bDate > latestUpdate) {
         latestRow = branchRow;
         latestUpdate = bDate;

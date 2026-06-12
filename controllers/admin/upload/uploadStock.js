@@ -1,6 +1,7 @@
 const prisma = require('../../../config/prisma');
 const { runExcelWorker } = require("../../../workers/workerHelper");
 const { initUploadJob, setUploadJob, finishUploadJob, failUploadJob, touchDataSync } = require('./uploadJob');
+const { normalizeLegacyBangkokStoredDate } = require("../../../utils/dateHelper");
 const cacheManager = require("../../../utils/cacheManager");
 
 // Batch size สำหรับ insert
@@ -46,21 +47,13 @@ exports.uploadStockXLSX = async (req, res) => {
             });
 
             if (lastSync) {
-                // ปรับจูนเวลาจาก DB (ที่อาจจะถูกมองเป็น UTC ทั้งที่เป็นเวลาไทย) ให้ตรงกับความเป็นจริงก่อนเทียบ
-                const lastUpdate = new Date(lastSync.updatedAt);
+                const lastUpdate = normalizeLegacyBangkokStoredDate(lastSync.updatedAt);
                 const now = new Date();
                 
                 // คำนวณส่วนต่างเป็นนาที
-                let diffMin = (now.getTime() - lastUpdate.getTime()) / (60 * 1000);
+                const diffMin = (now.getTime() - lastUpdate.getTime()) / (60 * 1000);
 
-                // --- แก้ไขเคส Timezone 7 ชั่วโมง ---
-                // ถ้าเวลาใน DB ดูเหมือนจะ "ล้ำหน้า" ปัจจุบันไปมากกว่า 5 ชม. (เช่น -300 นาทีขึ้นไป)
-                // ให้เราบวกคืนไป 420 นาที (7 ชม.) เพื่อให้ได้ส่วนต่างที่แท้จริง
-                if (diffMin < -300) { 
-                    diffMin += 420; 
-                }
-
-                // ถ้าส่วนต่างยังไม่ถึง 60 นาที ให้รอ
+                // เทียบ UTC instant โดยตรง ส่วนการแสดงเวลาไทยทำที่ API/UI เท่านั้น
                 if (diffMin < 60) {
                      const waitMin = Math.ceil(60 - diffMin);
                      if (waitMin > 0) {

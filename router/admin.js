@@ -30,7 +30,6 @@ const {
     uploadSKU_XLSX,
     uploadBillXLSX,
     uploadGourmetXLSX,
-    getUploadStatus,
     getAllSyncDates,
     clearStock,
     clearSku,
@@ -51,7 +50,6 @@ router.delete('/clear-stock', authCheck, adminCheck, clearStock)
 router.delete('/clear-sku', authCheck, adminCheck, clearSku)
 router.delete('/clear-template', authCheck, adminCheck, clearTemplate)
 router.delete('/clear-minmax', authCheck, adminCheck, clearMinMax)
-router.get('/upload-status', authCheck, adminCheck, getUploadStatus)
 router.get('/sync-dates', authCheck, adminCheck, getAllSyncDates)
 
 const { downloadTemplate, downloadSKU } = require('../controllers/admin/download');

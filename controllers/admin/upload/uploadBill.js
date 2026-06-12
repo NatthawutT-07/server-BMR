@@ -1,5 +1,4 @@
 const prisma = require('../../../config/prisma');
-const { Prisma } = require("@prisma/client");
 const XLSX = require("xlsx");
 const { touchDataSync } = require('./uploadJob');
 
@@ -7,13 +6,31 @@ const { touchDataSync } = require('./uploadJob');
 // Helpers
 // =======================
 const EPS = 1e-9;
-const round2 = (n) => Math.round((Number(n || 0) + Number.EPSILON) * 100) / 100;
 
 function parseDateBangkok(input) {
     if (!input) return null;
 
+    if (input instanceof Date && !Number.isNaN(input.getTime())) {
+        return input;
+    }
+
+    if (typeof input === "number") {
+        const parsed = XLSX.SSF.parse_date_code(input);
+        if (!parsed) return null;
+
+        const yyyy = String(parsed.y);
+        const mm = String(parsed.m).padStart(2, "0");
+        const dd = String(parsed.d).padStart(2, "0");
+        const hh = String(parsed.H || 0).padStart(2, "0");
+        const min = String(parsed.M || 0).padStart(2, "0");
+        const ss = String(Math.floor(parsed.S || 0)).padStart(2, "0");
+
+        return new Date(`${yyyy}-${mm}-${dd}T${hh}:${min}:${ss}+07:00`);
+    }
+
     const [datePart, timePartRaw] = String(input).trim().split(" ");
     const [day, month, year] = datePart.split("/").map(Number);
+    if (!day || !month || !year) return null;
 
     const timePart = timePartRaw || "00:00:00";
     const [hour = 0, minute = 0, second = 0] = timePart
@@ -21,14 +38,9 @@ function parseDateBangkok(input) {
         .map((v) => Number(v));
 
     // ใช้ Date.UTC() เพื่อบังคับให้เวลาที่ parse ตรงกับ Excel เป๊ะ ๆ
-    return new Date(Date.UTC(year, month - 1, day, hour, minute, second));
-}
-
-function parseCodeName(str) {
-    if (!str) return { code: null, name: null };
-    const match = String(str).match(/\((.*?)\)(.*)/);
-    if (match) return { code: match[1], name: match[2].trim() };
-    return { code: null, name: String(str).trim() };
+    return new Date(
+        `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:${String(second).padStart(2, "0")}+07:00`
+    );
 }
 
 function parseFloatWithComma(v) {

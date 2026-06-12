@@ -1,39 +1,29 @@
 const prisma = require('../../../config/prisma');
-
-const uploadJobs = new Map();
-const MAX_JOB_AGE_MS = 6 * 60 * 60 * 1000;
+const { normalizeLegacyBangkokStoredDate, toBangkokOffsetISOString } = require('../../../utils/dateHelper');
 
 const touchDataSync = async (key, rowCount, branchCode, db = prisma) => {
     try {
+        const updatedAt = new Date();
+        const safeRowCount = rowCount ?? 0;
+
         if (branchCode) {
             // อัปเดตเฉพาะรายสาขา (ไม่แตะ Global เพื่อไม่ให้สาขาอื่นเห็นเวลาที่ผิด)
-            await db.$executeRaw`
-                INSERT INTO "BranchDataSync" ("branchCode", "key", "updatedAt", "rowCount")
-                VALUES (${branchCode}, ${key}, timezone('Asia/Bangkok', NOW()), ${rowCount ?? 0})
-                ON CONFLICT ("branchCode", "key")
-                DO UPDATE SET "updatedAt" = EXCLUDED."updatedAt", "rowCount" = EXCLUDED."rowCount"
-            `;
+            await db.branchDataSync.upsert({
+                where: { branchCode_key: { branchCode, key } },
+                create: { branchCode, key, updatedAt, rowCount: safeRowCount },
+                update: { updatedAt, rowCount: safeRowCount },
+            });
         } else {
             // อัปเดตเวลาภาพรวม (Global) — ใช้เมื่อ Admin upload เท่านั้น
-            await db.$executeRaw`
-                INSERT INTO "DataSync" ("key", "updatedAt", "rowCount")
-                VALUES (${key}, timezone('Asia/Bangkok', NOW()), ${rowCount ?? 0})
-                ON CONFLICT ("key")
-                DO UPDATE SET "updatedAt" = EXCLUDED."updatedAt", "rowCount" = EXCLUDED."rowCount"
-            `;
+            await db.dataSync.upsert({
+                where: { key },
+                create: { key, updatedAt, rowCount: safeRowCount },
+                update: { updatedAt, rowCount: safeRowCount },
+            });
         }
     } catch (err) {
         console.error(`DataSync update failed (${key}, ${branchCode}):`, err);
         throw err;
-    }
-};
-
-const cleanupOldJobs = () => {
-    const now = Date.now();
-    for (const [jobId, job] of uploadJobs.entries()) {
-        if (now - (job.updatedAt || 0) > MAX_JOB_AGE_MS) {
-            uploadJobs.delete(jobId);
-        }
     }
 };
 
@@ -55,17 +45,13 @@ const failUploadJob = (jobId, message) => {
 
 const response = require("../../../utils/responseHelper");
 
-const getUploadStatus = async (req, res) => {
-    return res.status(404).json({ error: "Job status polling is disabled" });
-};
-
 const getAllSyncDates = async (req, res) => {
     try {
         const syncs = await prisma.dataSync.findMany();
         const result = {};
         syncs.forEach(s => {
             result[s.key] = {
-                updatedAt: s.updatedAt.toISOString(),
+                updatedAt: toBangkokOffsetISOString(normalizeLegacyBangkokStoredDate(s.updatedAt)),
                 rowCount: s.rowCount
             };
         });
@@ -81,7 +67,6 @@ module.exports = {
     setUploadJob,
     finishUploadJob,
     failUploadJob,
-    getUploadStatus,
     getAllSyncDates,
     touchDataSync
 };

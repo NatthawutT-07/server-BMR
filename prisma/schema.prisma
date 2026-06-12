@@ -150,6 +150,7 @@ model Bill {
   branchId             Int
   date                 DateTime
   bill_number          String   @unique
+  sales_channel        String?
   doc_type             String
   pos_type             String
   reference_doc        String?
@@ -165,6 +166,7 @@ model Bill {
   billItems    BillItem[]
 
   @@index([branchId, doc_type, date])
+  @@index([sales_channel])
   @@index([date])
   @@index([branchId, date])
   @@index([doc_type, date])
