@@ -123,9 +123,9 @@ exports.sku = async (req, res) => {
         groupName: r.groupName ?? null,
         quantity_stock: Number(r.quantity_stock ?? 0),
         quantity_withdraw: Number(r.quantity_withdraw ?? 0),
-        withdrawValue: Number(r.withdrawValue ?? 0),
+        value_withdraw: Number(r.value_withdraw ?? 0),
         quantity_sale_bill: Number(r.quantity_sale_bill ?? 0),
-        salesTotalPrice: Number(r.salesTotalPrice ?? 0),
+        total_sales_rounding_no_end_discount: Number(r.total_sales_rounding_no_end_discount ?? 0),
         dayOff: r.dayOff !== null && r.dayOff !== undefined ? Number(r.dayOff) : null,
       };
     });
@@ -172,7 +172,7 @@ exports.getShelfDashboardShelfSales = async (req, res) => {
       shelfCode: row.shelfCode,
       shelfName: row.shelfName || null,
       salesTotal: Number(row.salesTotal || 0),
-      withdrawValue: Number(row.withdrawValue || 0),
+      value_withdraw: Number(row.value_withdraw || 0),
       skuCount: Number(row.skuCount || 0),
       stockCost: Number(row.stockCost || 0),
     }));

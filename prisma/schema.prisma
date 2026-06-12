@@ -81,9 +81,9 @@ model withdraw {
   docStatus         String
   reason            String
   quantity_withdraw Int
-  value             Float
+  value_withdraw             Float
 
-  @@unique([docNumber, branch_code, item_code, quantity_withdraw, value])
+  @@unique([docNumber, branch_code, item_code, quantity_withdraw, value_withdraw])
   @@index([branch_code, item_code])
   @@index([branch_code, docStatus, item_code])
 }
@@ -154,10 +154,9 @@ model Bill {
   value_excl_tax       Float
   vat                  Float
   end_bill_discount    Float
-  total_after_discount Float
+  total_sales_end_discount_no_rounding Float
   rounding             Float
-  total_sales          Float
-  total_payment        Float
+  total_sales_Finally          Float
 
   branch    Branch     @relation(fields: [branchId], references: [id])
   billItems BillItem[]
@@ -179,7 +178,7 @@ model BillItem {
   price_per_unit     Float
   sales_amount       Float
   discount           Float
-  net_sales          Float
+  total_sales_rounding_no_end_discount          Float
   bill               Bill    @relation(fields: [billId], references: [id])
 
   @@index([item_code])
@@ -235,7 +234,7 @@ model Gourmet {
   branch_code           String
   item_code             String
   quantity_sale_gourmet Int
-  sales                 Float
+  sales_amount_gourmet                 Float
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

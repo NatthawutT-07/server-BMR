@@ -41,7 +41,7 @@ exports.stockBrandLookup = async (req, res) => {
         SELECT
           LPAD(COALESCE(NULLIF(regexp_replace(rb."item_code", '[^0-9]', '', 'g'), ''), '0'), 5, '0') AS "item_code",
           COALESCE(SUM(rb."quantity_sale_bill"), 0)      AS "quantity_sale_bill",
-          COALESCE(SUM(rb."total_sales"), 0)   AS "salesValue"
+          COALESCE(SUM(rb."total_sales_Finally"), 0)   AS "total_sales_Finally"
         FROM "RawBill" rb
         WHERE rb."item_code" IS NOT NULL
           AND rb."item_code" != ''
@@ -83,10 +83,10 @@ exports.stockBrandLookup = async (req, res) => {
     const salesMap = new Map();
     for (const r of salesRows) {
       if (r.item_code !== null && r.item_code !== undefined) {
-        const existing = salesMap.get(r.item_code) || { quantity_sale_bill: 0, salesValue: 0 };
+        const existing = salesMap.get(r.item_code) || { quantity_sale_bill: 0, total_sales_Finally: 0 };
         salesMap.set(r.item_code, {
           quantity_sale_bill: existing.quantity_sale_bill + (Number(r.quantity_sale_bill) || 0),
-          salesValue: existing.salesValue + (Number(r.salesValue) || 0),
+          total_sales_Finally: existing.total_sales_Finally + (Number(r.total_sales_Finally) || 0),
         });
       }
     }
@@ -108,7 +108,7 @@ exports.stockBrandLookup = async (req, res) => {
       }
       const code = item.item_code;
 
-      const sales = salesMap.get(code) || { quantity_sale_bill: 0, salesValue: 0 };
+      const sales = salesMap.get(code) || { quantity_sale_bill: 0, total_sales_Finally: 0 };
       const wdQty = withdrawMap.get(code) || 0;
       const skQty = stockMap.get(code) || 0;
 
@@ -118,7 +118,7 @@ exports.stockBrandLookup = async (req, res) => {
           consingItem: item.consingItem || "-",
           quantity_stock: 0,
           quantity_sale_bill: 0,
-          salesValue: 0,
+          total_sales_Finally: 0,
           quantity_withdraw: 0,
         });
       }
@@ -126,18 +126,18 @@ exports.stockBrandLookup = async (req, res) => {
       const b = brandMap.get(brand);
       b.quantity_stock += skQty;
       b.quantity_sale_bill += Number(sales.quantity_sale_bill) || 0;
-      b.salesValue += Number(sales.salesValue) || 0;
+      b.total_sales_Finally += Number(sales.total_sales_Finally) || 0;
       b.quantity_withdraw += wdQty;
     }
 
     const rows = Array.from(brandMap.values());
 
-    // เรียงตาม salesValue มากสุดขึ้นก่อน
-    rows.sort((a, b) => b.salesValue - a.salesValue);
+    // เรียงตาม total_sales_Finally มากสุดขึ้นก่อน
+    rows.sort((a, b) => b.total_sales_Finally - a.total_sales_Finally);
 
     // ─── KPI totals ───
     const kpi = {
-      totalSalesValue: rows.reduce((s, r) => s + r.salesValue, 0),
+      totalSalesValue: rows.reduce((s, r) => s + r.total_sales_Finally, 0),
       totalSalesQty: rows.reduce((s, r) => s + r.quantity_sale_bill, 0),
       totalWithdrawQty: rows.reduce((s, r) => s + r.quantity_withdraw, 0),
       totalStockQty: rows.reduce((s, r) => s + r.quantity_stock, 0),

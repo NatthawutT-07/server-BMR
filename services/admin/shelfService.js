@@ -251,9 +251,9 @@ exports.getSkuData = async (branch_code) => {
             im."min_stock", im."max_stock", im."pack_order",
             COALESCE(st."quantity_stock", 0)::int AS "quantity_stock",
             COALESCE(wd."quantity_withdraw", 0)::int   AS "quantity_withdraw",
-            COALESCE(wd."withdrawValue", 0)::float8   AS "withdrawValue",
+            COALESCE(wd."value_withdraw", 0)::float8   AS "value_withdraw",
             COALESCE(bs."quantity_sale_bill", 0)::int     AS "quantity_sale_bill",
-            COALESCE(bs."net_sales_total", 0)::float8 AS "salesTotalPrice",
+            COALESCE(bs."total_sales_rounding_no_end_discount", 0)::float8 AS "total_sales_rounding_no_end_discount",
             CASE
               WHEN ls."lastSaleDate" IS NOT NULL THEN
                 GREATEST(((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Bangkok')::date - 1) - (ls."lastSaleDate" AT TIME ZONE 'Asia/Bangkok')::date, 0)
@@ -265,14 +265,14 @@ exports.getSkuData = async (branch_code) => {
             FROM "Stock" WHERE "branch_code" = ${branch_code} GROUP BY "branch_code", "item_code"
         ) st ON s."branch_code" = st."branch_code" AND s."item_code" = st."item_code"
         LEFT JOIN (
-            SELECT "branch_code", "item_code", SUM("quantity_withdraw")::int AS "quantity_withdraw", SUM("value"::numeric)::float8 AS "withdrawValue"
+            SELECT "branch_code", "item_code", SUM("quantity_withdraw")::int AS "quantity_withdraw", SUM("value_withdraw"::numeric)::float8 AS "value_withdraw"
             FROM "withdraw"
             WHERE "branch_code" = ${branch_code} AND "docStatus" = 'อนุมัติแล้ว' AND "reason" != 'เบิกเพื่อขาย'
               AND to_date("date", 'DD/MM/YYYY') >= to_date(${startDateStr}, 'YYYY-MM-DD') AND to_date("date", 'DD/MM/YYYY') <= to_date(${endDateStr}, 'YYYY-MM-DD')
             GROUP BY "branch_code", "item_code"
         ) wd ON s."branch_code" = wd."branch_code" AND s."item_code" = wd."item_code"
         LEFT JOIN (
-            SELECT br."branch_code" AS "branch_code", bi."item_code" AS "item_code", SUM(bi."quantity_sale_bill")::int AS "quantity_sale_bill", SUM(bi."net_sales")::float8 AS "net_sales_total"
+            SELECT br."branch_code" AS "branch_code", bi."item_code" AS "item_code", SUM(bi."quantity_sale_bill")::int AS "quantity_sale_bill", SUM(bi."total_sales_rounding_no_end_discount")::float8 AS "total_sales_rounding_no_end_discount"
             FROM "BillItem" bi
             JOIN "Bill" b ON bi."billId" = b."id"
             JOIN "Branch" br ON b."branchId" = br."id"
@@ -310,7 +310,7 @@ exports.getDashboardSummary = async () => {
           GROUP BY "branch_code", "item_code"
       ),
       sales_map AS (
-          SELECT br."branch_code" AS "branch_code", bi."item_code" AS "item_code", SUM(bi."net_sales")::float8 AS sales_total
+          SELECT br."branch_code" AS "branch_code", bi."item_code" AS "item_code", SUM(bi."total_sales_rounding_no_end_discount")::float8 AS sales_total
           FROM "BillItem" bi
           JOIN "Bill" b ON bi."billId" = b."id"
           JOIN "Branch" br ON b."branchId" = br."id"
@@ -330,7 +330,7 @@ exports.getDashboardSummary = async () => {
       )
       SELECT b."branch_code" AS "branch_code", b."branch_name" AS "branchName", COALESCE(bs.shelf_count, 0)::int AS "shelfCount",
           COALESCE(bs.product_count, 0)::int AS "productCount", COALESCE(bs.stock_cost, 0)::float8 AS "stockCost",
-          COALESCE(bs.withdraw_value, 0)::float8 AS "withdrawValue", COALESCE(bs.sales_total, 0)::float8 AS "salesTotal"
+          COALESCE(bs.withdraw_value, 0)::float8 AS "value_withdraw", COALESCE(bs.sales_total, 0)::float8 AS "salesTotal"
       FROM "Branch" b LEFT JOIN branch_sums bs ON bs.branch_code = b."branch_code" ORDER BY b."branch_code" ASC
   `;
 
@@ -383,7 +383,7 @@ exports.getShelfSales = async (branch_code) => {
           GROUP BY "branch_code", "item_code"
       ),
       sales_map AS (
-          SELECT br."branch_code" AS "branch_code", bi."item_code" AS "item_code", SUM(bi."net_sales")::float8 AS sales_total
+          SELECT br."branch_code" AS "branch_code", bi."item_code" AS "item_code", SUM(bi."total_sales_rounding_no_end_discount")::float8 AS sales_total
           FROM "BillItem" bi JOIN "Bill" b ON bi."billId" = b."id" JOIN "Branch" br ON b."branchId" = br."id"
           WHERE br."branch_code" = ${branch_code} AND b."date" >= ${startUtc} AND b."date" <= ${endUtc}
           GROUP BY br."branch_code", bi."item_code"
@@ -400,7 +400,7 @@ exports.getShelfSales = async (branch_code) => {
           GROUP BY sr."branch_code", sr."shelfCode"
       )
       SELECT ss.branch_code AS "branch_code", ss.shelf_code AS "shelfCode", sn."fullName" AS "shelfName",
-          COALESCE(ss.sales_total, 0)::float8 AS "salesTotal", COALESCE(ss.withdraw_value, 0)::float8 AS "withdrawValue",
+          COALESCE(ss.sales_total, 0)::float8 AS "salesTotal", COALESCE(ss.withdraw_value, 0)::float8 AS "value_withdraw",
           COALESCE(ss.sku_count, 0)::int AS "skuCount", COALESCE(ss.stock_cost, 0)::float8 AS "stockCost"
       FROM shelf_sums ss LEFT JOIN shelf_names sn ON sn."branch_code" = ss.branch_code AND sn."shelfCode" = ss.shelf_code
       ORDER BY ss.shelf_code

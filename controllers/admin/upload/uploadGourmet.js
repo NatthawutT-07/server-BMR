@@ -14,13 +14,13 @@ exports.uploadGourmetXLSX = async (req, res) => {
         const raw = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
         setUploadJob(jobId, 20, "parsing rows");
 
-        const requiredFields = ["date", "branch_code", "item_code", "quantity", "sales"];
+        const requiredFields = ["date", "branch_code", "item_code", "quantity", "sales_amount_gourmet"];
         const aliases = {
             date: ["date", "วันที่"],
             branch_code: ["branch_code", "รหัสสาขา", "สาขา"],
             item_code: ["productcode", "รหัสสินค้า", "sku"],
             quantity_sale_gourmet: ["quantity", "qty", "จำนวน", "saleqty"],
-            sales: ["sales", "ยอดขาย", "ยอดขายรวม", "netsales", "salesamount", "ยอดขายสุทธิ"],
+            sales_amount_gourmet: ["sales", "ยอดขาย", "ยอดขายรวม", "netsales", "salesamount", "ยอดขายสุทธิ"],
         };
 
         // เอาช่องว่างเเละ _ ออกให้หมด เพื่อให้ match กับคำเช่น "Sale_QTY" ได้ตรงกับ "saleqty"
@@ -90,9 +90,9 @@ exports.uploadGourmetXLSX = async (req, res) => {
             let quantity_sale_gourmet = parseInt(String(row[headerMap.quantity_sale_gourmet]).replace(/,/g, ""), 10);
             if (Number.isNaN(quantity_sale_gourmet)) quantity_sale_gourmet = 0;
 
-            const salesRaw = String(row[headerMap.sales]).replace(/,/g, "");
-            let sales = parseFloat(salesRaw);
-            if (Number.isNaN(sales)) sales = 0;
+            const salesRawGourmet = String(row[headerMap.sales_amount_gourmet]).replace(/,/g, "");
+            let sales_amount_gourmet = parseFloat(salesRawGourmet);
+            if (Number.isNaN(sales_amount_gourmet)) sales_amount_gourmet = 0;
 
             // Date processing to standard string for unique key
             const yyyy = dateVal.getUTCFullYear();
@@ -108,7 +108,7 @@ exports.uploadGourmetXLSX = async (req, res) => {
                     branch_code: branch_code,
                     item_code: productCode,
                     quantity_sale_gourmet,
-                    sales,
+                    sales_amount_gourmet,
                 });
             }
         });

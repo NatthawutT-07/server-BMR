@@ -77,11 +77,10 @@ const headerMap = {
     "มูลค่าแยกภาษี": "value_excl_tax",
     "ภาษีมูลค่าเพิ่ม": "vat",
     "ลดท้ายบิล": "end_bill_discount",
-    "มูลค่ารวมหลังลดท้ายบิล": "total_after_discount",
+    "มูลค่ารวมหลังลดท้ายบิล": "total_sales_end_discount_no_rounding",
     "ยอดปัดเศษ": "rounding",
-    "ยอดขายสุทธิ": "net_sales",
-    "ยอดขายรวม": "total_sales",
-    "ยอดชำระรวม": "total_payment",
+    "ยอดขายสุทธิ": "total_sales_rounding_no_end_discount",
+    "ยอดขายรวม": "total_sales_Finally",
 };
 
 // BATCH SIZE สำหรับ raw SQL insert
@@ -205,10 +204,9 @@ exports.uploadBillXLSX = async (req, res) => {
                 value_excl_tax: parseFloatWithComma(meta.value_excl_tax),
                 vat: parseFloatWithComma(meta.vat),
                 end_bill_discount: parseFloatWithComma(meta.end_bill_discount),
-                total_after_discount: parseFloatWithComma(meta.total_after_discount),
+                total_sales_end_discount_no_rounding: parseFloatWithComma(meta.total_sales_Finally_end_discount_no_rounding),
                 rounding: parseFloatWithComma(meta.rounding),
-                total_sales: parseFloatWithComma(meta.total_sales),
-                total_payment: parseFloatWithComma(meta.total_payment),
+                total_sales_Finally: parseFloatWithComma(meta.total_sales_Finally),
             });
 
             // BILL ITEMS
@@ -228,7 +226,7 @@ exports.uploadBillXLSX = async (req, res) => {
                     price_per_unit: parseFloatWithComma(row.price_per_unit),
                     sales_amount: parseFloatWithComma(row.sales_amount),
                     discount: parseFloatWithComma(row.discount),
-                    net_sales: parseFloatWithComma(row.net_sales),
+                    total_sales_rounding_no_end_discount: parseFloatWithComma(row.total_sales_rounding_no_end_discount),
                 });
             }
         }
@@ -265,7 +263,7 @@ exports.uploadBillXLSX = async (req, res) => {
                 price_per_unit: i.price_per_unit,
                 sales_amount: i.sales_amount,
                 discount: i.discount,
-                net_sales: i.net_sales,
+                total_sales_rounding_no_end_discount: i.total_sales_rounding_no_end_discount,
             }));
 
         if (billItemsToInsert.length > 0) {
