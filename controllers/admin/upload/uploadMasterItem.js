@@ -87,18 +87,18 @@ exports.uploadMasterItemXLSX = async (req, res) => {
         if (toInsert.length > 0) {
             const cleanedInserts = toInsert.map(r => ({
                 item_code: String(r.item_code).trim().padStart(5, "0"),
-                nameProduct: r.nameProduct != null ? String(r.nameProduct) : null,
-                groupName: r.groupName != null ? String(r.groupName) : null,
-                status: r.status != null ? String(r.status) : null,
+                item_name: r.item_name != null ? String(r.item_name) : null,
+                group_name: r.group_name != null ? String(r.group_name) : null,
+                status: r.item_status != null ? String(r.item_status) : null,
                 barcode: r.barcode != null ? String(r.barcode) : null,
-                nameBrand: r.nameBrand != null ? String(r.nameBrand) : null,
-                consingItem: r.consingItem != null ? String(r.consingItem) : null,
-                purchasePriceExcVAT: parseFloat(r.purchasePriceExcVAT) || 0,
-                salesPriceIncVAT: parseInt(r.salesPriceIncVAT, 10) || 0,
-                preferredVandorCode: r.preferredVandorCode != null ? String(r.preferredVandorCode) : null,
-                preferredVandorName: r.preferredVandorName != null ? String(r.preferredVandorName) : null,
-                GP: r.GP != null ? String(r.GP) : null,
-                shelfLife: r.shelfLife != null ? String(r.shelfLife) : null,
+                brand_name: r.brand_name != null ? String(r.brand_name) : null,
+                is_consignment: r.is_consignment != null ? String(r.is_consignment) : null,
+                purchase_price: parseFloat(r.purchase_price) || 0,
+                selling_price_vat: parseInt(r.selling_price_vat, 10) || 0,
+                preferred_vendor_code: r.preferred_vendor_code != null ? String(r.preferred_vendor_code) : null,
+                preferred_vendor_name: r.preferred_vendor_name != null ? String(r.preferred_vendor_name) : null,
+                gross_profit_pct: r.gross_profit_pct != null ? String(r.gross_profit_pct) : null,
+                shelf_life_days: r.shelf_life_days != null ? String(r.shelf_life_days) : null,
                 productionDate: r.productionDate != null ? String(r.productionDate) : null,
                 vatGroupPu: r.vatGroupPu != null ? String(r.vatGroupPu) : null,
             }));
@@ -120,7 +120,7 @@ exports.uploadMasterItemXLSX = async (req, res) => {
             // Verify insert worked for debug codes
             const verifyInserts = await prisma.listOfItemHold.findMany({
                 where: { item_code: { in: [913, 5229] } },
-                select: { item_code: true, nameProduct: true }
+                select: { item_code: true, item_name: true }
             });
             // console.log('[DEBUG] Verification - found in DB after insert:', verifyInserts);
         }
@@ -137,57 +137,57 @@ exports.uploadMasterItemXLSX = async (req, res) => {
                 const values = chunk.map((r) => {
                     // Force consistent types for all fields
                     const item_code = String(r.item_code).trim().padStart(5, "0");
-                    const purchasePriceExcVAT = parseFloat(r.purchasePriceExcVAT) || 0;
-                    const salesPriceIncVAT = parseInt(r.salesPriceIncVAT, 10) || 0;
-                    const GP = r.GP != null ? String(r.GP) : null;
-                    const shelfLife = r.shelfLife != null ? String(r.shelfLife) : null;
-                    const productionDate = r.productionDate != null ? String(r.productionDate) : null;
-                    const vatGroupPu = r.vatGroupPu != null ? String(r.vatGroupPu) : null;
-                    const status = r.status != null ? String(r.status) : null;
+                    const purchase_price = parseFloat(r.purchase_price) || 0;
+                    const selling_price_vat = parseInt(r.selling_price_vat, 10) || 0;
+                    const gross_profit_pct = r.gross_profit_pct != null ? String(r.gross_profit_pct) : null;
+                    const shelf_life_days = r.shelf_life_days != null ? String(r.shelf_life_days) : null;
+                    
+                    
+                    const item_status = r.item_status != null ? String(r.item_status) : null;
                     const barcode = r.barcode != null ? String(r.barcode) : null;
-                    const nameBrand = r.nameBrand != null ? String(r.nameBrand) : null;
-                    const preferredVandorCode = r.preferredVandorCode != null ? String(r.preferredVandorCode) : null;
-                    const preferredVandorName = r.preferredVandorName != null ? String(r.preferredVandorName) : null;
-                    const consingItem = r.consingItem != null ? String(r.consingItem) : null;
-                    const groupName = r.groupName != null ? String(r.groupName) : null;
-                    const nameProduct = r.nameProduct != null ? String(r.nameProduct) : null;
+                    const brand_name = r.brand_name != null ? String(r.brand_name) : null;
+                    const preferred_vendor_code = r.preferred_vendor_code != null ? String(r.preferred_vendor_code) : null;
+                    const preferred_vendor_name = r.preferred_vendor_name != null ? String(r.preferred_vendor_name) : null;
+                    const is_consignment = r.is_consignment != null ? String(r.is_consignment) : null;
+                    const group_name = r.group_name != null ? String(r.group_name) : null;
+                    const item_name = r.item_name != null ? String(r.item_name) : null;
 
                     return Prisma.sql`(
                         ${item_code},
-                        ${purchasePriceExcVAT},
-                        ${salesPriceIncVAT},
-                        ${GP},
-                        ${shelfLife},
-                        ${productionDate},
-                        ${vatGroupPu},
-                        ${status},
+                        ${purchase_price},
+                        ${selling_price_vat},
+                        ${gross_profit_pct},
+                        ${shelf_life_days},
+                        
+                        
+                        ${item_status},
                         ${barcode},
-                        ${nameBrand},
-                        ${preferredVandorCode},
-                        ${preferredVandorName},
-                        ${consingItem},
-                        ${groupName},
-                        ${nameProduct}
+                        ${brand_name},
+                        ${preferred_vendor_code},
+                        ${preferred_vendor_name},
+                        ${is_consignment},
+                        ${group_name},
+                        ${item_name}
                     )`;
                 }
                 );
 
                 const sql = Prisma.sql`
                     UPDATE "ListOfItemHold" AS t SET
-                        "purchasePriceExcVAT" = v.purchase,
-                        "salesPriceIncVAT" = v.saleprice,
-                        "GP" = v.gp,
-                        "shelfLife" = v.shelf,
-                        "productionDate" = v.proddate,
-                        "vatGroupPu" = v.vat,
-                        "status" = v.status,
+                        "purchase_price" = v.purchase,
+                        "selling_price_vat" = v.saleprice,
+                        "gross_profit_pct" = v.gp,
+                        "shelf_life_days" = v.shelf,
+                        
+                        
+                        "item_status" = v.status,
                         "barcode" = v.barcode,
-                        "nameBrand" = v.brand,
-                        "preferredVandorCode" = v.vendor,
-                        "preferredVandorName" = v.vendorname,
-                        "consingItem" = v.consign,
-                        "groupName" = v.groupname,
-                        "nameProduct" = v.nameproduct
+                        "brand_name" = v.brand,
+                        "preferred_vendor_code" = v.vendor,
+                        "preferred_vendor_name" = v.vendorname,
+                        "is_consignment" = v.consign,
+                        "group_name" = v.groupname,
+                        "item_name" = v.nameproduct
                     FROM (VALUES ${Prisma.join(values)})
                     AS v(
                         item_code, purchase, saleprice, gp, shelf,

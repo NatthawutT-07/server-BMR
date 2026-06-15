@@ -46,18 +46,18 @@ exports.getMasterItem = async (qRaw) => {
     where: {
       OR: [
         { barcode: { contains: qRaw, mode: "insensitive" } },
-        { nameProduct: { contains: qRaw, mode: "insensitive" } },
-        { nameBrand: { contains: qRaw, mode: "insensitive" } },
+        { item_name: { contains: qRaw, mode: "insensitive" } },
+        { brand_name: { contains: qRaw, mode: "insensitive" } },
       ],
     },
-    select: { item_code: true, barcode: true, nameProduct: true, nameBrand: true },
+    select: { item_code: true, barcode: true, item_name: true, brand_name: true },
     take: 50,
   });
 
   let normalized = [];
   if (qDigits.length >= 6) {
     normalized = await prisma.$queryRaw`
-        SELECT "item_code", "barcode", "nameProduct", "nameBrand"
+        SELECT "item_code", "barcode", "item_name", "brand_name"
         FROM "ListOfItemHold"
         WHERE regexp_replace(COALESCE("barcode", ''), '\\D', '', 'g') LIKE ${"%" + qDigits + "%"}
         LIMIT 50;
@@ -246,8 +246,8 @@ exports.getSkuData = async (branch_code) => {
   const rawResult = await prisma.$queryRaw`
         SELECT 
             s."branch_code", s."item_code", s."shelfCode", s."rowNo", s."index",
-            p."nameProduct", p."nameBrand", p."purchasePriceExcVAT", p."salesPriceIncVAT", p."shelfLife", p."barcode",
-            p."groupName",
+            p."item_name", p."brand_name", p."purchase_price", p."selling_price_vat", p."shelf_life_days", p."barcode",
+            p."group_name",
             im."min_stock", im."max_stock", im."pack_order",
             COALESCE(st."quantity_stock", 0)::int AS "quantity_stock",
             COALESCE(wd."quantity_withdraw", 0)::int   AS "quantity_withdraw",
@@ -319,7 +319,7 @@ exports.getDashboardSummary = async () => {
       ),
       branch_sums AS (
           SELECT sr."branch_code" AS branch_code, COUNT(DISTINCT sr."shelfCode")::int AS shelf_count, COUNT(DISTINCT sr."item_code")::int AS product_count,
-              SUM(CASE WHEN COALESCE(sm.stock_qty, 0) > 0 THEN COALESCE(sm.stock_qty, 0) * COALESCE(p."purchasePriceExcVAT", 0) ELSE 0 END)::float8 AS stock_cost,
+              SUM(CASE WHEN COALESCE(sm.stock_qty, 0) > 0 THEN COALESCE(sm.stock_qty, 0) * COALESCE(p."purchase_price", 0) ELSE 0 END)::float8 AS stock_cost,
               SUM(COALESCE(wm.withdraw_value, 0))::float8 AS withdraw_value, SUM(COALESCE(sa.sales_total, 0))::float8 AS sales_total
           FROM sku_rows sr
           LEFT JOIN stock_map sm ON sm."branch_code" = sr."branch_code" AND sm."item_code" = sr."item_code"
@@ -390,7 +390,7 @@ exports.getShelfSales = async (branch_code) => {
       ),
       shelf_sums AS (
           SELECT sr."branch_code" AS branch_code, sr."shelfCode" AS shelf_code, COUNT(DISTINCT sr."item_code")::int AS sku_count,
-              SUM(CASE WHEN COALESCE(sm.stock_qty, 0) > 0 THEN COALESCE(sm.stock_qty, 0) * COALESCE(p."purchasePriceExcVAT", 0) ELSE 0 END)::float8 AS stock_cost,
+              SUM(CASE WHEN COALESCE(sm.stock_qty, 0) > 0 THEN COALESCE(sm.stock_qty, 0) * COALESCE(p."purchase_price", 0) ELSE 0 END)::float8 AS stock_cost,
               SUM(COALESCE(wm.withdraw_value, 0))::float8 AS withdraw_value, SUM(COALESCE(sa.sales_total, 0))::float8 AS sales_total
           FROM sku_rows sr
           LEFT JOIN stock_map sm ON sm."branch_code" = sr."branch_code" AND sm."item_code" = sr."item_code"

@@ -15,9 +15,9 @@ const lookupByBarcode = async (req, res) => {
       select: {
         item_code: true,
         barcode: true,
-        nameProduct: true,
-        nameBrand: true,
-        salesPriceIncVAT: true,
+        item_name: true,
+        brand_name: true,
+        selling_price_vat: true,
       },
     });
 
@@ -39,9 +39,9 @@ const lookupByBarcode = async (req, res) => {
         product: {
           item_code: item.item_code,
           barcode: item.barcode,
-          name: item.nameProduct,
-          brand: item.nameBrand,
-          price: item.salesPriceIncVAT,
+          name: item.item_name,
+          brand: item.brand_name,
+          price: item.selling_price_vat,
         },
       });
     }
@@ -60,9 +60,9 @@ const lookupByBarcode = async (req, res) => {
       product: {
         item_code: item.item_code,
         barcode: item.barcode,
-        name: item.nameProduct,
-        brand: item.nameBrand,
-        price: item.salesPriceIncVAT,
+        name: item.item_name,
+        brand: item.brand_name,
+        price: item.selling_price_vat,
       },
       locations: loc.map((x) => ({
         shelfCode: x.shelfCode,

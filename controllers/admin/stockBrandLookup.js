@@ -9,7 +9,7 @@ const { serialize } = require("../../utils/serializer");
  * ดึงข้อมูลสินค้าจาก ListOfItemHold ทั้งหมด
  * ยอดขาย → query จาก RawBill (ตารางแยกอิสระ) โดยแปลง date (DD/MM/YYYY) เป็น date จริง
  * withdraw, Stock → query จากตารางเดิม
- * รวมกลุ่มตาม nameBrand → ส่ง KPI + rows
+ * รวมกลุ่มตาม brand_name → ส่ง KPI + rows
  */
 exports.stockBrandLookup = async (req, res) => {
   try {
@@ -28,9 +28,9 @@ exports.stockBrandLookup = async (req, res) => {
     const items = await prisma.listOfItemHold.findMany({
       select: {
         item_code: true,
-        nameProduct: true,
-        nameBrand: true,
-        consingItem: true,
+        item_name: true,
+        brand_name: true,
+        is_consignment: true,
       },
     });
 
@@ -97,11 +97,11 @@ exports.stockBrandLookup = async (req, res) => {
       stockRows.map((r) => [r.item_code, r.quantity_stock])
     );
 
-    // ─── Merge & group by nameBrand ───
+    // ─── Merge & group by brand_name ───
     const brandMap = new Map();
 
     for (const item of items) {
-      const brand = item.nameBrand ? item.nameBrand.trim() : "";
+      const brand = item.brand_name ? item.brand_name.trim() : "";
       // ข้ามถ้าไม่มีแบรนด์ที่แมพกันได้ หรือเป็น "ไม่ระบุ"
       if (!brand || brand === "ไม่ระบุ") {
         continue;
@@ -114,8 +114,8 @@ exports.stockBrandLookup = async (req, res) => {
 
       if (!brandMap.has(brand)) {
         brandMap.set(brand, {
-          nameBrand: brand,
-          consingItem: item.consingItem || "-",
+          brand_name: brand,
+          is_consignment: item.is_consignment || "-",
           quantity_stock: 0,
           quantity_sale_bill: 0,
           total_sales_Finally: 0,

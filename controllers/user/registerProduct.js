@@ -29,10 +29,10 @@ exports.checkProductExists = async (req, res) => {
             where: { barcode: String(barcode) },
             select: {
                 item_code: true,
-                nameProduct: true,
-                nameBrand: true,
+                item_name: true,
+                brand_name: true,
                 barcode: true,
-                salesPriceIncVAT: true,
+                selling_price_vat: true,
             }
         });
 
@@ -64,10 +64,10 @@ exports.checkProductExists = async (req, res) => {
                 exists: true,
                 product: {
                     item_code: product.item_code,
-                    nameProduct: product.nameProduct,
-                    nameBrand: product.nameBrand,
+                    item_name: product.item_name,
+                    brand_name: product.brand_name,
                     barcode: product.barcode,
-                    price: product.salesPriceIncVAT,
+                    price: product.selling_price_vat,
                 },
                 location: {
                     shelfCode: existingItem.shelfCode,
@@ -85,10 +85,10 @@ exports.checkProductExists = async (req, res) => {
             exists: false,
             product: {
                 item_code: product.item_code,
-                nameProduct: product.nameProduct,
-                nameBrand: product.nameBrand,
+                item_name: product.item_name,
+                brand_name: product.brand_name,
                 barcode: product.barcode,
-                price: product.salesPriceIncVAT,
+                price: product.selling_price_vat,
             },
             msg: "สินค้ายังไม่มีใน Planogram สามารถลงทะเบียนได้"
         });
@@ -207,7 +207,7 @@ exports.registerProduct = async (req, res) => {
             where: { barcode: String(barcode) },
             select: {
                 item_code: true,
-                nameProduct: true,
+                item_name: true,
             }
         });
 
@@ -261,7 +261,7 @@ exports.registerProduct = async (req, res) => {
             }
         });
 
-        console.log(`Registered: ${product.nameProduct} → ${shelfCode}/${rowNo}/index:${nextIndex}`);
+        console.log(`Registered: ${product.item_name} → ${shelfCode}/${rowNo}/index:${nextIndex}`);
 
         return res.json({
             ok: true,
@@ -269,7 +269,7 @@ exports.registerProduct = async (req, res) => {
             data: {
                 id: newSku.id,
                 item_code: product.item_code,
-                nameProduct: product.nameProduct,
+                item_name: product.item_name,
                 shelfCode,
                 rowNo: Number(rowNo),
                 index: nextIndex,

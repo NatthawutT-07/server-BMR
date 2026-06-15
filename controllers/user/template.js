@@ -233,10 +233,10 @@ exports.UserTemplateItem = async (req, res) => {
           -- ชื่อ shelf จาก Template
           t."fullName" AS "fullName",
 
-          p."nameProduct",
-          p."nameBrand",
-          p."shelfLife",
-          p."salesPriceIncVAT",
+          p."item_name",
+          p."brand_name",
+          p."shelf_life_days",
+          p."selling_price_vat",
           p."barcode",
           im."min_stock",
           im."max_stock",
@@ -288,13 +288,13 @@ exports.UserTemplateItem = async (req, res) => {
       item_code:
         r.item_code !== null && r.item_code !== undefined ? r.item_code : null,
 
-      nameProduct: r.nameProduct ?? null,
-      nameBrand: r.nameBrand ?? null,
-      shelfLife: r.shelfLife ?? null,
+      item_name: r.item_name ?? null,
+      brand_name: r.brand_name ?? null,
+      shelf_life_days: r.shelf_life_days ?? null,
 
-      salesPriceIncVAT:
-        r.salesPriceIncVAT !== null && r.salesPriceIncVAT !== undefined
-          ? Number(r.salesPriceIncVAT)
+      selling_price_vat:
+        r.selling_price_vat !== null && r.selling_price_vat !== undefined
+          ? Number(r.selling_price_vat)
           : null,
 
       barcode: r.barcode ?? null,
@@ -351,10 +351,10 @@ exports.UserTemplateItem = async (req, res) => {
 //           s."shelfCode",
 //           s."rowNo",
 //           s."index",
-//           p."nameProduct",
-//           p."nameBrand",
-//           p."shelfLife",
-//           p."salesPriceIncVAT",
+//           p."item_name",
+//           p."brand_name",
+//           p."shelf_life_days",
+//           p."selling_price_vat",
 //           p."barcode",
 //           im."min_stock",
 //           im."max_stock",
@@ -485,13 +485,13 @@ exports.UserTemplateItem = async (req, res) => {
 //                 item_code:
 //                     r.item_code !== null && r.item_code !== undefined ? r.item_code : null,
 
-//                 nameProduct: r.nameProduct ?? null,
-//                 nameBrand: r.nameBrand ?? null,
-//                 shelfLife: r.shelfLife ?? null,
+//                 item_name: r.item_name ?? null,
+//                 brand_name: r.brand_name ?? null,
+//                 shelf_life_days: r.shelf_life_days ?? null,
 
-//                 salesPriceIncVAT:
-//                     r.salesPriceIncVAT !== null && r.salesPriceIncVAT !== undefined
-//                         ? Number(r.salesPriceIncVAT)
+//                 selling_price_vat:
+//                     r.selling_price_vat !== null && r.selling_price_vat !== undefined
+//                         ? Number(r.selling_price_vat)
 //                         : null,
 
 //                 barcode: r.barcode ?? null,

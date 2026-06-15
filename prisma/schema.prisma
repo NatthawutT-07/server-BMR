@@ -91,20 +91,18 @@ model withdraw {
 model ListOfItemHold {
   id                  Int     @id @default(autoincrement())
   item_code           String  @unique
-  nameProduct         String?
-  groupName           String?
-  status              String?
+  item_name         String?
+  group_name           String?
+  item_status              String?
   barcode             String?
-  nameBrand           String?
-  consingItem         String?
-  purchasePriceExcVAT Float
-  salesPriceIncVAT    Int
-  preferredVandorCode String?
-  preferredVandorName String?
-  GP                  String?
-  shelfLife           String?
-  productionDate      String?
-  vatGroupPu          String?
+  brand_name           String?
+  is_consignment         String?
+  purchase_price Float
+  selling_price_vat    Int
+  preferred_vendor_code String?
+  preferred_vendor_name String?
+  gross_profit_pct                  String?
+  shelf_life_days           String?
 
   @@index([item_code])
 }

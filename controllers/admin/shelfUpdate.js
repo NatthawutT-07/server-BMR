@@ -220,11 +220,11 @@ exports.createSingleChangeLog = async (branch_code, shelfCode, action, items, cr
         const codesToLookup = items.map((i) => i.item_code).filter(Boolean);
         const products = await prisma.listOfItemHold.findMany({
             where: { item_code: { in: codesToLookup } },
-            select: { item_code: true, nameProduct: true, nameBrand: true },
+            select: { item_code: true, item_name: true, brand_name: true },
         });
         const productNameMap = new Map();
         products.forEach((p) => {
-            productNameMap.set(p.item_code, p.nameProduct || p.nameBrand || `รหัส ${p.item_code}`);
+            productNameMap.set(p.item_code, p.item_name || p.brand_name || `รหัส ${p.item_code}`);
         });
 
         const logs = items.map((item) => ({
@@ -276,11 +276,11 @@ exports.createShelfChangeLogs = async (branch_code, shelfCode, oldItems, newItem
         const allCodes = [...new Set([...oldMap.keys(), ...newMap.keys()])].map(Number);
         const products = await prisma.listOfItemHold.findMany({
             where: { item_code: { in: allCodes } },
-            select: { item_code: true, nameProduct: true, nameBrand: true },
+            select: { item_code: true, item_name: true, brand_name: true },
         });
         const productNameMap = new Map();
         products.forEach((p) => {
-            productNameMap.set(p.item_code, p.nameProduct || p.nameBrand || `รหัส ${p.item_code}`);
+            productNameMap.set(p.item_code, p.item_name || p.brand_name || `รหัส ${p.item_code}`);
         });
 
         // หา DELETE: อยู่ใน old แต่ไม่อยู่ใน new

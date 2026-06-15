@@ -31,10 +31,10 @@ const getShelfBlocks = async (req, res) => {
       where: { item_code: { in: item_codes } },
       select: {
         item_code: true,
-        nameProduct: true,
-        nameBrand: true,
+        item_name: true,
+        brand_name: true,
         barcode: true,
-        salesPriceIncVAT: true,
+        selling_price_vat: true,
       },
     });
 
@@ -49,9 +49,9 @@ const getShelfBlocks = async (req, res) => {
         item_code: s.item_code,
         index: s.index,
         barcode: it?.barcode ?? null,
-        name: it?.nameProduct ?? null,
-        brand: it?.nameBrand ?? null,
-        price: it?.salesPriceIncVAT ?? null,
+        name: it?.item_name ?? null,
+        brand: it?.brand_name ?? null,
+        price: it?.selling_price_vat ?? null,
       });
     }
 
