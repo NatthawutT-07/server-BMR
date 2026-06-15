@@ -48,6 +48,33 @@ mkdir -p "$BACKUP_DIR"
 echo "Validating Prisma schema..."
 npx prisma validate
 
+echo "Checking table ownership..."
+NON_OWNED_TABLES="$(
+  psql "$PSQL_DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "
+    SELECT tablename || E'\t(owner: ' || tableowner || ')'
+    FROM pg_tables
+    WHERE schemaname = 'public'
+      AND tableowner <> current_user
+      AND tablename NOT IN (
+        'User',
+        'employee_hq',
+        'reward_hq',
+        'branch_hq',
+        'log_hq',
+        '_prisma_migrations'
+      )
+    ORDER BY tablename;
+  "
+)"
+
+if [[ -n "$NON_OWNED_TABLES" ]]; then
+  echo "The database user in DATABASE_URL does not own these tables:" >&2
+  printf '%s\n' "$NON_OWNED_TABLES" >&2
+  echo "Change their owner to the DATABASE_URL user before running this script." >&2
+  echo "No application was stopped and no database objects were changed." >&2
+  exit 1
+fi
+
 echo "The following tables and their data will be preserved:"
 printf '  - %s\n' "${PRESERVED_TABLES[@]}"
 echo
