@@ -2,10 +2,6 @@
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 
-/**
- * POST /api/pog-request
- * User สร้าง request ใหม่
- */
 const createPogRequest = async (req, res) => {
     try {
         const {
@@ -24,7 +20,6 @@ const createPogRequest = async (req, res) => {
             note,
         } = req.body;
 
-        // Validate required fields
         if (!branch_code || !action || !barcode) {
             return res.status(400).json({
                 ok: false,
@@ -32,7 +27,6 @@ const createPogRequest = async (req, res) => {
             });
         }
 
-        // Validate action type
         if (!["add", "swap", "delete", "move"].includes(action)) {
             return res.status(400).json({
                 ok: false,
@@ -40,9 +34,7 @@ const createPogRequest = async (req, res) => {
             });
         }
 
-        // ใช้ Transaction เพื่อป้องกัน Race Condition (2 tabs ส่งพร้อมกัน)
         const request = await prisma.$transaction(async (tx) => {
-            // Check Pending Duplicate ใน transaction
             const existing = await tx.pogRequest.findFirst({
                 where: {
                     branch_code,
@@ -55,8 +47,6 @@ const createPogRequest = async (req, res) => {
                 throw new Error("มีคำขอนี้อยู่ระหว่างดำเนินการ กรุณาลบคำขอเดิมก่อนหากต้องการส่งใหม่");
             }
 
-            // ป้องกันปัญหาแย่งตำแหน่งกัน (Concurrency Isuues)
-            // ถ้ามีคนจอง index นี้ไปแล้ว ให้เลื่อนลำดับไปต่อท้าย (เช่น จาก 5 เป็น 6)
             let finalToIndex = toIndex ? Number(toIndex) : null;
 
             if (finalToIndex !== null && (action === "add" || action === "move")) {
@@ -71,7 +61,6 @@ const createPogRequest = async (req, res) => {
                     orderBy: { toIndex: "asc" }
                 });
 
-                // ตรวจสอบและดัน index ขึ้นทีละ 1 หากมีคนขอตำแหน่งนี้หรือก่อนหน้านี้ไปแล้ว
                 for (const pending of pendingSameRow) {
                     if (pending.toIndex <= finalToIndex) {
                         finalToIndex++;
@@ -79,7 +68,6 @@ const createPogRequest = async (req, res) => {
                 }
             }
 
-            // Create ใน transaction เดียวกัน
             return await tx.pogRequest.create({
                 data: {
                     branch_code,
@@ -114,10 +102,6 @@ const createPogRequest = async (req, res) => {
     }
 };
 
-/**
- * GET /api/pog-request?branch_code=xxx&page=1&limit=20
- * User ดู history ของสาขาตัวเอง (รองรับ Pagination)
- */
 const getMyPogRequests = async (req, res) => {
     try {
         const { branch_code, page = 1, limit = 20 } = req.query;
@@ -133,7 +117,6 @@ const getMyPogRequests = async (req, res) => {
         const limitNum = Math.min(100, Math.max(1, parseInt(limit) || 20)); // Max 100
         const skip = (pageNum - 1) * limitNum;
 
-        // Get total count for pagination
         const total = await prisma.pogRequest.count({
             where: { branch_code },
         });
@@ -152,7 +135,7 @@ const getMyPogRequests = async (req, res) => {
                 page: pageNum,
                 limit: limitNum,
                 count: requests.length,
-                total, // จำนวนรวมทั้งหมด
+                total, 
             }
         });
     } catch (error) {
@@ -164,10 +147,6 @@ const getMyPogRequests = async (req, res) => {
     }
 };
 
-/**
- * PATCH /api/pog-request/:id/cancel
- * User ยกเลิก request ตัวเอง (เฉพาะ pending) - ไม่ลบจริง เปลี่ยนสถานะเป็น cancelled
- */
 const cancelMyPogRequest = async (req, res) => {
     try {
         const { id } = req.params;
@@ -183,7 +162,6 @@ const cancelMyPogRequest = async (req, res) => {
             return res.status(400).json({ ok: false, message: "ยกเลิกได้เฉพาะรายการที่รอดำเนินการเท่านั้น" });
         }
 
-        // เปลี่ยนสถานะเป็น cancelled แทนการลบ
         await prisma.pogRequest.update({
             where: { id: Number(id) },
             data: { status: "cancelled" }

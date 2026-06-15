@@ -23,7 +23,6 @@ const { registerSchema, loginSchema, changePasswordSchema } = require("../schema
 router.post("/register", validate(registerSchema), register);
 router.post("/login", loginLimiter, validate(loginSchema), login);
 
-// @ENDPOINT  GET /api/active-branches (Public route for login page)
 router.get("/active-branches", getActiveBranches);
 
 router.get("/csrf-token", (req, res) => {

@@ -1,17 +1,5 @@
-/**
- * Excel Worker Thread
- * ใช้สำหรับ Parse Excel files โดยไม่ Block Event Loop ของ Main Thread
- * 
- * รับ: { buffer, type } ผ่าน workerData
- * ส่งกลับ: { success, data, error } ผ่าน parentPort.postMessage
- */
-
 const { parentPort, workerData } = require("worker_threads");
 const XLSX = require("xlsx");
-
-// ========================================
-// Helper Functions (copy จาก uploadController)
-// ========================================
 
 const parseItemMinMax = (raw) => {
     const headerRowIndex = raw.findIndex(row =>
@@ -79,11 +67,9 @@ const parseMasterItem = (raw) => {
         return obj;
     });
 
-    // Filter: Item No. must be a valid number after parsing
     const cleaned = rows.filter(r => {
         const itemNo = r["Item No."];
         if (!itemNo) return false;
-        // Handle both number and text format
         const parsed = parseInt(String(itemNo).trim(), 10);
         return !isNaN(parsed) && parsed > 0;
     });
@@ -220,28 +206,19 @@ const parseWithdraw = (raw) => {
     return { data: mapped };
 };
 
-// ========================================
-// Main Worker Logic
-// ========================================
-
 try {
     const { buffer, type } = workerData;
-
-    // ส่ง progress
     parentPort.postMessage({ type: "progress", progress: 10, message: "reading file" });
 
-    // อ่าน Excel (ส่วนที่ Block มากที่สุด)
     const workbook = XLSX.read(Buffer.from(buffer), { type: "buffer" });
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
 
     parentPort.postMessage({ type: "progress", progress: 40, message: "parsing rows" });
 
-    // แปลงเป็น JSON
     const raw = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
 
     parentPort.postMessage({ type: "progress", progress: 60, message: "processing data" });
 
-    // Parse ตาม type
     let result;
     switch (type) {
         case "minmax":
@@ -262,7 +239,6 @@ try {
 
     parentPort.postMessage({ type: "progress", progress: 80, message: "finalizing" });
 
-    // ส่งผลลัพธ์กลับ
     if (result.error) {
         parentPort.postMessage({ type: "error", error: result.error });
     } else {

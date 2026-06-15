@@ -2,9 +2,7 @@ const prisma = require('../../../config/prisma');
 const XLSX = require("xlsx");
 const { touchDataSync } = require('./uploadJob');
 
-// =======================
 // Helpers
-// =======================
 const EPS = 1e-9;
 
 function parseDateBangkok(input) {
@@ -36,8 +34,6 @@ function parseDateBangkok(input) {
     const [hour = 0, minute = 0, second = 0] = timePart
         .split(":")
         .map((v) => Number(v));
-
-    // ใช้ Date.UTC() เพื่อบังคับให้เวลาที่ parse ตรงกับ Excel เป๊ะ ๆ
     return new Date(
         `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:${String(second).padStart(2, "0")}+07:00`
     );
@@ -82,13 +78,8 @@ const headerMap = {
     "ยอดขายสุทธิ": "total_sales_rounding_no_end_discount",
     "ยอดขายรวม": "total_sales_Finally",
 };
-
-// BATCH SIZE สำหรับ raw SQL insert
 const BATCH_SIZE = 5000;
-
-// =======================
-// Controller หลัก (OPTIMIZED)
-// =======================
+// Controller 
 exports.uploadBillXLSX = async (req, res) => {
     if (!req.file) return res.status(400).json({ error: "No file uploaded" });
 
@@ -103,11 +94,9 @@ exports.uploadBillXLSX = async (req, res) => {
         if (rows.length < 2) {
             return res.status(400).json({ error: "ไม่พบข้อมูลหลังตัดแถวบน/ล่าง" });
         }
-
-        // 3) header ไทย → key อังกฤษ
+        // 3) header ไทย -> อังกฤษ
         const thHeader = rows[0];
         const enHeader = thHeader.map((h) => headerMap[String(h).trim()] || String(h).trim());
-
         // 4) แปลงเป็น object
         let results = rows.slice(1).map((r, index) => {
             const obj = {};
@@ -117,8 +106,7 @@ exports.uploadBillXLSX = async (req, res) => {
             obj._tempId = index + 1;
             return obj;
         });
-
-        // 7) group ตาม bill_number
+        // 5) group ตาม bill_number
         const billGroups = new Map();
         const noBillRows = [];
         for (const row of results) {
@@ -131,8 +119,7 @@ exports.uploadBillXLSX = async (req, res) => {
             if (!g) billGroups.set(bn, (g = []));
             g.push(row);
         }
-
-        // 8) กันบิลซ้ำ
+        // 6) กันบิลซ้ำ
         const existingBills = await prisma.billHeader.findMany({
             select: { bill_number: true },
         });
@@ -144,7 +131,7 @@ exports.uploadBillXLSX = async (req, res) => {
             branchesInDb.map((b) => [b.branch_code, b.id])
         );
 
-        // 10) เตรียมชุดสร้างใหม่
+        // 7) เตรียมชุดสร้างใหม่
         const newBranches = new Map();
 
         // PASS 1: scan หา branchMain ใหม่ทั้งหมดก่อน
@@ -152,8 +139,6 @@ exports.uploadBillXLSX = async (req, res) => {
             if (existingBillSet.has(billNo)) continue;
 
             const meta = group[0];
-
-            // BRANCH
             if (
                 meta.branch_code &&
                 !branchIdMap[meta.branch_code] &&
@@ -163,7 +148,7 @@ exports.uploadBillXLSX = async (req, res) => {
             }
         }
 
-        // 11) Bulk create branchMain ทีเดียว
+        // 8) Bulk create branchMain ทีเดียว
         if (newBranches.size > 0) {
             await prisma.branchMain.createMany({
                 data: [...newBranches].map(([code, name]) => ({
@@ -174,14 +159,14 @@ exports.uploadBillXLSX = async (req, res) => {
             });
         }
 
-        // 12) refresh maps หลังสร้าง
+        // 9) refresh maps หลังสร้าง
         const branchesAll = await prisma.branchMain.findMany();
 
         const branchIdMapAll = Object.fromEntries(
             branchesAll.map((b) => [b.branch_code, b.id])
         );
 
-        // 13) สร้าง Bills + BillItems
+        // 10) สร้าง Bills + BillItems
         const newBills = [];
         const pendingBillItems = [];
 
@@ -231,7 +216,7 @@ exports.uploadBillXLSX = async (req, res) => {
             }
         }
 
-        // 14) Insert Bills แบบ batch
+        // 11) Insert Bills แบบ batch
         if (newBills.length > 0) {
             for (let i = 0; i < newBills.length; i += BATCH_SIZE) {
                 const chunk = newBills.slice(i, i + BATCH_SIZE);
@@ -242,7 +227,7 @@ exports.uploadBillXLSX = async (req, res) => {
             }
         }
 
-        // 15) โหลดเฉพาะ billId ที่เพิ่งสร้าง (ไม่โหลดทั้งหมด)
+        // 12) โหลดเฉพาะ billId ที่เพิ่งสร้าง (ไม่โหลดทั้งหมด)
         const newBillNumbers = newBills.map(b => b.bill_number);
         const createdBills = await prisma.billHeader.findMany({
             where: { bill_number: { in: newBillNumbers } },
@@ -252,7 +237,7 @@ exports.uploadBillXLSX = async (req, res) => {
             createdBills.map((b) => [b.bill_number, b.id])
         );
 
-        // 16) Insert BillItems แบบ batch
+        // 13) Insert BillItems แบบ batch
         const billItemsToInsert = pendingBillItems
             .filter((i) => billIdMapAll[i.bill_number])
             .map((i) => ({

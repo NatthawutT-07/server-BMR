@@ -1,18 +1,8 @@
-// controllers/admin/<your-file>.js
 const prisma = require("../../config/prisma");
 const cacheManager = require("../../utils/cacheManager");
 const { normalizeLegacyBangkokStoredDate, toBangkokOffsetISOString } = require("../../utils/dateHelper");
 const cache = cacheManager.getCache("user-template", { stdTTL: 60 }); // Increased from 5s to 60s for better performance
 
-/**
- * Helper: แปลง "ช่วงเดือนตามเวลาไทย" → เป็นช่วงเวลา UTC (Date)
- * - year: ปี (เช่น 2025)
- * - month: เดือน 1–12
- *
- * Thai start  = YYYY-MM-01 00:00:00 ที่โซน Asia/Bangkok
- * Thai end    = วันสุดท้ายของเดือนนั้น 23:59:59.999 ที่โซน Asia/Bangkok
- * แล้วแปลงเป็น UTC ทั้งคู่ → ใช้ใน WHERE b."date"
- */
 const getMonthRangeUtcFromBangkok = (year, month) => {
   const mm = String(month).padStart(2, "0");
   const startLocal = new Date(`${year}-${mm}-01T00:00:00+07:00`);
@@ -34,9 +24,6 @@ const getMonthRangeUtcFromBangkok = (year, month) => {
   };
 };
 
-/**
- * Helper: คืนค่า meta ของเดือนตามเวลาไทย
- */
 const getBangkokMonthMeta = () => {
   const now = new Date();
   const formatter = new Intl.DateTimeFormat("en-GB", {
@@ -86,19 +73,13 @@ const getBangkokMonthMeta = () => {
   };
 };
 
-// ======================================================
-// NEW: ดึงเวลาอัปเดต Stock ล่าสุด (แค่ 1 ค่าไว้โชว์)
-// ต้องมี Prisma model: DataSync { key @id, updatedAt, rowCount? }
-// ======================================================
 exports.getStockLastUpdate = async (req, res) => {
   try {
     const { branch_code } = req.query;
     const userBranch = branch_code || req.user?.storecode || req.user?.name;
 
-    // 1. ดึงเวลาส่วนกลาง (Admin upload / Global sync)
     const globalRow = await prisma.dataSync.findUnique({ where: { key: "stock" } });
 
-    // 2. ดึงเวลารายสาขา (User upload เฉพาะสาขา)
     let branchRow = null;
     if (userBranch) {
       const bRows = await prisma.$queryRaw`
@@ -109,7 +90,6 @@ exports.getStockLastUpdate = async (req, res) => {
       branchRow = bRows[0] || null;
     }
 
-    // 3. เทียบหาเวลาที่ล่าสุดกว่า (Latest between Global and Branch-specific)
     let latestRow = globalRow || null;
     let latestUpdate = normalizeLegacyBangkokStoredDate(globalRow?.updatedAt);
     if (branchRow?.updatedAt) {
@@ -130,11 +110,6 @@ exports.getStockLastUpdate = async (req, res) => {
   }
 };
 
-// ======================================================
-// NEW: ดึง shelf templates ของสาขา (สำหรับ dropdown)
-// - ดึงจาก ShelfTemplate table (โครงสร้าง shelf)
-// - รวม SKU items สำหรับคำนวณ available index
-// ======================================================
 exports.getBranchShelves = async (req, res) => {
   const { branch_code } = req.query;
 
@@ -143,13 +118,11 @@ exports.getBranchShelves = async (req, res) => {
   }
 
   try {
-    // ดึงชื่อสาขา
     const branchMain = await prisma.branchMain.findUnique({
       where: { branch_code: branch_code },
       select: { branch_name: true },
     });
 
-    // ดึง shelf templates
     const templates = await prisma.shelfTemplate.findMany({
       where: { branch_code },
       orderBy: { shelf_code: "asc" },
@@ -160,7 +133,6 @@ exports.getBranchShelves = async (req, res) => {
       },
     });
 
-    // ดึง SKU items สำหรับคำนวณ index
     const skus = await prisma.skuPosition.findMany({
       where: { branch_code },
       select: {
@@ -170,14 +142,12 @@ exports.getBranchShelves = async (req, res) => {
       },
     });
 
-    // Group SKU items by shelf
     const skuByShelf = {};
     skus.forEach((skuPosition) => {
       if (!skuByShelf[skuPosition.shelf_code]) skuByShelf[skuPosition.shelf_code] = [];
       skuByShelf[skuPosition.shelf_code].push(skuPosition);
     });
 
-    // รวม templates กับ items
     const shelves = templates.map((t) => ({
       shelf_code: t.shelf_code,
       shelf_name: t.shelf_name || "",
@@ -196,11 +166,6 @@ exports.getBranchShelves = async (req, res) => {
   }
 };
 
-// ======================================================
-// UserTemplateItem
-// - ส่ง branchName แค่ครั้งเดียว (meta)
-// - JOIN ShelfTemplate เพื่อเอา shelf_name (ชื่อ shelf)
-// ======================================================
 exports.UserTemplateItem = async (req, res) => {
   const branch_code = req.query.branch_code || req.body.branch_code;
 
@@ -210,13 +175,11 @@ exports.UserTemplateItem = async (req, res) => {
 
   const { currentYear, currentMonth } = getBangkokMonthMeta();
 
-  // key cache ผูกกับ branchMain + เดือนปี (กันการ reuse ข้ามเดือน)
   const key = `template-item-v4-${branch_code}-${currentYear}-${currentMonth}`;
   const cached = cache.get(key);
   if (cached) return res.json(cached);
 
   try {
-    // ดึงชื่อสาขา "ครั้งเดียว" ไม่ต้องซ้ำในทุกแถว
     const br = await prisma.branchMain.findUnique({
       where: { branch_code: branch_code },
       select: { branch_code: true, branch_name: true },
@@ -229,10 +192,7 @@ exports.UserTemplateItem = async (req, res) => {
           s."shelf_code",
           s."shelf_row_number",
           s."shelf_index_number",
-
-          -- ชื่อ shelf จาก ShelfTemplate
           t."shelf_name" AS "shelf_name",
-
           p."item_name",
           p."brand_name",
           p."shelf_life_days",
@@ -242,17 +202,12 @@ exports.UserTemplateItem = async (req, res) => {
           im."max_stock",
           im."pack_order",
 
-          --  Stock ปัจจุบัน
           COALESCE(st."quantity_stock", 0)::int AS "quantity_stock"
 
       FROM "SkuPosition" s
-
-      -- ShelfTemplate (ชื่อ shelf)
       LEFT JOIN "ShelfTemplate" t
         ON t."branch_code" = s."branch_code"
        AND t."shelf_code"  = s."shelf_code"
-
-      -- Stock ปัจจุบัน (ตามตาราง Stock)
       LEFT JOIN (
           SELECT "branch_code", "item_code",
               SUM("quantity_stock")::int AS "quantity_stock"
@@ -262,16 +217,11 @@ exports.UserTemplateItem = async (req, res) => {
       ) st 
       ON s."branch_code" = st."branch_code" 
       AND s."item_code" = st."item_code"
-
-      -- ข้อมูลสินค้า
       LEFT JOIN "MasterItem" p 
           ON s."item_code" = p."item_code"
-
-      -- Min / Max
       LEFT JOIN "MinMaxAutoPO" im 
           ON s."branch_code" = im."branch_code" 
           AND s."item_code" = im."item_code"
-
       WHERE s."branch_code" = ${branch_code}
       ORDER BY s."shelf_code", s."shelf_index_number", s."shelf_row_number"
     `;
@@ -282,7 +232,6 @@ exports.UserTemplateItem = async (req, res) => {
       shelf_row_number: r.shelf_row_number,
       shelf_index_number: r.shelf_index_number,
 
-      // ชื่อ shelf จาก ShelfTemplate
       shelf_name: r.shelf_name ?? null,
 
       item_code:
@@ -306,7 +255,6 @@ exports.UserTemplateItem = async (req, res) => {
       quantity_stock: Number(r.quantity_stock ?? 0),
     }));
 
-    // ส่ง branchName แค่ครั้งเดียว
     const payload = {
       branch_code,
       branchName: br?.branch_name ?? null,
@@ -320,205 +268,3 @@ exports.UserTemplateItem = async (req, res) => {
     return res.status(500).json({ msg: "Failed to load data" });
   }
 };
-
-// exports.UserTemplateItem = async (req, res) => {
-//     const { branch_code } = req.body;
-
-//     if (!branch_code) {
-//         return res.status(400).json({ msg: "branch_code is required" });
-//     }
-
-//     const {
-//         currentYear,
-//         currentMonth,
-//         currentMonthStartUtc,
-//         currentMonthEndUtc,
-//         prevMonths,
-//     } = getBangkokMonthMeta();
-
-//     // key cache ผูกกับ branchMain + เดือนปี (กันการ reuse ข้ามเดือน)
-//     const key = `template-item-v2-${branch_code}-${currentYear}-${currentMonth}`;
-//     const cached = cache.get(key);
-//     if (cached) {
-//         return res.json(cached);
-//     }
-
-//     try {
-//         const rawResult = await prisma.$queryRaw`
-//       SELECT
-//           s."branch_code",
-//           s."item_code",
-//           s."shelf_code",
-//           s."shelf_row_number",
-//           s."shelf_index_number",
-//           p."item_name",
-//           p."brand_name",
-//           p."shelf_life_days",
-//           p."selling_price_vat",
-//           p."barcode",
-//           im."min_stock",
-//           im."max_stock",
-
-//           --  Stock ปัจจุบัน
-//           COALESCE(st."quantity_stock", 0)::int AS "quantity_stock",
-
-//           --  ยอดขาย 3 เดือนก่อนหน้า (ตามเดือนเวลาไทย)
-//           COALESCE(p3."sales3mQty", 0)::int AS "sales3mQty",
-
-//           --  ยอดขายเดือนปัจจุบันเท่านั้น (ตามเดือนเวลาไทย)
-//           COALESCE(cm."salesCurrentMonthQty", 0)::int AS "salesCurrentMonthQty",
-
-//           --  Withdraw (เฉพาะ docStatus = 'อนุมัติแล้ว')
-//           COALESCE(wd."quantity_withdraw", 0)::int AS "quantity_withdraw"
-
-//       FROM "SkuPosition" s
-
-//       -- Stock ปัจจุบัน (ตามตาราง Stock)
-//       LEFT JOIN (
-//           SELECT "branch_code", "item_code",
-//               SUM("quantity_stock")::int AS "quantity_stock"
-//           FROM "Stock"
-//           WHERE "branch_code" = ${branch_code}
-//           GROUP BY "branch_code", "item_code"
-//       ) st
-//       ON s."branch_code" = st."branch_code"
-//       AND s."item_code" = st."item_code"
-
-//       --  Sales 3 เดือนก่อนหน้า จาก BillHeader / BillItem (รวมทุก channel)
-//       LEFT JOIN (
-//           SELECT
-//               br."branch_code"            AS "branch_code",
-//               (prod."item_code")::int  AS "item_code",
-//               SUM(bi."quantity_sale_bill")::int     AS "sales3mQty"
-//           FROM "BillItem" bi
-//           JOIN "BillHeader" b
-//               ON bi."billId" = b."id"
-//           JOIN "BranchMain" br
-//               ON b."branchId" = br."id"
-//           JOIN "Product" prod
-//               ON bi."productId" = prod."id"
-//           WHERE br."branch_code" = ${branch_code}
-//             AND (
-//                   (
-//                       b."date" >= ${prevMonths[0].startUtc}
-//                       AND b."date" <= ${prevMonths[0].endUtc}
-//                   )
-//                   OR
-//                   (
-//                       b."date" >= ${prevMonths[1].startUtc}
-//                       AND b."date" <= ${prevMonths[1].endUtc}
-//                   )
-//                   OR
-//                   (
-//                       b."date" >= ${prevMonths[2].startUtc}
-//                       AND b."date" <= ${prevMonths[2].endUtc}
-//                   )
-//             )
-//           GROUP BY
-//               br."branch_code",
-//               (prod."item_code")::int
-//       ) p3
-//       ON s."branch_code" = p3."branch_code"
-//       AND s."item_code" = p3."item_code"
-
-//       --  Sales เดือนปัจจุบัน จาก BillHeader / BillItem
-//       LEFT JOIN (
-//           SELECT
-//               br."branch_code"            AS "branch_code",
-//               (prod."item_code")::int  AS "item_code",
-//               SUM(bi."quantity_sale_bill")::int     AS "salesCurrentMonthQty"
-//           FROM "BillItem" bi
-//           JOIN "BillHeader" b
-//               ON bi."billId" = b."id"
-//           JOIN "BranchMain" br
-//               ON b."branchId" = br."id"
-//           JOIN "Product" prod
-//               ON bi."productId" = prod."id"
-//           WHERE br."branch_code" = ${branch_code}
-//             AND b."date" >= ${currentMonthStartUtc}
-//             AND b."date" <= ${currentMonthEndUtc}
-//           GROUP BY
-//               br."branch_code",
-//               (prod."item_code")::int
-//       ) cm
-//       ON s."branch_code" = cm."branch_code"
-//       AND s."item_code" = cm."item_code"
-
-//       --  Withdraw: เฉพาะ docStatus = 'อนุมัติแล้ว'
-//       LEFT JOIN (
-//           SELECT
-//               "branch_code",
-//               "item_code",
-//               SUM("quantity_withdraw")::int AS "quantity_withdraw"
-//           FROM "Withdraw"
-//           WHERE "branch_code" = ${branch_code}
-//             AND "docStatus" = 'อนุมัติแล้ว'
-//           GROUP BY "branch_code", "item_code"
-//       ) wd
-//       ON s."branch_code" = wd."branch_code"
-//       AND s."item_code" = wd."item_code"
-
-//       -- ข้อมูลสินค้า
-//       LEFT JOIN "MasterItem" p
-//           ON s."item_code" = p."item_code"
-
-//       -- Min / Max
-//       LEFT JOIN "MinMaxAutoPO" im
-//           ON s."branch_code" = im."branch_code"
-//           AND s."item_code" = im."item_code"
-
-//       WHERE s."branch_code" = ${branch_code}
-//       ORDER BY s."shelf_code", s."shelf_index_number", s."shelf_row_number"
-//     `;
-
-//         const result = rawResult.map((r) => {
-//             const sales3mQty = Number(r.sales3mQty ?? 0);
-//             const sales3mAvgQty = sales3mQty / 3; // เฉลี่ย 3 เดือน
-//             const salesTargetQty = sales3mAvgQty * 0.8; // 80% ของ avg
-
-//             return {
-//                 branch_code: r.branch_code,
-//                 shelf_code: r.shelf_code,
-//                 shelf_row_number: r.shelf_row_number,
-//                 shelf_index_number: r.shelf_index_number,
-
-//                 item_code:
-//                     r.item_code !== null && r.item_code !== undefined ? r.item_code : null,
-
-//                 item_name: r.item_name ?? null,
-//                 brand_name: r.brand_name ?? null,
-//                 shelf_life_days: r.shelf_life_days ?? null,
-
-//                 selling_price_vat:
-//                     r.selling_price_vat !== null && r.selling_price_vat !== undefined
-//                         ? Number(r.selling_price_vat)
-//                         : null,
-
-//                 barcode: r.barcode ?? null,
-
-//                 min_stock: r.min_stock !== null && r.min_stock !== undefined ? Number(r.min_stock) : null,
-//                 max_stock: r.max_stock !== null && r.max_stock !== undefined ? Number(r.max_stock) : null,
-
-//                 quantity_stock: Number(r.quantity_stock ?? 0),
-
-//                 // 🔹 ยอดขาย 3 เดือนก่อนหน้า (รวม 3 เดือน)
-//                 sales3mQty,
-
-//                 // 🔹 target = 80% ของ avg (ไปปัด int ที่หน้าบ้าน)
-//                 salesTargetQty,
-
-//                 // 🔹 ยอดขายเดือนปัจจุบันเท่านั้น
-//                 salesCurrentMonthQty: Number(r.salesCurrentMonthQty ?? 0),
-
-//                 // 🔹 Withdraw (เฉพาะอนุมัติแล้ว)
-//                 quantity_withdraw: Number(r.quantity_withdraw ?? 0),
-//             };
-//         });
-
-//         cache.set(key, result);
-//         return res.json(result);
-//     } catch (error) {
-//         console.error("UserTemplateItem error:", error);
-//         return res.status(500).json({ msg: "Failed to load data" });
-//     }
-// };

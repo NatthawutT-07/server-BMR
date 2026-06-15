@@ -3,12 +3,8 @@ const bcrypt = require("bcrypt");
 const response = require("../../utils/responseHelper");
 const cacheManager = require("../../utils/cacheManager");
 
-// Create a cache instance for employees
 const employeeCache = cacheManager.getCache("employees", { stdTTL: 1 });
 
-/**
- * GET /api/hq/employees
- */
 const getAllEmployees = async (req, res) => {
   try {
     const {
@@ -20,7 +16,6 @@ const getAllEmployees = async (req, res) => {
       offset = 0
     } = req.query;
 
-    // Generate a unique cache key based on query parameters
     const cacheKey = `list_${JSON.stringify(req.query)}`;
 
     // Check cache first
@@ -70,7 +65,6 @@ const getAllEmployees = async (req, res) => {
       offset: parseInt(offset),
     };
 
-    // Store in cache
     employeeCache.set(cacheKey, { employees, meta });
 
     return response.success(res, employees, meta);
@@ -80,9 +74,6 @@ const getAllEmployees = async (req, res) => {
   }
 };
 
-/**
- * GET /api/hq/employees/:id
- */
 const getEmployeeById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -112,9 +103,6 @@ const getEmployeeById = async (req, res) => {
   }
 };
 
-/**
- * GET /api/hq/employees/code/:employee_code
- */
 const getEmployeeByCode = async (req, res) => {
   try {
     const { employee_code } = req.params;
@@ -144,9 +132,6 @@ const getEmployeeByCode = async (req, res) => {
   }
 };
 
-/**
- * POST /api/hq/employees
- */
 const createEmployee = async (req, res) => {
   try {
     const {
@@ -206,9 +191,6 @@ const createEmployee = async (req, res) => {
   }
 };
 
-/**
- * PUT /api/hq/employees/:id
- */
 const updateEmployee = async (req, res) => {
   try {
     const { id } = req.params;
@@ -271,14 +253,10 @@ const updateEmployee = async (req, res) => {
   }
 };
 
-/**
- * DELETE /api/hq/employees/:id
- */
 const deleteEmployee = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // ค้นหาข้อมูลพนักงานก่อน เพื่อได้ employee_code
     const employee = await prisma.employee_hq.findUnique({
       where: { id: parseInt(id) },
       select: { employee_code: true, nickname: true },
@@ -288,7 +266,6 @@ const deleteEmployee = async (req, res) => {
       return response.error(res, "ไม่พบข้อมูลพนักงานที่ต้องการลบ", "NOT_FOUND", 404);
     }
 
-    // ลบ log ที่เกี่ยวข้อง และลบพนักงาน ใน transaction เดียวกัน
     const [deletedLogs] = await prisma.$transaction([
       prisma.log_hq.deleteMany({
         where: { employee_code: employee.employee_code },
@@ -313,9 +290,6 @@ const deleteEmployee = async (req, res) => {
   }
 };
 
-/**
- * GET /api/hq/employees/:id/stats
- */
 const getEmployeeStats = async (req, res) => {
   try {
     const { id } = req.params;
@@ -388,9 +362,6 @@ const getEmployeeStats = async (req, res) => {
   }
 };
 
-/**
- * POST /api/hq/employees/reset-all-points
- */
 const resetAllPoints = async (req, res) => {
   try {
     await prisma.employee_hq.updateMany({
@@ -409,9 +380,6 @@ const resetAllPoints = async (req, res) => {
   }
 };
 
-/**
- * POST /api/hq/employees/bulk
- */
 const bulkCreateEmployees = async (req, res) => {
   try {
     const { employees } = req.body;
@@ -466,9 +434,6 @@ const bulkCreateEmployees = async (req, res) => {
   }
 };
 
-/**
- * POST /api/hq/employees/bulk-add-points
- */
 const bulkAddPoints = async (req, res) => {
   try {
     const { employee_hits } = req.body;

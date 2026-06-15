@@ -38,7 +38,6 @@ const {
 } = require('../controllers/admin/upload/uploadController');
 // Upload endpoints
 router.post('/upload-minmax', authCheck, adminCheck, upload.single('file'), uploadItemMinMaxXLSX);
-// router.post('/upload-partners', authCheck, adminCheck, upload.single('file'), uploadPartnersCSV)
 router.post('/upload-masterItem', authCheck, adminCheck, upload.single('file'), uploadMasterItemXLSX)
 router.post('/upload-stock', authCheck, upload.single('file'), uploadStockXLSX)
 router.post('/upload-withdraw', authCheck, adminCheck, upload.single('file'), uploadWithdrawXLSX)
@@ -63,13 +62,12 @@ const { createShelfItemSchema, deleteShelfItemSchema, updateShelfItemSchema, get
 
 router.get("/shelf-templates", authCheck, ShelfTemplate); //Template //user
 router.get("/master-items", authCheck, getMasterItem);
-router.get("/sku-positions", authCheck, validate(getSkuSchema), skuPosition); //Item Search //user // date , withdraw , sales
+router.get("/sku-positions", authCheck, validate(getSkuSchema), skuPosition);
 router.delete("/sku-positions", authCheck, validate(deleteShelfItemSchema), itemDelete);
 router.post("/sku-positions", authCheck, validate(createShelfItemSchema), itemCreate);
 router.put("/sku-positions/bulk", authCheck, validate(updateShelfItemSchema), itemUpdate)
 router.get("/dashboards/shelf-summary", authCheck, getShelfDashboardSummary);
 router.get("/dashboards/shelf-sales", authCheck, getShelfDashboardShelfSales);
-// router.get("/shelf-summary",  summary)
 
 // POG Request - Admin
 const { getAllPogRequests, updatePogRequestStatus, deletePogRequest, bulkApprove, updatePogRequestPosition } = require('../controllers/admin/pogRequest');

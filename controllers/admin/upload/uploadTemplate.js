@@ -49,7 +49,7 @@ exports.uploadTemplateXLSX = async (req, res) => {
         const templateData = Array.from(tempMap.values());
         setUploadJob(jobId, 25, "analyzing sync delta");
 
-        // 2. เช็คว่าต้องลบตัวไหนออก (มีใน DB แต่ไม่มีในไฟล์) โดยตรวจจับเฉพาะสาขาที่มีในไฟล์อัปโหลด
+        // 2. เช็คตัวไม่มีในไฟล์ลบออก
         const branchesInFile = [...new Set(templateData.map(t => t.branch_code))];
         const existingInDb = await prisma.shelfTemplate.findMany({
             where: { branch_code: { in: branchesInFile } },
@@ -66,7 +66,6 @@ exports.uploadTemplateXLSX = async (req, res) => {
         // 3. Transaction ควบคุมการ Sync (Delete -> Upsert)
         await prisma.$transaction(async (tx) => {
             
-            // Delete รายการที่หายไปเป็น Batch
             if (toDeleteIds.length > 0) {
                 for (let i = 0; i < toDeleteIds.length; i += CHUNK_SIZE) {
                     await tx.ShelfTemplate.deleteMany({
@@ -75,7 +74,6 @@ exports.uploadTemplateXLSX = async (req, res) => {
                 }
             }
 
-            // Upsert ข้อมูลใหม่
             for (let i = 0; i < templateData.length; i += CHUNK_SIZE) {
                 const chunk = templateData.slice(i, i + CHUNK_SIZE);
                 
@@ -105,7 +103,6 @@ exports.uploadTemplateXLSX = async (req, res) => {
             }
         }, { timeout: 120000 });
 
-        // บันทึกเวลาอัปเดตล่าสุด
         await touchDataSync('shelfTemplate', templateData.length);
 
         setUploadJob(jobId, 95, "finalizing");

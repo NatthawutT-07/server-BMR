@@ -3,9 +3,6 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const response = require("../../utils/responseHelper");
 
-/**
- * POST /api/hq/auth/register
- */
 exports.register = async (req, res) => {
   try {
     const { employee_code, nickname, position, organizational_unit, password, role } = req.body;
@@ -43,9 +40,6 @@ exports.register = async (req, res) => {
   }
 };
 
-/**
- * POST /api/hq/auth/login
- */
 exports.login = async (req, res) => {
   try {
     const { employee_code, password } = req.body;
@@ -94,9 +88,6 @@ exports.login = async (req, res) => {
   }
 };
 
-/**
- * GET /api/hq/auth/me
- */
 exports.getCurrentUser = async (req, res) => {
   try {
     const employee = await prisma.employee_hq.findUnique({

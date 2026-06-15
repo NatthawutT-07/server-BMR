@@ -2,7 +2,6 @@ const express = require("express");
 const app = express();
 app.disable("x-powered-by");
 
-// Enforce Bangkok Timezone globally
 process.env.TZ = "Asia/Bangkok";
 
 const morgan = require("morgan");
@@ -16,10 +15,9 @@ const jwt = require("jsonwebtoken");
 require("dotenv").config();
 const { ensureCsrfCookie } = require("./middlewares/csrf");
 
-// อยู่หลัง proxy (เช่น Cloudflare / Nginx)
 app.set("trust proxy", 1);
 
-// CORS (ต้องเปิด credentials เพื่อส่ง cookie refresh token)
+// CORS
 const allowedOrigins = [
   // Production
   "https://bmrpog.com",
@@ -30,18 +28,17 @@ const allowedOrigins = [
   "http://localhost:4173",
   "http://localhost:3000",
 
-  // Development - Mobile (Expo)
+  // Development - Mobile
   "http://localhost:8081",  // Metro bundler
-  "http://localhost:19000", // Expo dev server
+  "http://localhost:19000", // dev server
   "http://localhost:19001",
-  "http://localhost:19006", // Expo web
+  "http://localhost:19006", // web
 ];
 
-// Mobile apps ไม่มี origin (เหมือน Postman) หรือมี pattern พิเศษ
 const isMobileOrDevOrigin = (origin) => {
   if (!origin) return true; // Mobile apps, curl, Postman
 
-  // Expo development patterns
+  // development patterns
   if (origin.includes("exp://")) return true;
   if (origin.includes(".exp.direct")) return true;
   if (origin.includes("expo.dev")) return true;
@@ -67,14 +64,11 @@ app.use(
   })
 );
 
-// Console-only logging (no file output)
 app.use(morgan('dev'));
 
-// Custom API logging middleware
 app.use((req, res, next) => {
   const startTime = Date.now();
 
-  // Store original res.end to capture response time
   const originalEnd = res.end;
   res.end = function (...args) {
     const duration = Date.now() - startTime;
@@ -82,19 +76,13 @@ app.use((req, res, next) => {
     const method = req.method;
     const url = req.originalUrl || req.url;
 
-    // Log API requests with time and status
     console.log(`🔹 API ${method} ${url} - Status: ${status} - ${duration}ms`);
 
-    // Call original end
     originalEnd.apply(this, args);
   };
 
   next();
 });
-
-/* =========================
-   Middlewares
-========================= */
 
 app.use(
   compression({
@@ -105,7 +93,7 @@ app.use(
 app.use(express.json({ limit: "20mb" }));
 app.use(cookieParser());
 
-// Security headers (helmet)
+// Security headers
 app.use(
   helmet({
     crossOriginEmbedderPolicy: false,
@@ -132,7 +120,7 @@ app.use(
 // CSRF cookie (double-submit)
 app.use(ensureCsrfCookie);
 
-// Normalize error responses (ให้ทุก controller ได้รูปแบบเดียวกัน)
+// Normalize error responses
 app.use((req, res, next) => {
   const rawJson = res.json.bind(res);
   const rawSend = res.send.bind(res);
@@ -173,23 +161,19 @@ app.use((req, res, next) => {
 
 
 
-// Serve uploaded files statically
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 app.use("/api/uploads", express.static(path.join(__dirname, "uploads")));
 
-// Health check endpoint for Docker/Kubernetes
 app.get("/health", (req, res) => {
   res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
-// routes
 app.use("/api", require("./router/auth"));
 app.use("/api", require("./router/admin"));
 app.use("/api", require("./router/user"));
 app.use("/api", require("./router/userMobile"));
 app.use("/api", require("./router/hq"));
 
-// Error handler: response format สั้น/สม่ำเสมอ
 app.use((err, req, res, next) => {
   const status = err?.status || err?.statusCode || 500;
   const message = err?.message || "Server error";

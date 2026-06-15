@@ -1,7 +1,3 @@
-// generator client {
-//   provider = "prisma-client-js"
-// }
-
 generator client {
   provider      = "prisma-client-js"
   binaryTargets = ["native"]
@@ -235,7 +231,7 @@ model Gourmet {
   @@index([item_code])
 }
 
-// log การเปลี่ยนแปลง shelf (add/delete/move)
+// log shelf (add/delete/move)
 model ShelfChangeLog {
   id             Int       @id @default(autoincrement())
   branch_code    String
@@ -259,7 +255,7 @@ model ShelfChangeLog {
   @@index([updateId])
 }
 
-// ========== HQ System Models ==========
+//  HQ System Models 
 
 model employee_hq {
   id                  Int     @id @default(autoincrement())

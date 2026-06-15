@@ -2,7 +2,6 @@ const authService = require("../services/authService");
 const jwt = require("jsonwebtoken");
 const prisma = require("../config/prisma");
 
-// ✅ ดึง Public IP ของ client ให้เหมือนที่ใช้ใน app.js
 const getClientIp = (req) => {
   const cfIp = req.headers["cf-connecting-ip"];
   const trueClientIp = req.headers["true-client-ip"];
@@ -57,7 +56,6 @@ const getUserIdFromAccessToken = (req) => {
   }
 };
 
-// --------------------- Register ---------------------
 exports.register = async (req, res) => {
   try {
     const { name, password, role } = req.body;
@@ -75,7 +73,6 @@ exports.register = async (req, res) => {
   }
 };
 
-// --------------------- Login ---------------------
 exports.login = async (req, res) => {
   try {
     const { name, password } = req.body;
@@ -98,7 +95,6 @@ exports.login = async (req, res) => {
   }
 };
 
-// --------------------- Refresh Token ---------------------
 exports.refreshToken = async (req, res) => {
   try {
     const token = req.cookies.jid;
@@ -124,7 +120,6 @@ exports.refreshToken = async (req, res) => {
   }
 };
 
-// --------------------- Logout ---------------------
 exports.logout = async (req, res) => {
   try {
     const token = req.cookies?.jid;
@@ -139,7 +134,6 @@ exports.logout = async (req, res) => {
   }
 };
 
-// --------------------- Change Password ---------------------
 exports.changePassword = async (req, res) => {
   try {
     const { oldPassword, newPassword } = req.body;
@@ -154,7 +148,6 @@ exports.changePassword = async (req, res) => {
   }
 };
 
-// --------------------- Current User ---------------------
 exports.currentUser = async (req, res) => {
   try {
     const user = await authService.getUser(req.user.id);
@@ -164,7 +157,6 @@ exports.currentUser = async (req, res) => {
   }
 };
 
-// --------------------- Current Admin ---------------------
 exports.currentAdmin = async (req, res) => {
   try {
     const user = await authService.getUser(req.user.id);
@@ -174,17 +166,15 @@ exports.currentAdmin = async (req, res) => {
   }
 };
 
-// --------------------- Get Active Branches ---------------------
 exports.getActiveBranches = async (req, res) => {
   try {
-    // 1. หา user ทั้งหมดที่มี role="user" และ enabled=true
     const activeUsers = await prisma.user.findMany({
       where: {
         role: "user",
         enabled: true,
       },
       select: {
-        name: true, // name คือ branch_code เช่น "ST002"
+        name: true,
       },
     });
 
@@ -194,7 +184,6 @@ exports.getActiveBranches = async (req, res) => {
 
     const branch_codes = activeUsers.map((u) => u.name);
 
-    // 2. ไปหาข้อมูลจากตาราง BranchMain เพื่อเอา branch_name
     const branchesInfo = await prisma.branchMain.findMany({
       where: {
         branch_code: {
@@ -207,7 +196,6 @@ exports.getActiveBranches = async (req, res) => {
       },
     });
 
-    // 3. Map ข้อมูลส่งกลับไปหน้าบ้าน
     const result = activeUsers.map((u) => {
       const branchInfo = branchesInfo.find((b) => b.branch_code === u.name);
       return {
@@ -216,7 +204,6 @@ exports.getActiveBranches = async (req, res) => {
       };
     });
 
-    // 4. เรียงลำดับตามรหัสสาขา
     result.sort((a, b) => a.code.localeCompare(b.code));
 
     res.json(result);

@@ -5,16 +5,14 @@ const touchDataSync = async (key, rowCount, branch_code, db = prisma) => {
     try {
         const updatedAt = new Date();
         const safeRowCount = rowCount ?? 0;
-
+        // show เวลา upload stock
         if (branch_code) {
-            // อัปเดตเฉพาะรายสาขา (ไม่แตะ Global เพื่อไม่ให้สาขาอื่นเห็นเวลาที่ผิด)
             await db.branchDataSync.upsert({
                 where: { branch_code_key: { branch_code, key } },
                 create: { branch_code, key, updatedAt, rowCount: safeRowCount },
                 update: { updatedAt, rowCount: safeRowCount },
             });
         } else {
-            // อัปเดตเวลาภาพรวม (Global) — ใช้เมื่อ Admin upload เท่านั้น
             await db.dataSync.upsert({
                 where: { key },
                 create: { key, updatedAt, rowCount: safeRowCount },

@@ -8,12 +8,12 @@ const rewardController = require("../controllers/hq/reward");
 const employeeController = require("../controllers/hq/employee");
 const logController = require("../controllers/hq/log");
 
-// ==================== AUTH ROUTES ====================
+//  AUTH ROUTES 
 router.post("/hq/auth/register", authController.register);
 router.post("/hq/auth/login", authController.login);
 router.get("/hq/auth/current-user", hqAuthCheck, authController.getCurrentUser);
 
-// ==================== BRANCH_HQ ROUTES ====================
+//  BRANCH_HQ ROUTES 
 router.get("/hq/branches", branchController.getAllBranches);
 router.get("/hq/branches/:id", hqAuthCheck, branchController.getBranchById);
 router.post("/hq/branches", hqAuthCheck, hqAdminCheck, branchController.createBranch);
@@ -35,14 +35,14 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage: storage });
 
-// ==================== REWARD_HQ ROUTES ====================
+//  REWARD_HQ ROUTES 
 router.get("/hq/rewards", rewardController.getAllRewards);
 router.get("/hq/rewards/:id", hqAuthCheck, rewardController.getRewardById);
 router.post("/hq/rewards", hqAuthCheck, hqAdminCheck, upload.single('image'), rewardController.createReward);
 router.put("/hq/rewards/:id", hqAuthCheck, hqAdminCheck, upload.single('image'), rewardController.updateReward);
 router.delete("/hq/rewards/:id", hqAuthCheck, hqAdminCheck, rewardController.deleteReward);
 
-// ==================== EMPLOYEE_HQ ROUTES ====================
+//  EMPLOYEE_HQ ROUTES 
 router.get("/hq/employees", employeeController.getAllEmployees);
 router.get("/hq/employees/code/:employee_code", employeeController.getEmployeeByCode);
 router.get("/hq/employees/:id", hqAuthCheck, employeeController.getEmployeeById);
@@ -54,7 +54,7 @@ router.post("/hq/employees/bulk-add-points", hqAuthCheck, hqAdminCheck, employee
 router.put("/hq/employees/:id", hqAuthCheck, hqAdminCheck, employeeController.updateEmployee);
 router.delete("/hq/employees/:id", hqAuthCheck, hqAdminCheck, employeeController.deleteEmployee);
 
-// ==================== LOG_HQ ROUTES ====================
+//  LOG_HQ ROUTES 
 router.get("/hq/logs", hqAuthCheck, logController.getAllLogs);
 router.get("/hq/logs/:id", hqAuthCheck, logController.getLogById);
 router.post("/hq/logs", logController.createLog);

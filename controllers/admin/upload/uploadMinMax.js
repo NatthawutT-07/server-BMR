@@ -3,7 +3,6 @@ const { Prisma } = require("@prisma/client");
 const { runExcelWorker } = require("../../../workers/workerHelper");
 const { initUploadJob, setUploadJob, finishUploadJob, failUploadJob, touchDataSync } = require('./uploadJob');
 
-// ใช้ Worker Thread สำหรับ Parse Excel (ไม่ Block Event Loop)
 exports.uploadItemMinMaxXLSX = async (req, res) => {
     if (!req.file) return res.status(400).send("No file uploaded");
 
@@ -11,7 +10,6 @@ exports.uploadItemMinMaxXLSX = async (req, res) => {
     setUploadJob(jobId, 5, "starting worker");
 
     try {
-        // ใช้ Worker Thread parse Excel (Non-blocking)
         const mapped = await runExcelWorker(
             req.file.buffer,
             "minmax",
@@ -25,19 +23,14 @@ exports.uploadItemMinMaxXLSX = async (req, res) => {
 
         setUploadJob(jobId, 85, "comparing with database");
 
-        // ---------------------------
-        // 3) Load all existing rows (only 1 query)
-        // ---------------------------
+        // 1) Load all existing rows
         const existingRows = await prisma.minMaxAutoPO.findMany();
         const dbMap = new Map();
 
         existingRows.forEach(x => {
             dbMap.set(x.branch_code + "|" + x.item_code, x);
         });
-
-        // ---------------------------
-        // 4) Separate INSERT + UPDATE
-        // ---------------------------
+        // 2) Separate INSERT + UPDATE
         const toInsert = [];
         const toUpdate = [];
 
@@ -58,10 +51,7 @@ exports.uploadItemMinMaxXLSX = async (req, res) => {
                 toUpdate.push(row);
             }
         }
-
-        // ---------------------------
-        // 5) Batch Insert (fast)
-        // ---------------------------
+        // 3) Batch Insert 
         if (toInsert.length > 0) {
             await prisma.minMaxAutoPO.createMany({
                 data: toInsert,
@@ -69,9 +59,7 @@ exports.uploadItemMinMaxXLSX = async (req, res) => {
             });
         }
 
-        // ---------------------------
-        // 6) Batch Update (Super Fast)
-        // ---------------------------
+        // 4) Batch Update
         if (toUpdate.length > 0) {
             const values = toUpdate.map((r) =>
                 Prisma.sql`(${r.branch_code}, ${r.item_code}, ${r.min_stock}, ${r.max_stock}, ${r.pack_order})`
@@ -92,7 +80,6 @@ exports.uploadItemMinMaxXLSX = async (req, res) => {
             await prisma.$executeRaw(sql);
         }
 
-        // บันทึกเวลาอัปเดตล่าสุด
         await touchDataSync('minMax', toInsert.length + toUpdate.length);
 
         setUploadJob(jobId, 95, "saving data");

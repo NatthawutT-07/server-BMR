@@ -3,7 +3,6 @@ const { Prisma } = require("@prisma/client");
 const { runExcelWorker } = require("../../../workers/workerHelper");
 const { initUploadJob, setUploadJob, finishUploadJob, failUploadJob, touchDataSync } = require('./uploadJob');
 
-// ใช้ Worker Thread สำหรับ Parse Excel (ไม่ Block Event Loop)
 exports.uploadMasterItemXLSX = async (req, res) => {
     if (!req.file) return res.status(400).send("No file uploaded");
 
@@ -11,7 +10,6 @@ exports.uploadMasterItemXLSX = async (req, res) => {
     setUploadJob(jobId, 5, "starting worker");
 
     try {
-        // ใช้ Worker Thread parse Excel (Non-blocking)
         const mapped = await runExcelWorker(
             req.file.buffer,
             "masterItem",
@@ -25,10 +23,7 @@ exports.uploadMasterItemXLSX = async (req, res) => {
 
         setUploadJob(jobId, 85, "comparing with database");
 
-        //------------------------------------------
-        // 5) Load existing items (1 query only)
-        //------------------------------------------
-
+        // 1) Load existing items
         const existingRows = await prisma.masterItem.findMany();
         const dbMap = new Map();
 
@@ -36,9 +31,7 @@ exports.uploadMasterItemXLSX = async (req, res) => {
             dbMap.set(x.item_code, x);
         });
 
-        //------------------------------------------
-        // 6) Separate INSERT / UPDATE / SKIP
-        //------------------------------------------
+        // 2) Separate INSERT / UPDATE / SKIP
         const toInsert = [];
         const toUpdate = [];
         let skipped = 0;
@@ -46,19 +39,12 @@ exports.uploadMasterItemXLSX = async (req, res) => {
         // Debug: Check if specific item_codes are in mapped data
         const debugCodes = [5229, 913];
         const foundInMapped = mapped.filter(item => debugCodes.includes(item.item_code));
-        // console.log(`[DEBUG] Looking for codes ${debugCodes.join(', ')} in mapped data:`, foundInMapped.length > 0 ? foundInMapped.map(i => i.item_code) : 'NONE FOUND');
-        // console.log(`[DEBUG] Total mapped items: ${mapped.length}`);
-        // console.log(`[DEBUG] Existing DB items: ${dbMap.size}`);
 
         for (const item of mapped) {
             const old = dbMap.get(item.item_code);
 
             if (!old) {
                 toInsert.push(item);
-                // Debug specific codes
-                if (debugCodes.includes(item.item_code)) {
-                    // console.log(`[DEBUG] Code ${item.item_code} → TO INSERT (not in DB)`);
-                }
                 continue;
             }
 
@@ -67,23 +53,12 @@ exports.uploadMasterItemXLSX = async (req, res) => {
 
             if (!changed) {
                 skipped++;
-                if (debugCodes.includes(item.item_code)) {
-                    // console.log(`[DEBUG] Code ${item.item_code} → SKIPPED (no changes)`);
-                }
                 continue;
             }
 
             toUpdate.push(item);
-            if (debugCodes.includes(item.item_code)) {
-                // console.log(`[DEBUG] Code ${item.item_code} → TO UPDATE`);
-            }
         }
-
-        // console.log(`[DEBUG] Summary: toInsert=${toInsert.length}, toUpdate=${toUpdate.length}, skipped=${skipped}`);
-
-        //------------------------------------------
-        // 7) Bulk Insert - with type conversion
-        //------------------------------------------
+        // 3) Bulk Insert
         if (toInsert.length > 0) {
             const cleanedInserts = toInsert.map(r => ({
                 item_code: String(r.item_code).trim().padStart(5, "0"),
@@ -102,40 +77,30 @@ exports.uploadMasterItemXLSX = async (req, res) => {
                 productionDate: r.productionDate != null ? String(r.productionDate) : null,
                 vatGroupPu: r.vatGroupPu != null ? String(r.vatGroupPu) : null,
             }));
-
-            // Debug: Log what we're about to insert
-            // console.log('[DEBUG] Inserting items:', cleanedInserts.map(i => i.item_code));
-
             try {
                 const insertResult = await prisma.masterItem.createMany({
                     data: cleanedInserts,
                     skipDuplicates: true
                 });
-                // console.log('[DEBUG] Insert result:', insertResult);
             } catch (insertErr) {
                 console.error('[DEBUG] Insert error:', insertErr);
                 throw insertErr;
             }
 
-            // Verify insert worked for debug codes
             const verifyInserts = await prisma.masterItem.findMany({
                 where: { item_code: { in: [913, 5229] } },
                 select: { item_code: true, item_name: true }
             });
-            // console.log('[DEBUG] Verification - found in DB after insert:', verifyInserts);
         }
 
-        //------------------------------------------
-        // 8) Bulk Update (raw SQL for max speed) - BATCHED
-        //------------------------------------------
-        const UPDATE_BATCH_SIZE = 2000; // ~15 columns × 2000 = 30000 variables (under 32767 limit)
+        // 4) Bulk Update (raw SQL for max speed) - BATCHED
+        const UPDATE_BATCH_SIZE = 2000;
 
         if (toUpdate.length > 0) {
             for (let i = 0; i < toUpdate.length; i += UPDATE_BATCH_SIZE) {
                 const chunk = toUpdate.slice(i, i + UPDATE_BATCH_SIZE);
 
                 const values = chunk.map((r) => {
-                    // Force consistent types for all fields
                     const item_code = String(r.item_code).trim().padStart(5, "0");
                     const purchase_price = parseFloat(r.purchase_price) || 0;
                     const selling_price_vat = parseInt(r.selling_price_vat, 10) || 0;
@@ -205,12 +170,8 @@ exports.uploadMasterItemXLSX = async (req, res) => {
             }
         }
 
-        // บันทึกเวลาอัปเดตล่าสุด
         await touchDataSync('masterItem', toInsert.length + toUpdate.length);
 
-        //------------------------------------------
-        // Done
-        //------------------------------------------
         setUploadJob(jobId, 90, "saving data");
         finishUploadJob(jobId, "completed");
         res.status(200).json({

@@ -2,9 +2,6 @@ const prisma = require("../../config/prisma");
 const response = require("../../utils/responseHelper");
 const dateHelper = require("../../utils/dateHelper");
 
-/**
- * GET /api/hq/logs
- */
 const getAllLogs = async (req, res) => {
   try {
     const {
@@ -61,9 +58,6 @@ const getAllLogs = async (req, res) => {
   }
 };
 
-/**
- * GET /api/hq/logs/:id
- */
 const getLogById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -91,9 +85,6 @@ const getLogById = async (req, res) => {
   }
 };
 
-/**
- * POST /api/hq/logs
- */
 const createLog = async (req, res) => {
   try {
     const {
@@ -124,7 +115,6 @@ const createLog = async (req, res) => {
       return response.error(res, "ไม่พบข้อมูลพนักงาน", "NOT_FOUND", 404);
     }
 
-    // Check for existing sales log for the same employee and day (limit once per day)
     if (action === "ขาย") {
       const dateStr = date.substring(0, 10); // YYYY-MM-DD
       const todayStart = new Date(dateStr + "T00:00:00.000+07:00");
@@ -175,7 +165,6 @@ const createLog = async (req, res) => {
       },
     });
 
-    // Update employee points
     if (action === "ยอดขาย" && point !== undefined && point !== null) {
       await prisma.employee_hq.update({
         where: { employee_code },
@@ -214,9 +203,6 @@ const createLog = async (req, res) => {
   }
 };
 
-/**
- * PUT /api/hq/logs/:id
- */
 const updateLog = async (req, res) => {
   try {
     const { id } = req.params;
@@ -267,9 +253,6 @@ const updateLog = async (req, res) => {
   }
 };
 
-/**
- * DELETE /api/hq/logs/:id
- */
 const deleteLog = async (req, res) => {
   try {
     const { id } = req.params;
@@ -288,10 +271,6 @@ const deleteLog = async (req, res) => {
   }
 };
 
-/**
- * POST /api/hq/logs/bulk-hit-target
- * Bulk create logs for hit target employees + update points
- */
 const bulkCreateHitTargetLogs = async (req, res) => {
   try {
     const { entries, date } = req.body;
@@ -309,14 +288,12 @@ const bulkCreateHitTargetLogs = async (req, res) => {
     for (const entry of entries) {
       const { employee_code, branch_name, target, sales } = entry;
       try {
-        // ตรวจสอบว่าพนักงานมีอยู่ในระบบ
         const emp = await prisma.employee_hq.findUnique({ where: { employee_code } });
         if (!emp) {
           results.failed.push({ employee_code, branch_name, reason: "ไม่พบรหัสพนักงานในระบบ" });
           continue;
         }
 
-        // สร้าง log และอัปเดต point ในเดียว (transaction)
         await prisma.$transaction([
           prisma.log_hq.create({
             data: {

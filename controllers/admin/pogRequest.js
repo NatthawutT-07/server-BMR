@@ -3,7 +3,7 @@ const prisma = new PrismaClient();
 const response = require("../../utils/responseHelper");
 const { lockKey, acquireLock, releaseLock } = require("../../utils/lock");
 
-// Helper: Get item_code from barcode
+//Get item_code from barcode
 const getCodeProduct = async (barcode) => {
     if (!barcode) return null;
     const item = await prisma.masterItem.findFirst({
@@ -13,7 +13,7 @@ const getCodeProduct = async (barcode) => {
     return item?.item_code || null;
 };
 
-// Helper: Apply Change to SKU Table
+//Apply Change to SKU Table
 const applyPogChange = async (reqItem) => {
     const { branch_code, action, barcode } = reqItem;
     const fromShelf = reqItem.fromShelf;
@@ -170,9 +170,6 @@ const applyPogChange = async (reqItem) => {
     }
 };
 
-/**
- * GET /api/admin/pog-requests
- */
 const getAllPogRequests = async (req, res) => {
     try {
         const { branch_code, status, action, shelf, row, limit = 50, page = 1 } = req.query;
@@ -239,9 +236,6 @@ const getAllPogRequests = async (req, res) => {
     }
 };
 
-/**
- * PATCH /api/admin/pog-requests/:id
- */
 const updatePogRequestStatus = async (req, res) => {
     try {
         const { id } = req.params;
@@ -270,9 +264,6 @@ const updatePogRequestStatus = async (req, res) => {
     }
 };
 
-/**
- * DELETE /api/admin/pog-requests/:id
- */
 const deletePogRequest = async (req, res) => {
     try {
         const { id } = req.params;
@@ -285,9 +276,6 @@ const deletePogRequest = async (req, res) => {
     }
 };
 
-/**
- * PUT /api/admin/pog-requests/:id/position
- */
 const updatePogRequestPosition = async (req, res) => {
     try {
         const { id } = req.params;
@@ -314,9 +302,6 @@ const updatePogRequestPosition = async (req, res) => {
     }
 };
 
-/**
- * POST /api/admin/pog-requests/bulk-approve
- */
 const bulkApprove = async (req, res) => {
     try {
         const { ids } = req.body;

@@ -3,9 +3,6 @@ const response = require("../../utils/responseHelper");
 const fs = require("fs");
 const path = require("path");
 
-/**
- * GET /api/hq/rewards
- */
 const getAllRewards = async (req, res) => {
   try {
     const { min_points, max_points } = req.query;
@@ -29,9 +26,6 @@ const getAllRewards = async (req, res) => {
   }
 };
 
-/**
- * GET /api/hq/rewards/:id
- */
 const getRewardById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -50,9 +44,6 @@ const getRewardById = async (req, res) => {
   }
 };
 
-/**
- * POST /api/hq/rewards
- */
 const createReward = async (req, res) => {
   try {
     const { title, point_reward } = req.body;
@@ -83,9 +74,6 @@ const createReward = async (req, res) => {
   }
 };
 
-/**
- * PUT /api/hq/rewards/:id
- */
 const updateReward = async (req, res) => {
   try {
     const { id } = req.params;
@@ -131,9 +119,6 @@ const updateReward = async (req, res) => {
   }
 };
 
-/**
- * DELETE /api/hq/rewards/:id
- */
 const deleteReward = async (req, res) => {
   try {
     const { id } = req.params;
@@ -150,7 +135,6 @@ const deleteReward = async (req, res) => {
       where: { id: parseInt(id) },
     });
 
-    // Delete associated image
     if (existingReward.image_url) {
       const imagePath = path.join(__dirname, "../../", existingReward.image_url);
       if (fs.existsSync(imagePath)) {

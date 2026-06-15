@@ -45,7 +45,7 @@ exports.itemDelete = async (req, res) => {
 
     if (
       (id == null || id === "") &&
-      (!branch_code || !shelf_code || shelf_row_number == null || item_code == null || index == null)
+      (!branch_code || !shelf_code || shelf_row_number == null || item_code == null || shelf_index_number == null)
     ) {
       return response.error(res, "Missing delete identifiers", "BAD_REQUEST", 400);
     }

@@ -134,7 +134,7 @@ exports.deleteItem = async (deleteData, userName) => {
         branch_code: bc,
         shelf_code: sc,
         shelf_row_number: Number(shelf_row_number),
-        shelf_index_number: Number(index),
+        shelf_index_number: Number(shelf_index_number),
         item_code: item_code,
       };
     }
@@ -148,7 +148,7 @@ exports.deleteItem = async (deleteData, userName) => {
           shelf_code: sc,
           shelf_row_number: Number(shelf_row_number),
           item_code: item_code,
-          shelf_index_number: Number(index),
+          shelf_index_number: Number(shelf_index_number),
         },
       });
     }
@@ -334,15 +334,12 @@ exports.getDashboardSummary = async () => {
       FROM "BranchMain" b LEFT JOIN branch_sums bs ON bs.branch_code = b."branch_code" ORDER BY b."branch_code" ASC
   `;
 
-  // Query for the overall unique SKU count across the entire system
   const overallSkuResult = await prisma.$queryRaw`
       SELECT COUNT(DISTINCT "item_code")::int AS "overallUniqueSkus"
       FROM "SkuPosition"
   `;
   const overallUniqueSkus = overallSkuResult[0]?.overallUniqueSkus || 0;
 
-  // Query to find days within the date range (startUtc to endUtc) that have NO sales in any branchMain
-  // We generate a series of dates and LEFT JOIN with the actual sales dates
   const missingSalesDatesResult = await prisma.$queryRaw`
       WITH RECURSIVE date_series AS (
           SELECT ${startUtc}::date AS d

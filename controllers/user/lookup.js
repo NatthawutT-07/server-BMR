@@ -1,6 +1,5 @@
 const prisma = require("../../config/prisma");
 
-// GET /api/lookup?branch_code=ST002&barcode=8859566512531
 const lookupByBarcode = async (req, res) => {
   try {
     const { branch_code, barcode } = req.query;
@@ -9,7 +8,6 @@ const lookupByBarcode = async (req, res) => {
       return res.status(400).json({ message: "branch_code, barcode required" });
     }
 
-    // barcode ไม่ใช่ unique field ใช้ findFirst แทน
     const item = await prisma.masterItem.findFirst({
       where: { barcode: String(barcode) },
       select: {
@@ -75,7 +73,6 @@ const lookupByBarcode = async (req, res) => {
     console.error("lookupByBarcode error:", err.message);
     console.error("lookupByBarcode stack:", err.stack);
 
-    // Return standardized error format
     return res.status(500).json({
       ok: false,
       code: "ERROR",

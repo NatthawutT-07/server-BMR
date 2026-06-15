@@ -2,15 +2,7 @@ const prisma = require("../../config/prisma");
 const response = require("../../utils/responseHelper");
 const { serialize } = require("../../utils/serializer");
 
-/**
- * POST /api/stock-brand-lookup
- * Body: { startDate: "YYYY-MM-DD", endDate: "YYYY-MM-DD" }
- *
- * ดึงข้อมูลสินค้าจาก MasterItem ทั้งหมด
- * ยอดขาย → query จาก RawBill (ตารางแยกอิสระ) โดยแปลง date (DD/MM/YYYY) เป็น date จริง
- * withdraw, Stock → query จากตารางเดิม
- * รวมกลุ่มตาม brand_name → ส่ง KPI + rows
- */
+
 exports.stockBrandLookup = async (req, res) => {
   try {
     const { startDate, endDate } = req.body;
@@ -24,7 +16,6 @@ exports.stockBrandLookup = async (req, res) => {
       );
     }
 
-    // ─── 1) MasterItem: สินค้าทั้งหมด ───
     const items = await prisma.masterItem.findMany({
       select: {
         item_code: true,
@@ -34,8 +25,6 @@ exports.stockBrandLookup = async (req, res) => {
       },
     });
 
-    // ─── 2) Sales: query จาก RawBill (date เก็บเป็น DD/MM/YYYY) ───
-    // ใช้ quantity สำหรับจำนวน และ total_sales สำหรับยอดขาย
     const salesRows = serialize(
       await prisma.$queryRaw`
         SELECT
@@ -53,7 +42,6 @@ exports.stockBrandLookup = async (req, res) => {
       `
     );
 
-    // ─── 3) Withdraw: date range (date เป็น String "DD/MM/YYYY" ใน DB) ───
     const withdrawRows = serialize(
       await prisma.$queryRaw`
         SELECT
@@ -68,7 +56,6 @@ exports.stockBrandLookup = async (req, res) => {
       `
     );
 
-    // ─── 4) Stock: current quantity (ไม่ขึ้นกับ date) ───
     const stockRows = serialize(
       await prisma.$queryRaw`
         SELECT
@@ -79,7 +66,6 @@ exports.stockBrandLookup = async (req, res) => {
       `
     );
 
-    // ─── Build lookup maps ───
     const salesMap = new Map();
     for (const r of salesRows) {
       if (r.item_code !== null && r.item_code !== undefined) {
@@ -97,12 +83,10 @@ exports.stockBrandLookup = async (req, res) => {
       stockRows.map((r) => [r.item_code, r.quantity_stock])
     );
 
-    // ─── Merge & group by brand_name ───
     const brandMap = new Map();
 
     for (const item of items) {
       const brand = item.brand_name ? item.brand_name.trim() : "";
-      // ข้ามถ้าไม่มีแบรนด์ที่แมพกันได้ หรือเป็น "ไม่ระบุ"
       if (!brand || brand === "ไม่ระบุ") {
         continue;
       }
@@ -132,10 +116,8 @@ exports.stockBrandLookup = async (req, res) => {
 
     const rows = Array.from(brandMap.values());
 
-    // เรียงตาม total_sales_Finally มากสุดขึ้นก่อน
     rows.sort((a, b) => b.total_sales_Finally - a.total_sales_Finally);
 
-    // ─── KPI totals ───
     const kpi = {
       totalSalesValue: rows.reduce((s, r) => s + r.total_sales_Finally, 0),
       totalSalesQty: rows.reduce((s, r) => s + r.quantity_sale_bill, 0),

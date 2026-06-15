@@ -3,7 +3,6 @@ const { Prisma } = require("@prisma/client");
 const { runExcelWorker } = require("../../../workers/workerHelper");
 const { initUploadJob, setUploadJob, finishUploadJob, failUploadJob, touchDataSync } = require('./uploadJob');
 
-// ใช้ Worker Thread สำหรับ Parse Excel (ไม่ Block Event Loop)
 exports.uploadWithdrawXLSX = async (req, res) => {
     if (!req.file) return res.status(400).send("No file uploaded");
 
@@ -11,7 +10,6 @@ exports.uploadWithdrawXLSX = async (req, res) => {
     setUploadJob(jobId, 5, "starting worker");
 
     try {
-        // ใช้ Worker Thread parse Excel (Non-blocking)
         let mapped = await runExcelWorker(
             req.file.buffer,
             "Withdraw",
@@ -23,7 +21,6 @@ exports.uploadWithdrawXLSX = async (req, res) => {
             return res.status(200).send("No valid withdraw rows found.");
         }
 
-        // ฟิวเตอร์พื้นฐาน (document_status === 'อนุมัติแล้ว' และ reason !== 'เบิกเพื่อขาย')
         mapped = mapped.filter(r => r.document_status === 'อนุมัติแล้ว' && r.reason === 'เบิกหมดอายุ');
 
         if (mapped.length === 0) {
@@ -33,8 +30,6 @@ exports.uploadWithdrawXLSX = async (req, res) => {
                 inserted: 0
             });
         }
-
-        // ตรวจสอบและลบข้อมูลซ้ำใน batch เดียวกัน
         const uniqueMap = new Map();
         const duplicates = [];
 
@@ -56,19 +51,13 @@ exports.uploadWithdrawXLSX = async (req, res) => {
         });
 
         if (duplicates.length > 0) {
-            // console.log(` Found ${duplicates.length} duplicate records in batch:`, duplicates.slice(0, 5));
-            // เก็บเฉพาะข้อมูลที่ไม่ซ้ำ (เก็บตัวแรกที่เจอ)
             mapped = mapped.filter((r, index) => {
                 const key = `${r.document_reference}-${r.branch_code}-${r.item_code}`;
                 return uniqueMap.get(key) === index;
             });
-            // console.log(`After deduplication: ${mapped.length} unique records`);
         }
 
-        // ------------------------------------------------------------
-        // 5) Build Ultra-Fast Bulk Upsert (with Batches to avoid P2035)
-        // ------------------------------------------------------------
-        const BATCH_SIZE = 3000; // 3000 rows * 8 params = 24,000 bind vars (< 32,767 limit)
+        const BATCH_SIZE = 3000;
         const totalBatches = Math.ceil(mapped.length / BATCH_SIZE);
 
         for (let i = 0; i < mapped.length; i += BATCH_SIZE) {
@@ -76,7 +65,6 @@ exports.uploadWithdrawXLSX = async (req, res) => {
             const currentBatch = Math.floor(i / BATCH_SIZE) + 1;
 
             const values = chunk.map((r) => {
-                // Fallback for required string columns to prevent Prisma 23502 error
                 const document_status = r.document_status || "";
                 const reason = r.reason || "";
 
@@ -97,7 +85,6 @@ exports.uploadWithdrawXLSX = async (req, res) => {
             setUploadJob(jobId, progress, `saving batch ${currentBatch}/${totalBatches}`);
         }
 
-        // บันทึกเวลาอัปเดตล่าสุด
         await touchDataSync('withdraw', mapped.length);
 
         finishUploadJob(jobId, "completed");

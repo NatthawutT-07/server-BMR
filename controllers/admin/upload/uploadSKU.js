@@ -17,7 +17,7 @@ exports.uploadSKU_XLSX = async (req, res) => {
 
         setUploadJob(jobId, 15, "validating data");
 
-        // 1) Clean / Validate แถว (ต้องมีทุก field)
+        // 1) Clean / Validate
         const missingRequired = rows.some(r => !r.branch_code || !r.shelf_code || r.shelf_row_number == null || r.item_code == null || r.shelf_index_number == null);
         if (missingRequired) {
             throw new Error("พบบางแถวขาดข้อมูลที่จำเป็น (branch_code, shelf_code, shelf_row_number, item_code, index)");
@@ -31,7 +31,7 @@ exports.uploadSKU_XLSX = async (req, res) => {
             shelf_index_number: parseInt(row.shelf_index_number, 10),
         }));
 
-        // 2) ตรวจสอบ Duplicate Keys ในไฟล์ (branch_code + item_code ซ้ำกันในไฟล์)
+        // 2) Check Duplicate 
         const skuMap = new Map();
         const duplicates = [];
         for (const item of skuData) {
@@ -47,7 +47,7 @@ exports.uploadSKU_XLSX = async (req, res) => {
         const uniqueSkuData = Array.from(skuMap.values());
         setUploadJob(jobId, 30, "upserting to database");
 
-        // 3) Prisma Upsert ใน Transaction รองรับการเขียนทับ/สร้างใหม่
+        // 3) Prisma Upsert ใน Transaction
         await prisma.$transaction(async (tx) => {
             for (let i = 0; i < uniqueSkuData.length; i += CHUNK_SIZE) {
                 const chunk = uniqueSkuData.slice(i, i + CHUNK_SIZE);
@@ -78,7 +78,6 @@ exports.uploadSKU_XLSX = async (req, res) => {
             }
         }, { timeout: 120000 });
 
-        // บันทึกเวลาอัปเดตล่าสุด
         await touchDataSync('skuPosition', uniqueSkuData.length);
 
         setUploadJob(jobId, 95, "finalizing");

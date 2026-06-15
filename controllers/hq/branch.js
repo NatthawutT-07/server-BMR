@@ -1,9 +1,6 @@
 const prisma = require("../../config/prisma");
 const response = require("../../utils/responseHelper");
 
-/**
- * GET /api/hq/branches
- */
 const getAllBranches = async (req, res) => {
   try {
     const { month, branch_code } = req.query;
@@ -24,9 +21,6 @@ const getAllBranches = async (req, res) => {
   }
 };
 
-/**
- * GET /api/hq/branches/:id
- */
 const getBranchById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -45,9 +39,6 @@ const getBranchById = async (req, res) => {
   }
 };
 
-/**
- * POST /api/hq/branches
- */
 const createBranch = async (req, res) => {
   try {
     const { branch_code, branch_name, month, day, target, status = "active" } = req.body;
@@ -82,9 +73,6 @@ const createBranch = async (req, res) => {
   }
 };
 
-/**
- * PUT /api/hq/branches/:id
- */
 const updateBranch = async (req, res) => {
   try {
     const { id } = req.params;
@@ -129,9 +117,6 @@ const updateBranch = async (req, res) => {
   }
 };
 
-/**
- * DELETE /api/hq/branches/:id
- */
 const deleteBranch = async (req, res) => {
   try {
     const { id } = req.params;

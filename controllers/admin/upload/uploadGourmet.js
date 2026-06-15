@@ -14,16 +14,16 @@ exports.uploadGourmetXLSX = async (req, res) => {
         const raw = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
         setUploadJob(jobId, 20, "parsing rows");
 
-        const requiredFields = ["date", "branch_code", "item_code", "quantity", "sales_amount_gourmet"];
+        const requiredFields = ["date", "branch_code", "item_code", "quantity_sale_gourmet", "sales_amount_gourmet"];
         const aliases = {
-            date: ["date", "วันที่"],
-            branch_code: ["branch_code", "รหัสสาขา", "สาขา"],
-            item_code: ["productcode", "รหัสสินค้า", "skuPosition"],
-            quantity_sale_gourmet: ["quantity", "qty", "จำนวน", "saleqty"],
-            sales_amount_gourmet: ["sales", "ยอดขาย", "ยอดขายรวม", "netsales", "salesamount", "ยอดขายสุทธิ"],
+            date: ["date", ""],
+            branch_code: ["storecodesap"],
+            item_code: ["itemno.bm"],
+            quantity_sale_gourmet: ["saleqty"],
+            sales_amount_gourmet: ["salesamount"],
         };
 
-        // เอาช่องว่างเเละ _ ออกให้หมด เพื่อให้ match กับคำเช่น "Sale_QTY" ได้ตรงกับ "saleqty"
+        // เอาช่องว่างเเละ _ ออก
         const normalize = (v) => String(v || "").trim().toLowerCase().replace(/[\s_]/g, "");
 
         const tryBuildHeader = (row) => {
@@ -81,7 +81,10 @@ exports.uploadGourmetXLSX = async (req, res) => {
         const seen = new Set();
 
         raw.slice(headerRowIndex + 1).forEach((row) => {
-            const branch_code = String(row[headerMap.branch_code] || "").trim();
+            let branch_code = String(row[headerMap.branch_code] || "").trim();
+            if (branch_code.startsWith("ST0")) {
+                branch_code = branch_code.replace("ST0", "ST");
+            }
             const productCode = String(row[headerMap.item_code] || "").trim();
             const dateVal = excelDateToJS(row[headerMap.date]);
 
@@ -120,13 +123,11 @@ exports.uploadGourmetXLSX = async (req, res) => {
 
         setUploadJob(jobId, 70, "saving data");
 
-        // Use createMany with skipDuplicates to ignore existing rows with same unique constraints
         const result = await prisma.gourmet.createMany({
             data: mapped,
             skipDuplicates: true
         });
 
-        // บันทึกเวลาอัปเดตล่าสุด
         await touchDataSync('gourmet', result.count);
 
         finishUploadJob(jobId, "completed");

@@ -16,12 +16,12 @@ const router = express.Router()
 router.post("/shelf-templates/items", authCheck, UserTemplateItem);
 router.post('/upload-stock', authCheck, upload.single('file'), uploadStockXLSX);
 router.get("/stock-last-update", authCheck, getStockLastUpdate);
-router.get("/branch-shelves", authCheck, getBranchShelves); // ดึง shelf templates ของสาขา
+router.get("/branch-shelves", authCheck, getBranchShelves);
 
 // POG Request routes (for user)
 router.post('/pog-request', authCheck, createPogRequest);
 router.get('/pog-request', authCheck, getMyPogRequests);
-router.patch('/pog-request/:id/cancel', authCheck, cancelMyPogRequest); // ยกเลิก (ไม่ลบ)
+router.patch('/pog-request/:id/cancel', authCheck, cancelMyPogRequest);
 
 // Register Product routes (ลงทะเบียนสินค้าโดยตรง)
 router.get("/products/check", authCheck, checkProductExists);

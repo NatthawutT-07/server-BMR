@@ -26,7 +26,6 @@ exports.checkShelfUpdate = async (req, res) => {
     }
 };
 
-// สาขากด "รับทราบ" update แล้ว
 exports.acknowledgeShelfUpdate = async (req, res) => {
     try {
         const { branch_code } = req.params;
@@ -48,7 +47,6 @@ exports.acknowledgeShelfUpdate = async (req, res) => {
     }
 };
 
-// Helper function สำหรับ call จาก shelf controller
 exports.markShelfUpdated = async (branch_code, updatedBy = null) => {
     try {
         await prisma.shelfUpdate.upsert({
@@ -58,15 +56,13 @@ exports.markShelfUpdated = async (branch_code, updatedBy = null) => {
         });
     } catch (error) {
         console.error("markShelfUpdated error:", error);
-        // ไม่ throw error เพื่อไม่ให้กระทบ flow หลัก
     }
 };
 
-// ดึง change logs ที่ยังไม่รับทราบสำหรับสาขา (history mode + pagination)
 exports.getShelfChangeLogs = async (req, res) => {
     try {
         const { branch_code } = req.params;
-        const showAll = req.query.all === "true"; // ?all=true = แสดงทั้งหมด
+        const showAll = req.query.all === "true"; //all=true = แสดงทั้งหมด
         const page = Math.max(1, parseInt(req.query.page) || 1);
         const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
         const skip = (page - 1) * limit;
@@ -79,11 +75,7 @@ exports.getShelfChangeLogs = async (req, res) => {
             branch_code,
             ...(showAll ? {} : { acknowledged: false }),
         };
-
-        // Get total count for pagination
         const total = await prisma.shelfChangeLog.count({ where: whereClause });
-
-        // ดึง logs ที่ยังไม่รับทราบ (หรือทั้งหมดถ้า showAll)
         const logs = await prisma.shelfChangeLog.findMany({
             where: whereClause,
             orderBy: [{ createdAt: "desc" }, { shelf_code: "asc" }],
@@ -106,7 +98,6 @@ exports.getShelfChangeLogs = async (req, res) => {
             take: limit,
         });
 
-        // นับ unacknowledged
         const unacknowledgedCount = await prisma.shelfChangeLog.count({
             where: { branch_code, acknowledged: false },
         });
@@ -126,7 +117,6 @@ exports.getShelfChangeLogs = async (req, res) => {
     }
 };
 
-// รับทราบ change log ทีละตัว (by id)
 exports.acknowledgeChangeLog = async (req, res) => {
     try {
         const { id } = req.params;
@@ -147,7 +137,6 @@ exports.acknowledgeChangeLog = async (req, res) => {
     }
 };
 
-// รับทราบทั้งหมดของสาขา
 exports.acknowledgeAllChangeLogs = async (req, res) => {
     try {
         const { branch_code } = req.params;
@@ -168,10 +157,8 @@ exports.acknowledgeAllChangeLogs = async (req, res) => {
     }
 };
 
-// Admin: ดูสถานะการรับทราบของทุกสาขา
 exports.getAllBranchAckStatus = async (req, res) => {
     try {
-        // ดึงรายการสาขาทั้งหมดที่มี ShelfChangeLog
         const branchStats = await prisma.$queryRaw`
             SELECT 
                 "branch_code",
@@ -185,7 +172,6 @@ exports.getAllBranchAckStatus = async (req, res) => {
             ORDER BY "pending" DESC, "branch_code" ASC
         `;
 
-        // Format output
         const result = branchStats.map(row => ({
             branch_code: row.branch_code,
             pending: Number(row.pending) || 0,
@@ -210,13 +196,11 @@ exports.getAllBranchAckStatus = async (req, res) => {
     }
 };
 
-// Helper: สร้าง single change log สำหรับ itemCreate/itemDelete
 exports.createSingleChangeLog = async (branch_code, shelf_code, action, items, createdBy = null) => {
     try {
         const { v4: uuidv4 } = require("uuid");
         const updateId = uuidv4();
 
-        // ดึงชื่อสินค้าจาก MasterItem
         const codesToLookup = items.map((i) => i.item_code).filter(Boolean);
         const products = await prisma.masterItem.findMany({
             where: { item_code: { in: codesToLookup } },
@@ -252,14 +236,11 @@ exports.createSingleChangeLog = async (branch_code, shelf_code, action, items, c
     }
 };
 
-// Helper: สร้าง change logs จากการเปรียบเทียบ old vs new items
 exports.createShelfChangeLogs = async (branch_code, shelf_code, oldItems, newItems, createdBy = null) => {
     try {
         const { v4: uuidv4 } = require("uuid");
         const updateId = uuidv4();
         const logs = [];
-
-        // สร้าง map สำหรับ lookup
         const oldMap = new Map();
         oldItems.forEach((item) => {
             const key = `${item.item_code}`;
@@ -271,8 +252,6 @@ exports.createShelfChangeLogs = async (branch_code, shelf_code, oldItems, newIte
             const key = `${item.item_code}`;
             newMap.set(key, item);
         });
-
-        // ดึงชื่อสินค้าจาก MasterItem
         const allCodes = [...new Set([...oldMap.keys(), ...newMap.keys()])].map(Number);
         const products = await prisma.masterItem.findMany({
             where: { item_code: { in: allCodes } },
@@ -283,7 +262,6 @@ exports.createShelfChangeLogs = async (branch_code, shelf_code, oldItems, newIte
             item_nameMap.set(p.item_code, p.item_name || p.brand_name || `รหัส ${p.item_code}`);
         });
 
-        // หา DELETE: อยู่ใน old แต่ไม่อยู่ใน new
         for (const [key, oldItem] of oldMap) {
             if (!newMap.has(key)) {
                 logs.push({
@@ -302,7 +280,6 @@ exports.createShelfChangeLogs = async (branch_code, shelf_code, oldItems, newIte
             }
         }
 
-        // หา ADD: อยู่ใน new แต่ไม่อยู่ใน old
         for (const [key, newItem] of newMap) {
             if (!oldMap.has(key)) {
                 logs.push({
@@ -321,7 +298,6 @@ exports.createShelfChangeLogs = async (branch_code, shelf_code, oldItems, newIte
             }
         }
 
-        // หา MOVE: อยู่ทั้งสอง แต่ row/index เปลี่ยน
         for (const [key, oldItem] of oldMap) {
             const newItem = newMap.get(key);
             if (newItem) {
@@ -343,7 +319,6 @@ exports.createShelfChangeLogs = async (branch_code, shelf_code, oldItems, newIte
             }
         }
 
-        // บันทึก logs ถ้ามี
         if (logs.length > 0) {
             await prisma.shelfChangeLog.createMany({ data: logs });
         }
