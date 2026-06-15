@@ -42,7 +42,7 @@ const getMonthMetaUtc = () => {
 exports.getMasterItem = async (qRaw) => {
   const qDigits = digitsOnly(qRaw);
 
-  const normal = await prisma.listOfItemHold.findMany({
+  const normal = await prisma.masterItem.findMany({
     where: {
       OR: [
         { barcode: { contains: qRaw, mode: "insensitive" } },
@@ -58,7 +58,7 @@ exports.getMasterItem = async (qRaw) => {
   if (qDigits.length >= 6) {
     normalized = await prisma.$queryRaw`
         SELECT "item_code", "barcode", "item_name", "brand_name"
-        FROM "ListOfItemHold"
+        FROM "MasterItem"
         WHERE regexp_replace(COALESCE("barcode", ''), '\\D', '', 'g') LIKE ${"%" + qDigits + "%"}
         LIMIT 50;
       `;
@@ -88,7 +88,7 @@ exports.createItems = async (items, userName) => {
       shelf_index_number: Number(item.shelf_index_number),
     }));
 
-    await prisma.sku.createMany({
+    await prisma.skuPosition.createMany({
       data: itemsToInsert,
       skipDuplicates: true,
     });
@@ -116,7 +116,7 @@ exports.deleteItem = async (deleteData, userName) => {
   let sc = shelf_code;
 
   if ((bc == null || sc == null) && id != null) {
-    const found = await prisma.sku.findUnique({ where: { id: Number(id) } });
+    const found = await prisma.skuPosition.findUnique({ where: { id: Number(id) } });
     if (!found) throw new Error("Item not found");
     bc = found.branch_code;
     sc = found.shelf_code;
@@ -128,7 +128,7 @@ exports.deleteItem = async (deleteData, userName) => {
 
     let deletedItem = null;
     if (id != null && id !== "") {
-      deletedItem = await prisma.sku.findUnique({ where: { id: Number(id) } });
+      deletedItem = await prisma.skuPosition.findUnique({ where: { id: Number(id) } });
     } else {
       deletedItem = {
         branch_code: bc,
@@ -140,9 +140,9 @@ exports.deleteItem = async (deleteData, userName) => {
     }
 
     if (id != null && id !== "") {
-      await prisma.sku.deleteMany({ where: { id: Number(id) } });
+      await prisma.skuPosition.deleteMany({ where: { id: Number(id) } });
     } else {
-      await prisma.sku.deleteMany({
+      await prisma.skuPosition.deleteMany({
         where: {
           branch_code: bc,
           shelf_code: sc,
@@ -153,14 +153,14 @@ exports.deleteItem = async (deleteData, userName) => {
       });
     }
 
-    const remainingItems = await prisma.sku.findMany({
+    const remainingItems = await prisma.skuPosition.findMany({
       where: { branch_code: bc, shelf_code: sc, shelf_row_number: Number(shelf_row_number) },
       orderBy: { shelf_index_number: "asc" },
     });
 
     if (remainingItems.length > 0) {
       const updateOps = remainingItems.map((item, i) =>
-        prisma.sku.update({
+        prisma.skuPosition.update({
           where: { id: item.id },
           data: { shelf_index_number: i + 1 },
         })
@@ -195,7 +195,7 @@ exports.updateItems = async (items, userName) => {
     key = lockKey(branch_code, shelf_code);
     await acquireLock(prisma, key);
 
-    const oldItems = await prisma.sku.findMany({
+    const oldItems = await prisma.skuPosition.findMany({
       where: { branch_code, shelf_code },
       select: { item_code: true, shelf_row_number: true, shelf_index_number: true },
     });
@@ -209,8 +209,8 @@ exports.updateItems = async (items, userName) => {
     }));
 
     await prisma.$transaction([
-      prisma.sku.deleteMany({ where: { branch_code, shelf_code } }),
-      prisma.sku.createMany({ data: itemsToInsert }),
+      prisma.skuPosition.deleteMany({ where: { branch_code, shelf_code } }),
+      prisma.skuPosition.createMany({ data: itemsToInsert }),
     ]);
 
     const newItems = itemsToInsert.map((i) => ({
@@ -235,7 +235,7 @@ exports.updateItems = async (items, userName) => {
 };
 
 exports.getTemplates = async () => {
-  return await prisma.Template.findMany({
+  return await prisma.shelfTemplate.findMany({
     orderBy: { id: "asc" },
   });
 };
@@ -259,14 +259,14 @@ exports.getSkuData = async (branch_code) => {
                 GREATEST(((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Bangkok')::date - 1) - (ls."lastSaleDate" AT TIME ZONE 'Asia/Bangkok')::date, 0)
               ELSE NULL
             END AS "dayOff"
-        FROM "Sku" s
+        FROM "SkuPosition" s
         LEFT JOIN (
             SELECT "branch_code", "item_code", SUM("quantity_stock")::int AS "quantity_stock"
             FROM "Stock" WHERE "branch_code" = ${branch_code} GROUP BY "branch_code", "item_code"
         ) st ON s."branch_code" = st."branch_code" AND s."item_code" = st."item_code"
         LEFT JOIN (
             SELECT "branch_code", "item_code", SUM("quantity_withdraw")::int AS "quantity_withdraw", SUM("value_withdraw"::numeric)::float8 AS "value_withdraw"
-            FROM "withdraw"
+            FROM "Withdraw"
             WHERE "branch_code" = ${branch_code} AND "document_status" = 'อนุมัติแล้ว' AND "reason" != 'เบิกเพื่อขาย'
               AND to_date("date_withdraw", 'DD/MM/YYYY') >= to_date(${startDateStr}, 'YYYY-MM-DD') AND to_date("date_withdraw", 'DD/MM/YYYY') <= to_date(${endDateStr}, 'YYYY-MM-DD')
             GROUP BY "branch_code", "item_code"
@@ -274,21 +274,21 @@ exports.getSkuData = async (branch_code) => {
         LEFT JOIN (
             SELECT br."branch_code" AS "branch_code", bi."item_code" AS "item_code", SUM(bi."quantity_sale_bill")::int AS "quantity_sale_bill", SUM(bi."total_sales_rounding_no_end_discount")::float8 AS "total_sales_rounding_no_end_discount"
             FROM "BillItem" bi
-            JOIN "Bill" b ON bi."billId" = b."id"
-            JOIN "Branch" br ON b."branchId" = br."id"
+            JOIN "BillHeader" b ON bi."billId" = b."id"
+            JOIN "BranchMain" br ON b."branchId" = br."id"
             WHERE br."branch_code" = ${branch_code} AND b."date" >= ${startUtc} AND b."date" <= ${endUtc}
             GROUP BY br."branch_code", bi."item_code"
         ) bs ON s."branch_code" = bs."branch_code" AND s."item_code" = bs."item_code"
         LEFT JOIN (
             SELECT br."branch_code" AS "branch_code", bi."item_code" AS "item_code", MAX(b."date") AS "lastSaleDate"
             FROM "BillItem" bi
-            JOIN "Bill" b ON bi."billId" = b."id"
-            JOIN "Branch" br ON b."branchId" = br."id"
+            JOIN "BillHeader" b ON bi."billId" = b."id"
+            JOIN "BranchMain" br ON b."branchId" = br."id"
             WHERE br."branch_code" = ${branch_code} AND b."date" >= ${startUtc} AND b."date" <= ${endUtc}
             GROUP BY br."branch_code", bi."item_code"
         ) ls ON s."branch_code" = ls."branch_code" AND s."item_code" = ls."item_code"
-        LEFT JOIN "ListOfItemHold" p ON s."item_code" = p."item_code"
-        LEFT JOIN "ItemMinMax" im ON s."branch_code" = im."branch_code" AND s."item_code" = im."item_code"
+        LEFT JOIN "MasterItem" p ON s."item_code" = p."item_code"
+        LEFT JOIN "MinMaxAutoPO" im ON s."branch_code" = im."branch_code" AND s."item_code" = im."item_code"
         WHERE s."branch_code" = ${branch_code}
         ORDER BY s."shelf_code", s."shelf_index_number", s."shelf_row_number"
     `;
@@ -300,11 +300,11 @@ exports.getDashboardSummary = async () => {
   const { startUtc, endUtc, startDateStr, endDateStr } = get90DaysRangeUtc();
 
   const rows = await prisma.$queryRaw`
-      WITH sku_rows AS (SELECT "branch_code", "shelf_code", "item_code" FROM "Sku"),
+      WITH sku_rows AS (SELECT "branch_code", "shelf_code", "item_code" FROM "SkuPosition"),
       stock_map AS (SELECT "branch_code", "item_code", SUM("quantity_stock")::float8 AS stock_qty FROM "Stock" GROUP BY "branch_code", "item_code"),
       withdraw_map AS (
           SELECT "branch_code", "item_code", SUM("value_withdraw")::float8 AS withdraw_value
-          FROM "withdraw"
+          FROM "Withdraw"
           WHERE "document_status" = 'อนุมัติแล้ว' AND "reason" != 'เบิกเพื่อขาย'
             AND to_date("date_withdraw", 'DD/MM/YYYY') >= to_date(${startDateStr}, 'YYYY-MM-DD') AND to_date("date_withdraw", 'DD/MM/YYYY') <= to_date(${endDateStr}, 'YYYY-MM-DD')
           GROUP BY "branch_code", "item_code"
@@ -312,8 +312,8 @@ exports.getDashboardSummary = async () => {
       sales_map AS (
           SELECT br."branch_code" AS "branch_code", bi."item_code" AS "item_code", SUM(bi."total_sales_rounding_no_end_discount")::float8 AS sales_total
           FROM "BillItem" bi
-          JOIN "Bill" b ON bi."billId" = b."id"
-          JOIN "Branch" br ON b."branchId" = br."id"
+          JOIN "BillHeader" b ON bi."billId" = b."id"
+          JOIN "BranchMain" br ON b."branchId" = br."id"
           WHERE b."date" >= ${startUtc} AND b."date" <= ${endUtc}
           GROUP BY br."branch_code", bi."item_code"
       ),
@@ -323,7 +323,7 @@ exports.getDashboardSummary = async () => {
               SUM(COALESCE(wm.withdraw_value, 0))::float8 AS withdraw_value, SUM(COALESCE(sa.sales_total, 0))::float8 AS sales_total
           FROM sku_rows sr
           LEFT JOIN stock_map sm ON sm."branch_code" = sr."branch_code" AND sm."item_code" = sr."item_code"
-          LEFT JOIN "ListOfItemHold" p ON p."item_code" = sr."item_code"
+          LEFT JOIN "MasterItem" p ON p."item_code" = sr."item_code"
           LEFT JOIN withdraw_map wm ON wm."branch_code" = sr."branch_code" AND wm."item_code" = sr."item_code"
           LEFT JOIN sales_map sa ON sa."branch_code" = sr."branch_code" AND sa."item_code" = sr."item_code"
           GROUP BY sr."branch_code"
@@ -331,17 +331,17 @@ exports.getDashboardSummary = async () => {
       SELECT b."branch_code" AS "branch_code", b."branch_name" AS "branchName", COALESCE(bs.shelf_count, 0)::int AS "shelfCount",
           COALESCE(bs.product_count, 0)::int AS "productCount", COALESCE(bs.stock_cost, 0)::float8 AS "stockCost",
           COALESCE(bs.withdraw_value, 0)::float8 AS "value_withdraw", COALESCE(bs.sales_total, 0)::float8 AS "salesTotal"
-      FROM "Branch" b LEFT JOIN branch_sums bs ON bs.branch_code = b."branch_code" ORDER BY b."branch_code" ASC
+      FROM "BranchMain" b LEFT JOIN branch_sums bs ON bs.branch_code = b."branch_code" ORDER BY b."branch_code" ASC
   `;
 
   // Query for the overall unique SKU count across the entire system
   const overallSkuResult = await prisma.$queryRaw`
       SELECT COUNT(DISTINCT "item_code")::int AS "overallUniqueSkus"
-      FROM "Sku"
+      FROM "SkuPosition"
   `;
   const overallUniqueSkus = overallSkuResult[0]?.overallUniqueSkus || 0;
 
-  // Query to find days within the date range (startUtc to endUtc) that have NO sales in any branch
+  // Query to find days within the date range (startUtc to endUtc) that have NO sales in any branchMain
   // We generate a series of dates and LEFT JOIN with the actual sales dates
   const missingSalesDatesResult = await prisma.$queryRaw`
       WITH RECURSIVE date_series AS (
@@ -353,7 +353,7 @@ exports.getDashboardSummary = async () => {
       ),
       sales_dates AS (
           SELECT DISTINCT b."date"::date AS sale_date
-          FROM "Bill" b
+          FROM "BillHeader" b
           WHERE b."date" >= ${startUtc} AND b."date" <= ${endUtc}
       )
       SELECT ds.d::text AS missing_date
@@ -372,19 +372,19 @@ exports.getShelfSales = async (branch_code) => {
   const { startUtc, endUtc, startDateStr, endDateStr } = get90DaysRangeUtc();
 
   const rows = await prisma.$queryRaw`
-      WITH sku_rows AS (SELECT "branch_code", "shelf_code", "item_code" FROM "Sku" WHERE "branch_code" = ${branch_code}),
-      shelf_names AS (SELECT "branch_code", "shelf_code", "shelf_name" FROM "Template" WHERE "branch_code" = ${branch_code}),
+      WITH sku_rows AS (SELECT "branch_code", "shelf_code", "item_code" FROM "SkuPosition" WHERE "branch_code" = ${branch_code}),
+      shelf_names AS (SELECT "branch_code", "shelf_code", "shelf_name" FROM "ShelfTemplate" WHERE "branch_code" = ${branch_code}),
       stock_map AS (SELECT "branch_code", "item_code", SUM("quantity_stock")::float8 AS stock_qty FROM "Stock" WHERE "branch_code" = ${branch_code} GROUP BY "branch_code", "item_code"),
       withdraw_map AS (
           SELECT "branch_code", "item_code", SUM("value_withdraw")::float8 AS withdraw_value
-          FROM "withdraw"
+          FROM "Withdraw"
           WHERE "document_status" = 'อนุมัติแล้ว' AND "reason" != 'เบิกเพื่อขาย' AND "branch_code" = ${branch_code}
             AND to_date("date_withdraw", 'DD/MM/YYYY') >= to_date(${startDateStr}, 'YYYY-MM-DD') AND to_date("date_withdraw", 'DD/MM/YYYY') <= to_date(${endDateStr}, 'YYYY-MM-DD')
           GROUP BY "branch_code", "item_code"
       ),
       sales_map AS (
           SELECT br."branch_code" AS "branch_code", bi."item_code" AS "item_code", SUM(bi."total_sales_rounding_no_end_discount")::float8 AS sales_total
-          FROM "BillItem" bi JOIN "Bill" b ON bi."billId" = b."id" JOIN "Branch" br ON b."branchId" = br."id"
+          FROM "BillItem" bi JOIN "BillHeader" b ON bi."billId" = b."id" JOIN "BranchMain" br ON b."branchId" = br."id"
           WHERE br."branch_code" = ${branch_code} AND b."date" >= ${startUtc} AND b."date" <= ${endUtc}
           GROUP BY br."branch_code", bi."item_code"
       ),
@@ -394,7 +394,7 @@ exports.getShelfSales = async (branch_code) => {
               SUM(COALESCE(wm.withdraw_value, 0))::float8 AS withdraw_value, SUM(COALESCE(sa.sales_total, 0))::float8 AS sales_total
           FROM sku_rows sr
           LEFT JOIN stock_map sm ON sm."branch_code" = sr."branch_code" AND sm."item_code" = sr."item_code"
-          LEFT JOIN "ListOfItemHold" p ON p."item_code" = sr."item_code"
+          LEFT JOIN "MasterItem" p ON p."item_code" = sr."item_code"
           LEFT JOIN withdraw_map wm ON wm."branch_code" = sr."branch_code" AND wm."item_code" = sr."item_code"
           LEFT JOIN sales_map sa ON sa."branch_code" = sr."branch_code" AND sa."item_code" = sr."item_code"
           GROUP BY sr."branch_code", sr."shelf_code"

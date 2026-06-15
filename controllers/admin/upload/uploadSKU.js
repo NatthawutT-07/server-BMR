@@ -53,7 +53,7 @@ exports.uploadSKU_XLSX = async (req, res) => {
                 const chunk = uniqueSkuData.slice(i, i + CHUNK_SIZE);
                 
                 const upsertPromises = chunk.map(item => 
-                    tx.sku.upsert({
+                    tx.skuPosition.upsert({
                         where: {
                             branch_code_item_code: {
                                 branch_code: item.branch_code,
@@ -79,7 +79,7 @@ exports.uploadSKU_XLSX = async (req, res) => {
         }, { timeout: 120000 });
 
         // บันทึกเวลาอัปเดตล่าสุด
-        await touchDataSync('sku', uniqueSkuData.length);
+        await touchDataSync('skuPosition', uniqueSkuData.length);
 
         setUploadJob(jobId, 95, "finalizing");
         finishUploadJob(jobId, `completed - ${uniqueSkuData.length} SKU records synced`);

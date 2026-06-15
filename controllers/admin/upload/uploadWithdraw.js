@@ -14,7 +14,7 @@ exports.uploadWithdrawXLSX = async (req, res) => {
         // ใช้ Worker Thread parse Excel (Non-blocking)
         let mapped = await runExcelWorker(
             req.file.buffer,
-            "withdraw",
+            "Withdraw",
             (progress, message) => setUploadJob(jobId, progress, message)
         );
 
@@ -84,7 +84,7 @@ exports.uploadWithdrawXLSX = async (req, res) => {
             });
 
             const sql = Prisma.sql`
-                INSERT INTO "withdraw"
+                INSERT INTO "Withdraw"
                 ("item_code", "branch_code", "document_reference", "date_withdraw", "document_status", "reason", "quantity_withdraw", "value_withdraw")
                 VALUES ${Prisma.join(values)}
                 ON CONFLICT ("document_reference", "branch_code", "item_code") 

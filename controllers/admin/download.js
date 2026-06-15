@@ -6,7 +6,7 @@ exports.downloadTemplate = async (req, res) => {
         const { branch_code } = req.query;
         const whereClause = branch_code ? { branch_code: String(branch_code) } : {};
 
-        const templates = await prisma.Template.findMany({
+        const templates = await prisma.shelfTemplate.findMany({
             where: whereClause,
             select: {
                 branch_code: true,
@@ -33,7 +33,7 @@ exports.downloadSKU = async (req, res) => {
         const { branch_code } = req.query;
         const whereClause = branch_code ? { branch_code: String(branch_code) } : {};
 
-        const skus = await prisma.sku.findMany({
+        const skus = await prisma.skuPosition.findMany({
             where: whereClause,
             select: {
                 branch_code: true,

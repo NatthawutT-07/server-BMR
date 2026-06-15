@@ -4,10 +4,10 @@ const { touchDataSync } = require('./uploadJob');
 exports.clearMinMax = async (req, res) => {
     try {
         await prisma.$transaction(async (tx) => {
-            await tx.$executeRaw`TRUNCATE TABLE "ItemMinMax"`;
+            await tx.$executeRaw`TRUNCATE TABLE "MinMaxAutoPO"`;
             await touchDataSync('minMax', 0, undefined, tx);
         });
-        return res.status(200).json({ message: "ItemMinMax cleared successfully" });
+        return res.status(200).json({ message: "MinMaxAutoPO cleared successfully" });
     } catch (err) {
         console.error("Clear MinMax Error:", err);
         return res.status(500).json({ error: err.message });

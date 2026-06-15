@@ -30,17 +30,17 @@ const getAllBranches = async (req, res) => {
 const getBranchById = async (req, res) => {
   try {
     const { id } = req.params;
-    const branch = await prisma.branch_hq.findUnique({
+    const branchMain = await prisma.branch_hq.findUnique({
       where: { id: parseInt(id) },
     });
 
-    if (!branch) {
+    if (!branchMain) {
       return response.error(res, "ไม่พบข้อมูลสาขา", "NOT_FOUND", 404);
     }
 
-    return response.success(res, branch);
+    return response.success(res, branchMain);
   } catch (error) {
-    console.error("Get branch error:", error);
+    console.error("Get branchMain error:", error);
     return response.error(res, "เกิดข้อผิดพลาดในการดึงข้อมูล", "FETCH_ERROR", 500, error.message);
   }
 };
@@ -60,7 +60,7 @@ const createBranch = async (req, res) => {
     const targetNum = parseFloat(target);
     const avg_target = dayNum > 0 ? parseFloat((targetNum / dayNum).toFixed(2)) : 0;
 
-    const branch = await prisma.branch_hq.create({
+    const branchMain = await prisma.branch_hq.create({
       data: {
         branch_code,
         branch_name,
@@ -72,9 +72,9 @@ const createBranch = async (req, res) => {
       },
     });
 
-    return response.success(res, branch, null, "เพิ่มสาขาสำเร็จ", 201);
+    return response.success(res, branchMain, null, "เพิ่มสาขาสำเร็จ", 201);
   } catch (error) {
-    console.error("Create branch error:", error);
+    console.error("Create branchMain error:", error);
     if (error.code === "P2002") {
       return response.error(res, "สาขานี้ในเดือนที่ระบุมีอยู่ในระบบแล้ว", "CONFLICT", 409);
     }
@@ -111,14 +111,14 @@ const updateBranch = async (req, res) => {
       updateData.avg_target = dayNum > 0 ? parseFloat((targetNum / dayNum).toFixed(2)) : 0;
     }
 
-    const branch = await prisma.branch_hq.update({
+    const branchMain = await prisma.branch_hq.update({
       where: { id: parseInt(id) },
       data: updateData,
     });
 
-    return response.success(res, branch, null, "อัปเดตข้อมูลสาขาสำเร็จ");
+    return response.success(res, branchMain, null, "อัปเดตข้อมูลสาขาสำเร็จ");
   } catch (error) {
-    console.error("Update branch error:", error);
+    console.error("Update branchMain error:", error);
     if (error.code === "P2025") {
       return response.error(res, "ไม่พบข้อมูลสาขา", "NOT_FOUND", 404);
     }
@@ -142,7 +142,7 @@ const deleteBranch = async (req, res) => {
 
     return response.success(res, null, null, "ลบสาขาสำเร็จ");
   } catch (error) {
-    console.error("Delete branch error:", error);
+    console.error("Delete branchMain error:", error);
     if (error.code === "P2025") {
       return response.error(res, "ไม่พบข้อมูลสาขาที่ต้องการลบ", "NOT_FOUND", 404);
     }

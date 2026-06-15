@@ -29,7 +29,7 @@ exports.uploadMasterItemXLSX = async (req, res) => {
         // 5) Load existing items (1 query only)
         //------------------------------------------
 
-        const existingRows = await prisma.listOfItemHold.findMany();
+        const existingRows = await prisma.masterItem.findMany();
         const dbMap = new Map();
 
         existingRows.forEach(x => {
@@ -107,7 +107,7 @@ exports.uploadMasterItemXLSX = async (req, res) => {
             // console.log('[DEBUG] Inserting items:', cleanedInserts.map(i => i.item_code));
 
             try {
-                const insertResult = await prisma.listOfItemHold.createMany({
+                const insertResult = await prisma.masterItem.createMany({
                     data: cleanedInserts,
                     skipDuplicates: true
                 });
@@ -118,7 +118,7 @@ exports.uploadMasterItemXLSX = async (req, res) => {
             }
 
             // Verify insert worked for debug codes
-            const verifyInserts = await prisma.listOfItemHold.findMany({
+            const verifyInserts = await prisma.masterItem.findMany({
                 where: { item_code: { in: [913, 5229] } },
                 select: { item_code: true, item_name: true }
             });
@@ -173,7 +173,7 @@ exports.uploadMasterItemXLSX = async (req, res) => {
                 );
 
                 const sql = Prisma.sql`
-                    UPDATE "ListOfItemHold" AS t SET
+                    UPDATE "MasterItem" AS t SET
                         "purchase_price" = v.purchase,
                         "selling_price_vat" = v.saleprice,
                         "gross_profit_pct" = v.gp,

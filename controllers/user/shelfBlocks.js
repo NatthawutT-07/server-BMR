@@ -8,14 +8,14 @@ const getShelfBlocks = async (req, res) => {
       return res.status(400).json({ message: "branch_code, shelf_code required" });
     }
 
-    const shelf = await prisma.Template.findUnique({
+    const shelf = await prisma.shelfTemplate.findUnique({
       where: { branch_code_shelf_code: { branch_code, shelf_code } },
       select: { shelf_code: true, shelf_name: true, shelf_total_row: true, type: true },
     });
 
     if (!shelf) return res.status(404).json({ message: "SHELF_NOT_FOUND" });
 
-    const skus = await prisma.sku.findMany({
+    const skus = await prisma.skuPosition.findMany({
       where: { branch_code, shelf_code },
       select: { shelf_row_number: true, shelf_index_number: true, item_code: true },
       orderBy: [{ shelf_row_number: "asc" }, { shelf_index_number: "asc" }],
@@ -27,7 +27,7 @@ const getShelfBlocks = async (req, res) => {
 
     const item_codes = [...new Set(skus.map((x) => x.item_code))];
 
-    const items = await prisma.listOfItemHold.findMany({
+    const items = await prisma.masterItem.findMany({
       where: { item_code: { in: item_codes } },
       select: {
         item_code: true,

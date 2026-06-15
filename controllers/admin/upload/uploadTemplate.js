@@ -43,7 +43,7 @@ exports.uploadTemplateXLSX = async (req, res) => {
             tempMap.set(key, item);
         }
         if (duplicates.length > 0) {
-            throw new Error(`พบข้อมูลซ้ำซ้อนในไฟล์ Template: ${duplicates.slice(0, 5).join(', ')} ...`);
+            throw new Error(`พบข้อมูลซ้ำซ้อนในไฟล์ ShelfTemplate: ${duplicates.slice(0, 5).join(', ')} ...`);
         }
 
         const templateData = Array.from(tempMap.values());
@@ -51,7 +51,7 @@ exports.uploadTemplateXLSX = async (req, res) => {
 
         // 2. เช็คว่าต้องลบตัวไหนออก (มีใน DB แต่ไม่มีในไฟล์) โดยตรวจจับเฉพาะสาขาที่มีในไฟล์อัปโหลด
         const branchesInFile = [...new Set(templateData.map(t => t.branch_code))];
-        const existingInDb = await prisma.Template.findMany({
+        const existingInDb = await prisma.shelfTemplate.findMany({
             where: { branch_code: { in: branchesInFile } },
             select: { id: true, branch_code: true, shelf_code: true }
         });
@@ -69,7 +69,7 @@ exports.uploadTemplateXLSX = async (req, res) => {
             // Delete รายการที่หายไปเป็น Batch
             if (toDeleteIds.length > 0) {
                 for (let i = 0; i < toDeleteIds.length; i += CHUNK_SIZE) {
-                    await tx.Template.deleteMany({
+                    await tx.ShelfTemplate.deleteMany({
                         where: { id: { in: toDeleteIds.slice(i, i + CHUNK_SIZE) } }
                     });
                 }
@@ -80,7 +80,7 @@ exports.uploadTemplateXLSX = async (req, res) => {
                 const chunk = templateData.slice(i, i + CHUNK_SIZE);
                 
                 const upsertPromises = chunk.map(item => 
-                    tx.Template.upsert({
+                    tx.ShelfTemplate.upsert({
                         where: {
                             branch_code_shelf_code: {
                                 branch_code: item.branch_code,
@@ -106,14 +106,14 @@ exports.uploadTemplateXLSX = async (req, res) => {
         }, { timeout: 120000 });
 
         // บันทึกเวลาอัปเดตล่าสุด
-        await touchDataSync('template', templateData.length);
+        await touchDataSync('shelfTemplate', templateData.length);
 
         setUploadJob(jobId, 95, "finalizing");
         finishUploadJob(jobId, `completed - synced ${templateData.length} records, deleted ${toDeleteIds.length}`);
-        res.status(200).send(`Template XLSX synced! (Upserted: ${templateData.length}, Deleted: ${toDeleteIds.length})`);
+        res.status(200).send(`ShelfTemplate XLSX synced! (Upserted: ${templateData.length}, Deleted: ${toDeleteIds.length})`);
 
     } catch (err) {
-        console.error("Template XLSX Error:", err);
+        console.error("ShelfTemplate XLSX Error:", err);
         failUploadJob(jobId, err?.message || "failed");
         res.status(500).json({ error: err.message });
     }

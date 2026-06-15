@@ -18,7 +18,7 @@ exports.uploadGourmetXLSX = async (req, res) => {
         const aliases = {
             date: ["date", "วันที่"],
             branch_code: ["branch_code", "รหัสสาขา", "สาขา"],
-            item_code: ["productcode", "รหัสสินค้า", "sku"],
+            item_code: ["productcode", "รหัสสินค้า", "skuPosition"],
             quantity_sale_gourmet: ["quantity", "qty", "จำนวน", "saleqty"],
             sales_amount_gourmet: ["sales", "ยอดขาย", "ยอดขายรวม", "netsales", "salesamount", "ยอดขายสุทธิ"],
         };
@@ -53,8 +53,8 @@ exports.uploadGourmetXLSX = async (req, res) => {
         }
 
         if (headerRowIndex === -1 || !headerMap) {
-            failUploadJob(jobId, "ไม่พบ header gourmet (date, branch, product, quantity_sale_gourmet, sales)");
-            return res.status(400).send("ไม่พบ header gourmet (date, branch, product, quantity_sale_gourmet, sales)");
+            failUploadJob(jobId, "ไม่พบ header gourmet (date, branchMain, product, quantity_sale_gourmet, sales)");
+            return res.status(400).send("ไม่พบ header gourmet (date, branchMain, product, quantity_sale_gourmet, sales)");
         }
 
         const excelDateToJS = (value) => {

@@ -216,9 +216,9 @@ exports.createSingleChangeLog = async (branch_code, shelf_code, action, items, c
         const { v4: uuidv4 } = require("uuid");
         const updateId = uuidv4();
 
-        // ดึงชื่อสินค้าจาก ListOfItemHold
+        // ดึงชื่อสินค้าจาก MasterItem
         const codesToLookup = items.map((i) => i.item_code).filter(Boolean);
-        const products = await prisma.listOfItemHold.findMany({
+        const products = await prisma.masterItem.findMany({
             where: { item_code: { in: codesToLookup } },
             select: { item_code: true, item_name: true, brand_name: true },
         });
@@ -272,9 +272,9 @@ exports.createShelfChangeLogs = async (branch_code, shelf_code, oldItems, newIte
             newMap.set(key, item);
         });
 
-        // ดึงชื่อสินค้าจาก ListOfItemHold
+        // ดึงชื่อสินค้าจาก MasterItem
         const allCodes = [...new Set([...oldMap.keys(), ...newMap.keys()])].map(Number);
-        const products = await prisma.listOfItemHold.findMany({
+        const products = await prisma.masterItem.findMany({
             where: { item_code: { in: allCodes } },
             select: { item_code: true, item_name: true, brand_name: true },
         });

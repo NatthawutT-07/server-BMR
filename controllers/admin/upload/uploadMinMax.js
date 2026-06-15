@@ -28,7 +28,7 @@ exports.uploadItemMinMaxXLSX = async (req, res) => {
         // ---------------------------
         // 3) Load all existing rows (only 1 query)
         // ---------------------------
-        const existingRows = await prisma.itemMinMax.findMany();
+        const existingRows = await prisma.minMaxAutoPO.findMany();
         const dbMap = new Map();
 
         existingRows.forEach(x => {
@@ -63,7 +63,7 @@ exports.uploadItemMinMaxXLSX = async (req, res) => {
         // 5) Batch Insert (fast)
         // ---------------------------
         if (toInsert.length > 0) {
-            await prisma.itemMinMax.createMany({
+            await prisma.minMaxAutoPO.createMany({
                 data: toInsert,
                 skipDuplicates: true
             });
@@ -78,7 +78,7 @@ exports.uploadItemMinMaxXLSX = async (req, res) => {
             );
 
             const sql = Prisma.sql`
-                UPDATE "ItemMinMax" AS t SET
+                UPDATE "MinMaxAutoPO" AS t SET
                     "min_stock" = v."min_stock",
                     "max_stock" = v."max_stock",
                     "pack_order" = v."pack_order"

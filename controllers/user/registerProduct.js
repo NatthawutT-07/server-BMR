@@ -25,7 +25,7 @@ exports.checkProductExists = async (req, res) => {
 
     try {
         // หา item_code จาก barcode
-        const product = await prisma.listOfItemHold.findFirst({
+        const product = await prisma.masterItem.findFirst({
             where: { barcode: String(barcode) },
             select: {
                 item_code: true,
@@ -45,7 +45,7 @@ exports.checkProductExists = async (req, res) => {
         }
 
         // เช็คว่ามีใน planogram ของสาขานี้หรือยัง
-        const existingItem = await prisma.sku.findFirst({
+        const existingItem = await prisma.skuPosition.findFirst({
             where: {
                 branch_code,
                 item_code: product.item_code
@@ -103,7 +103,7 @@ exports.checkProductExists = async (req, res) => {
 };
 
 // ======================================================
-// Get Shelves for Branch (ดึง shelf ของสาขา)
+// Get Shelves for BranchMain (ดึง shelf ของสาขา)
 // ใช้สำหรับ dropdown เลือก shelf
 // ======================================================
 exports.getShelvesForRegister = async (req, res) => {
@@ -118,7 +118,7 @@ exports.getShelvesForRegister = async (req, res) => {
 
     try {
         // ดึง shelf templates ของสาขา
-        const templates = await prisma.Template.findMany({
+        const templates = await prisma.shelfTemplate.findMany({
             where: { branch_code },
             orderBy: { shelf_code: "asc" },
             select: {
@@ -162,7 +162,7 @@ exports.getNextIndex = async (req, res) => {
     }
 
     try {
-        const maxIndex = await prisma.sku.aggregate({
+        const maxIndex = await prisma.skuPosition.aggregate({
             where: {
                 branch_code,
                 shelf_code,
@@ -203,7 +203,7 @@ exports.registerProduct = async (req, res) => {
 
     try {
         // 1. หา item_code จาก barcode
-        const product = await prisma.listOfItemHold.findFirst({
+        const product = await prisma.masterItem.findFirst({
             where: { barcode: String(barcode) },
             select: {
                 item_code: true,
@@ -219,7 +219,7 @@ exports.registerProduct = async (req, res) => {
         }
 
         // 2. เช็คว่ามีใน planogram ของสาขานี้หรือยัง
-        const existingItem = await prisma.sku.findFirst({
+        const existingItem = await prisma.skuPosition.findFirst({
             where: {
                 branch_code,
                 item_code: product.item_code
@@ -239,7 +239,7 @@ exports.registerProduct = async (req, res) => {
         }
 
         // 3. หา index ถัดไปของ row นี้
-        const maxIndex = await prisma.sku.aggregate({
+        const maxIndex = await prisma.skuPosition.aggregate({
             where: {
                 branch_code,
                 shelf_code,
@@ -251,7 +251,7 @@ exports.registerProduct = async (req, res) => {
         const nextIndex = (maxIndex._max.shelf_index_number || 0) + 1;
 
         // 4. บันทึกลง SKU table
-        const newSku = await prisma.sku.create({
+        const newSku = await prisma.skuPosition.create({
             data: {
                 branch_code,
                 shelf_code,

@@ -194,8 +194,8 @@ exports.getActiveBranches = async (req, res) => {
 
     const branch_codes = activeUsers.map((u) => u.name);
 
-    // 2. ไปหาข้อมูลจากตาราง Branch เพื่อเอา branch_name
-    const branchesInfo = await prisma.branch.findMany({
+    // 2. ไปหาข้อมูลจากตาราง BranchMain เพื่อเอา branch_name
+    const branchesInfo = await prisma.branchMain.findMany({
       where: {
         branch_code: {
           in: branch_codes,

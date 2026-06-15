@@ -10,7 +10,7 @@ const lookupByBarcode = async (req, res) => {
     }
 
     // barcode ไม่ใช่ unique field ใช้ findFirst แทน
-    const item = await prisma.listOfItemHold.findFirst({
+    const item = await prisma.masterItem.findFirst({
       where: { barcode: String(barcode) },
       select: {
         item_code: true,
@@ -25,7 +25,7 @@ const lookupByBarcode = async (req, res) => {
       return res.json({ found: false, reason: "BARCODE_NOT_FOUND" });
     }
 
-    const loc = await prisma.sku.findMany({
+    const loc = await prisma.skuPosition.findMany({
       where: { branch_code, item_code: item.item_code },
       select: { shelf_code: true, shelf_row_number: true, shelf_index_number: true },
       orderBy: [{ shelf_code: "asc" }, { shelf_row_number: "asc" }, { shelf_index_number: "asc" }],
@@ -48,7 +48,7 @@ const lookupByBarcode = async (req, res) => {
 
     const shelf_codes = [...new Set(loc.map((x) => x.shelf_code))];
 
-    const shelves = await prisma.Template.findMany({
+    const shelves = await prisma.shelfTemplate.findMany({
       where: { branch_code, shelf_code: { in: shelf_codes } },
       select: { shelf_code: true, shelf_name: true, shelf_total_row: true },
     });

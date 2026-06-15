@@ -35,7 +35,7 @@ model LoginLog {
   createdAt DateTime @default(now())
 }
 
-model ItemMinMax {
+model MinMaxAutoPO {
   id          Int    @id @default(autoincrement())
   branch_code String
   item_code   String
@@ -72,7 +72,7 @@ model BranchDataSync {
   @@id([branch_code, key])
 }
 
-model withdraw {
+model Withdraw {
   id                 Int    @id @default(autoincrement())
   item_code          String
   branch_code        String
@@ -88,7 +88,7 @@ model withdraw {
   @@index([branch_code, document_status, item_code])
 }
 
-model ListOfItemHold {
+model MasterItem {
   id                    Int     @id @default(autoincrement())
   item_code             String  @unique
   item_name             String?
@@ -107,7 +107,7 @@ model ListOfItemHold {
   @@index([item_code])
 }
 
-model Template {
+model ShelfTemplate {
   id              Int     @id @default(autoincrement())
   branch_code     String
   shelf_code      String
@@ -119,8 +119,8 @@ model Template {
   @@index([branch_code, shelf_code, shelf_name])
 }
 
-model Sku {
-  id                 Int     @id @default(autoincrement())
+model SkuPosition {
+  id                 Int    @id @default(autoincrement())
   branch_code        String
   shelf_code         String
   shelf_row_number   Int
@@ -132,14 +132,14 @@ model Sku {
   @@index([branch_code, item_code])
 }
 
-model Branch {
-  id          Int    @id @default(autoincrement())
-  branch_code String @unique
+model BranchMain {
+  id          Int          @id @default(autoincrement())
+  branch_code String       @unique
   branch_name String
-  bills       Bill[]
+  bills       BillHeader[]
 }
 
-model Bill {
+model BillHeader {
   id                                   Int      @id @default(autoincrement())
   branchId                             Int
   date                                 DateTime
@@ -155,7 +155,7 @@ model Bill {
   rounding                             Float
   total_sales_Finally                  Float
 
-  branch    Branch     @relation(fields: [branchId], references: [id])
+  branch    BranchMain @relation(fields: [branchId], references: [id])
   billItems BillItem[]
 
   @@index([branchId, doc_type, date])
@@ -167,7 +167,7 @@ model Bill {
 }
 
 model BillItem {
-  id                                   Int     @id @default(autoincrement())
+  id                                   Int        @id @default(autoincrement())
   billId                               Int
   item_code                            String
   quantity_sale_bill                   Float
@@ -176,7 +176,7 @@ model BillItem {
   sales_amount                         Float
   discount                             Float
   total_sales_rounding_no_end_discount Float
-  bill                                 Bill    @relation(fields: [billId], references: [id])
+  bill                                 BillHeader @relation(fields: [billId], references: [id])
 
   @@index([item_code])
   @@index([billId])
@@ -184,23 +184,23 @@ model BillItem {
 }
 
 model PogRequest {
-  id          Int     @id @default(autoincrement())
-  branch_code String
-  action      String // add|move|delete
-  barcode     String
-  item_name String?
-  fromShelf String?
-  fromRow   Int?
-  fromIndex Int?
-  toShelf String?
-  toRow   Int?
-  toIndex Int?
-  swap_barcode     String?
+  id             Int      @id @default(autoincrement())
+  branch_code    String
+  action         String // add|move|delete
+  barcode        String
+  item_name      String?
+  fromShelf      String?
+  fromRow        Int?
+  fromIndex      Int?
+  toShelf        String?
+  toRow          Int?
+  toIndex        Int?
+  swap_barcode   String?
   swap_item_name String?
-  status    String   @default("pending") // pending | approved | rejected | completed
-  note      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  status         String   @default("pending") // pending | approved | rejected | completed
+  note           String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   @@index([branch_code, status])
   @@index([status])
@@ -237,25 +237,19 @@ model Gourmet {
 
 // log การเปลี่ยนแปลง shelf (add/delete/move)
 model ShelfChangeLog {
-  id          Int     @id @default(autoincrement())
-  branch_code String
-  shelf_code  String
-  updateId    String 
-  action      String // add | delete | move
-  item_code   String
-  item_name String?
-
-  // ตำแหน่งเดิม (สำหรับ delete/move)
-  fromRow   Int?
-  fromIndex Int?
-
-  // ตำแหน่งใหม่ (สำหรับ add/move)
-  toRow   Int?
-  toIndex Int?
-
-  createdAt DateTime @default(now())
-  createdBy String?
-
+  id             Int       @id @default(autoincrement())
+  branch_code    String
+  shelf_code     String
+  updateId       String
+  action         String // add | delete | move
+  item_code      String
+  item_name      String?
+  fromRow        Int?
+  fromIndex      Int?
+  toRow          Int?
+  toIndex        Int?
+  createdAt      DateTime  @default(now())
+  createdBy      String?
   acknowledged   Boolean   @default(false)
   acknowledgedAt DateTime?
 

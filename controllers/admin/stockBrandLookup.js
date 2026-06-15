@@ -6,7 +6,7 @@ const { serialize } = require("../../utils/serializer");
  * POST /api/stock-brand-lookup
  * Body: { startDate: "YYYY-MM-DD", endDate: "YYYY-MM-DD" }
  *
- * ดึงข้อมูลสินค้าจาก ListOfItemHold ทั้งหมด
+ * ดึงข้อมูลสินค้าจาก MasterItem ทั้งหมด
  * ยอดขาย → query จาก RawBill (ตารางแยกอิสระ) โดยแปลง date (DD/MM/YYYY) เป็น date จริง
  * withdraw, Stock → query จากตารางเดิม
  * รวมกลุ่มตาม brand_name → ส่ง KPI + rows
@@ -24,8 +24,8 @@ exports.stockBrandLookup = async (req, res) => {
       );
     }
 
-    // ─── 1) ListOfItemHold: สินค้าทั้งหมด ───
-    const items = await prisma.listOfItemHold.findMany({
+    // ─── 1) MasterItem: สินค้าทั้งหมด ───
+    const items = await prisma.masterItem.findMany({
       select: {
         item_code: true,
         item_name: true,
@@ -59,7 +59,7 @@ exports.stockBrandLookup = async (req, res) => {
         SELECT
           "item_code",
           COALESCE(SUM("quantity"), 0)::int AS "quantity_withdraw"
-        FROM "withdraw"
+        FROM "Withdraw"
         WHERE "document_status" = 'อนุมัติแล้ว'
           AND "reason" = 'เบิกหมดอายุ'
           AND to_date("date_withdraw", 'DD/MM/YYYY') >= to_date(${startDate}, 'YYYY-MM-DD')

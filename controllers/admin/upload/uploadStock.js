@@ -37,7 +37,7 @@ exports.uploadStockXLSX = async (req, res) => {
         if (user.role !== 'admin') {
             const forbiddenBranches = uniqueBranches.filter(bc => bc !== user.name);
             if (forbiddenBranches.length > 0) {
-                failUploadJob(jobId, `Permission denied: You can only upload stock for branch ${user.name}`);
+                failUploadJob(jobId, `Permission denied: You can only upload stock for branchMain ${user.name}`);
                 return res.status(403).json({ error: `You are not allowed to upload stock for other branches (${forbiddenBranches.join(', ')})` });
             }
 

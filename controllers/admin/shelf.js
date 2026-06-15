@@ -79,17 +79,17 @@ exports.itemUpdate = async (req, res) => {
 };
 
 
-exports.Template = async (req, res) => {
+exports.ShelfTemplate = async (req, res) => {
   try {
     const result = await shelfService.getTemplates();
     return response.success(res, result);
   } catch (error) {
-    console.error("Template error:", error);
+    console.error("ShelfTemplate error:", error);
     return response.error(res, "Failed to load templates");
   }
 };
 
-exports.sku = async (req, res) => {
+exports.skuPosition = async (req, res) => {
   const { branch_code } = req.body;
 
   if (!branch_code) {
@@ -133,7 +133,7 @@ exports.sku = async (req, res) => {
     cache.set(key, result);
     return response.success(res, result);
   } catch (error) {
-    console.error("sku error:", error);
+    console.error("skuPosition error:", error);
     return response.error(res, "Failed to retrieve data");
   }
 };

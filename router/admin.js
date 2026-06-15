@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const { authCheck, adminCheck } = require('../middlewares/authCheck')
-const { Template, sku, itemDelete, itemCreate, itemUpdate, getMasterItem, getShelfDashboardSummary, getShelfDashboardShelfSales } = require("../controllers/admin/shelf");
+const { ShelfTemplate, skuPosition, itemDelete, itemCreate, itemUpdate, getMasterItem, getShelfDashboardSummary, getShelfDashboardShelfSales } = require("../controllers/admin/shelf");
 
 // //Manege
 // User Management
@@ -12,7 +12,7 @@ router.delete("/users/:id", authCheck, adminCheck, deleteUser);
 router.post("/change-status", authCheck, adminCheck, changeStatus);
 router.post("/change-role", authCheck, adminCheck, changeRole);
 
-// Branch Management
+// BranchMain Management
 const { listBranches, createBranch, updateBranch, deleteBranch } = require("../controllers/admin/branch");
 router.get("/branches", authCheck, adminCheck, listBranches);
 router.post("/branches", authCheck, adminCheck, createBranch);
@@ -61,9 +61,9 @@ router.get("/download-sku", authCheck, downloadSKU); //user
 const { validate } = require("../middlewares/validate");
 const { createShelfItemSchema, deleteShelfItemSchema, updateShelfItemSchema, getSkuSchema } = require("../schemas/shelfSchema");
 
-router.get("/shelf-template", authCheck, Template); //Template //user
+router.get("/shelf-template", authCheck, ShelfTemplate); //Template //user
 router.get("/shelf-getMasterItem", authCheck, getMasterItem);
-router.post("/shelf-sku", authCheck, validate(getSkuSchema), sku); //Item Search //user // date , withdraw , sales
+router.post("/shelf-sku", authCheck, validate(getSkuSchema), skuPosition); //Item Search //user // date , withdraw , sales
 router.delete("/shelf-delete", authCheck, validate(deleteShelfItemSchema), itemDelete);
 router.post("/shelf-add", authCheck, validate(createShelfItemSchema), itemCreate);
 router.put("/shelf-update", authCheck, validate(updateShelfItemSchema), itemUpdate)
@@ -79,7 +79,7 @@ router.delete("/pog-requests/:id", authCheck, adminCheck, deletePogRequest);
 router.post("/pog-requests/bulk-approve", authCheck, adminCheck, bulkApprove);
 router.put("/pog-requests/:id/position", authCheck, adminCheck, updatePogRequestPosition);
 
-// Shelf Update Notification - for mobile branch
+// Shelf Update Notification - for mobile branchMain
 const { checkShelfUpdate, acknowledgeShelfUpdate, getShelfChangeLogs, acknowledgeChangeLog, acknowledgeAllChangeLogs, getAllBranchAckStatus } = require('../controllers/admin/shelfUpdate');
 router.get("/shelf-update-check/:branch_code", authCheck, checkShelfUpdate);
 router.post("/shelf-update-acknowledge/:branch_code", authCheck, acknowledgeShelfUpdate);
@@ -87,7 +87,7 @@ router.get("/shelf-change-logs/:branch_code", authCheck, getShelfChangeLogs);
 router.post("/shelf-change-log-acknowledge/:id", authCheck, acknowledgeChangeLog);
 router.post("/shelf-change-logs-acknowledge-all/:branch_code", authCheck, acknowledgeAllChangeLogs);
 
-// Admin: Monitor branch acknowledgment status
+// Admin: Monitor branchMain acknowledgment status
 router.get("/branch-ack-status", authCheck, adminCheck, getAllBranchAckStatus);
 
 module.exports = router;

@@ -133,12 +133,12 @@ exports.uploadBillXLSX = async (req, res) => {
         }
 
         // 8) กันบิลซ้ำ
-        const existingBills = await prisma.bill.findMany({
+        const existingBills = await prisma.billHeader.findMany({
             select: { bill_number: true },
         });
         const existingBillSet = new Set(existingBills.map((b) => b.bill_number));
 
-        const branchesInDb = await prisma.branch.findMany();
+        const branchesInDb = await prisma.branchMain.findMany();
 
         const branchIdMap = Object.fromEntries(
             branchesInDb.map((b) => [b.branch_code, b.id])
@@ -147,7 +147,7 @@ exports.uploadBillXLSX = async (req, res) => {
         // 10) เตรียมชุดสร้างใหม่
         const newBranches = new Map();
 
-        // PASS 1: scan หา branch ใหม่ทั้งหมดก่อน
+        // PASS 1: scan หา branchMain ใหม่ทั้งหมดก่อน
         for (const [billNo, group] of billGroups.entries()) {
             if (existingBillSet.has(billNo)) continue;
 
@@ -163,9 +163,9 @@ exports.uploadBillXLSX = async (req, res) => {
             }
         }
 
-        // 11) Bulk create branch ทีเดียว
+        // 11) Bulk create branchMain ทีเดียว
         if (newBranches.size > 0) {
-            await prisma.branch.createMany({
+            await prisma.branchMain.createMany({
                 data: [...newBranches].map(([code, name]) => ({
                     branch_code: code,
                     branch_name: name,
@@ -175,7 +175,7 @@ exports.uploadBillXLSX = async (req, res) => {
         }
 
         // 12) refresh maps หลังสร้าง
-        const branchesAll = await prisma.branch.findMany();
+        const branchesAll = await prisma.branchMain.findMany();
 
         const branchIdMapAll = Object.fromEntries(
             branchesAll.map((b) => [b.branch_code, b.id])
@@ -235,7 +235,7 @@ exports.uploadBillXLSX = async (req, res) => {
         if (newBills.length > 0) {
             for (let i = 0; i < newBills.length; i += BATCH_SIZE) {
                 const chunk = newBills.slice(i, i + BATCH_SIZE);
-                await prisma.bill.createMany({
+                await prisma.billHeader.createMany({
                     data: chunk,
                     skipDuplicates: true,
                 });
@@ -244,7 +244,7 @@ exports.uploadBillXLSX = async (req, res) => {
 
         // 15) โหลดเฉพาะ billId ที่เพิ่งสร้าง (ไม่โหลดทั้งหมด)
         const newBillNumbers = newBills.map(b => b.bill_number);
-        const createdBills = await prisma.bill.findMany({
+        const createdBills = await prisma.billHeader.findMany({
             where: { bill_number: { in: newBillNumbers } },
             select: { id: true, bill_number: true },
         });

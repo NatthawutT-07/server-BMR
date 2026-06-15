@@ -6,7 +6,7 @@ const { lockKey, acquireLock, releaseLock } = require("../../utils/lock");
 // Helper: Get item_code from barcode
 const getCodeProduct = async (barcode) => {
     if (!barcode) return null;
-    const item = await prisma.listOfItemHold.findFirst({
+    const item = await prisma.masterItem.findFirst({
         where: { barcode: String(barcode) },
         select: { item_code: true },
     });
@@ -30,18 +30,18 @@ const applyPogChange = async (reqItem) => {
         const key = lockKey(branch_code, fromShelf);
         await acquireLock(prisma, key);
         try {
-            const deleted = await prisma.sku.deleteMany({
+            const deleted = await prisma.skuPosition.deleteMany({
                 where: { branch_code, shelf_code: fromShelf, shelf_row_number: fromRow, item_code: code },
             });
             if (deleted.count === 0) throw new Error(`ไม่พบสินค้า ${barcode} ใน ${fromShelf}/Row${fromRow}`);
 
-            const remaining = await prisma.sku.findMany({
+            const remaining = await prisma.skuPosition.findMany({
                 where: { branch_code, shelf_code: fromShelf, shelf_row_number: fromRow },
                 orderBy: { shelf_index_number: "asc" },
             });
             if (remaining.length > 0) {
                 const updates = remaining.map((itm, idx) =>
-                    prisma.sku.update({ where: { id: itm.id }, data: { shelf_index_number: idx + 1 } })
+                    prisma.skuPosition.update({ where: { id: itm.id }, data: { shelf_index_number: idx + 1 } })
                 );
                 await prisma.$transaction(updates);
             }
@@ -59,26 +59,26 @@ const applyPogChange = async (reqItem) => {
         const key = lockKey(branch_code, toShelf);
         await acquireLock(prisma, key);
         try {
-            const itemsToShift = await prisma.sku.findMany({
+            const itemsToShift = await prisma.skuPosition.findMany({
                 where: { branch_code, shelf_code: toShelf, shelf_row_number: toRow, shelf_index_number: { gte: toIndex } },
                 orderBy: { shelf_index_number: "desc" }
             });
             if (itemsToShift.length > 0) {
                 const shiftUpdates = itemsToShift.map(itm =>
-                    prisma.sku.update({ where: { id: itm.id }, data: { shelf_index_number: itm.shelf_index_number + 1 } })
+                    prisma.skuPosition.update({ where: { id: itm.id }, data: { shelf_index_number: itm.shelf_index_number + 1 } })
                 );
                 await prisma.$transaction(shiftUpdates);
             }
-            await prisma.sku.create({
+            await prisma.skuPosition.create({
                 data: { branch_code, shelf_code: toShelf, shelf_row_number: toRow, shelf_index_number: toIndex, item_code: code }
             });
-            const allItems = await prisma.sku.findMany({
+            const allItems = await prisma.skuPosition.findMany({
                 where: { branch_code, shelf_code: toShelf, shelf_row_number: toRow },
                 orderBy: { shelf_index_number: "asc" }
             });
             if (allItems.length > 0) {
                 const reindexUpdates = allItems.map((itm, idx) =>
-                    prisma.sku.update({ where: { id: itm.id }, data: { shelf_index_number: idx + 1 } })
+                    prisma.skuPosition.update({ where: { id: itm.id }, data: { shelf_index_number: idx + 1 } })
                 );
                 await prisma.$transaction(reindexUpdates);
             }
@@ -103,7 +103,7 @@ const applyPogChange = async (reqItem) => {
 
         try {
             if (isSameRow) {
-                const allItems = await prisma.sku.findMany({
+                const allItems = await prisma.skuPosition.findMany({
                     where: { branch_code, shelf_code: fromShelf, shelf_row_number: Number(fromRow) },
                     orderBy: { shelf_index_number: "asc" }
                 });
@@ -118,46 +118,46 @@ const applyPogChange = async (reqItem) => {
                     ...otherItems.slice(insertPosition)
                 ];
                 const updates = newOrder.map((itm, idx) =>
-                    prisma.sku.update({ where: { id: itm.id }, data: { shelf_index_number: idx + 1 } })
+                    prisma.skuPosition.update({ where: { id: itm.id }, data: { shelf_index_number: idx + 1 } })
                 );
                 await prisma.$transaction(updates);
             } else {
-                const deleted = await prisma.sku.deleteMany({
+                const deleted = await prisma.skuPosition.deleteMany({
                     where: { branch_code, shelf_code: fromShelf, shelf_row_number: Number(fromRow), item_code: code }
                 });
                 if (deleted.count === 0) throw new Error(`ไม่พบสินค้า ${barcode} ใน ${fromShelf}/Row${fromRow}`);
 
-                const sourceRemaining = await prisma.sku.findMany({
+                const sourceRemaining = await prisma.skuPosition.findMany({
                     where: { branch_code, shelf_code: fromShelf, shelf_row_number: Number(fromRow) },
                     orderBy: { shelf_index_number: "asc" }
                 });
                 if (sourceRemaining.length > 0) {
                     const sourceUpdates = sourceRemaining.map((itm, idx) =>
-                        prisma.sku.update({ where: { id: itm.id }, data: { shelf_index_number: idx + 1 } })
+                        prisma.skuPosition.update({ where: { id: itm.id }, data: { shelf_index_number: idx + 1 } })
                     );
                     await prisma.$transaction(sourceUpdates);
                 }
 
-                const itemsToShift = await prisma.sku.findMany({
+                const itemsToShift = await prisma.skuPosition.findMany({
                     where: { branch_code, shelf_code: toShelf, shelf_row_number: Number(toRow), shelf_index_number: { gte: Number(toIndex) } },
                     orderBy: { shelf_index_number: "desc" }
                 });
                 if (itemsToShift.length > 0) {
                     const shiftUpdates = itemsToShift.map(itm =>
-                        prisma.sku.update({ where: { id: itm.id }, data: { shelf_index_number: itm.shelf_index_number + 1 } })
+                        prisma.skuPosition.update({ where: { id: itm.id }, data: { shelf_index_number: itm.shelf_index_number + 1 } })
                     );
                     await prisma.$transaction(shiftUpdates);
                 }
-                await prisma.sku.create({
+                await prisma.skuPosition.create({
                     data: { branch_code, shelf_code: toShelf, shelf_row_number: Number(toRow), shelf_index_number: Number(toIndex), item_code: code }
                 });
-                const targetAll = await prisma.sku.findMany({
+                const targetAll = await prisma.skuPosition.findMany({
                     where: { branch_code, shelf_code: toShelf, shelf_row_number: Number(toRow) },
                     orderBy: { shelf_index_number: "asc" }
                 });
                 if (targetAll.length > 0) {
                     const targetUpdates = targetAll.map((itm, idx) =>
-                        prisma.sku.update({ where: { id: itm.id }, data: { shelf_index_number: idx + 1 } })
+                        prisma.skuPosition.update({ where: { id: itm.id }, data: { shelf_index_number: idx + 1 } })
                     );
                     await prisma.$transaction(targetUpdates);
                 }
@@ -334,8 +334,8 @@ const bulkApprove = async (req, res) => {
         const affectedRows = new Set(); 
         const rowChanges = {};
 
-        const calculateActualIndex = (branch, shelf, row, originalIndex) => {
-            const key = `${branch}|${shelf}|${row}`;
+        const calculateActualIndex = (branchMain, shelf, row, originalIndex) => {
+            const key = `${branchMain}|${shelf}|${row}`;
             const changes = rowChanges[key] || [];
             let actualIndex = Number(originalIndex);
             for (const change of changes) {
@@ -345,8 +345,8 @@ const bulkApprove = async (req, res) => {
             return actualIndex;
         };
 
-        const recordChange = (branch, shelf, row, type, originalIndex) => {
-            const key = `${branch}|${shelf}|${row}`;
+        const recordChange = (branchMain, shelf, row, type, originalIndex) => {
+            const key = `${branchMain}|${shelf}|${row}`;
             if (!rowChanges[key]) rowChanges[key] = [];
             rowChanges[key].push({ type, originalIndex: Number(originalIndex) });
         };
