@@ -188,22 +188,15 @@ model PogRequest {
   branch_code String
   action      String // add|move|delete
   barcode     String
-  productName String?
-
-  // Current position
+  item_name String?
   fromShelf String?
   fromRow   Int?
   fromIndex Int?
-
-  // Target position (for add/swap)
   toShelf String?
   toRow   Int?
   toIndex Int?
-
-  // For swap - second product
-  swapBarcode     String?
-  swapProductName String?
-
+  swap_barcode     String?
+  swap_item_name String?
   status    String   @default("pending") // pending | approved | rejected | completed
   note      String?
   createdAt DateTime @default(now())
@@ -214,7 +207,7 @@ model PogRequest {
   @@index([createdAt])
 }
 
-// เก็บสถานะการอัพเดท shelf ของแต่ละสาขา (สำหรับแจ้งเตือน mobile)
+// สถานะอัพเดท shelf ของแต่ละสาขา
 model ShelfUpdate {
   id          Int      @id @default(autoincrement())
   branch_code String   @unique
@@ -250,7 +243,7 @@ model ShelfChangeLog {
   updateId    String 
   action      String // add | delete | move
   item_code   String
-  productName String?
+  item_name String?
 
   // ตำแหน่งเดิม (สำหรับ delete/move)
   fromRow   Int?
@@ -263,7 +256,6 @@ model ShelfChangeLog {
   createdAt DateTime @default(now())
   createdBy String?
 
-  //  สำหรับ acknowledge ทีละตัว
   acknowledged   Boolean   @default(false)
   acknowledgedAt DateTime?
 

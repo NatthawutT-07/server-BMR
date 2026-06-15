@@ -93,7 +93,7 @@ exports.getShelfChangeLogs = async (req, res) => {
                 updateId: true,
                 action: true,
                 item_code: true,
-                productName: true,
+                item_name: true,
                 fromRow: true,
                 fromIndex: true,
                 toRow: true,
@@ -222,9 +222,9 @@ exports.createSingleChangeLog = async (branch_code, shelf_code, action, items, c
             where: { item_code: { in: codesToLookup } },
             select: { item_code: true, item_name: true, brand_name: true },
         });
-        const productNameMap = new Map();
+        const item_nameMap = new Map();
         products.forEach((p) => {
-            productNameMap.set(p.item_code, p.item_name || p.brand_name || `รหัส ${p.item_code}`);
+            item_nameMap.set(p.item_code, p.item_name || p.brand_name || `รหัส ${p.item_code}`);
         });
 
         const logs = items.map((item) => ({
@@ -233,7 +233,7 @@ exports.createSingleChangeLog = async (branch_code, shelf_code, action, items, c
             updateId,
             action,
             item_code: item.item_code,
-            productName: productNameMap.get(item.item_code) || null,
+            item_name: item_nameMap.get(item.item_code) || null,
             fromRow: action === "delete" ? Number(item.shelf_row_number) : null,
             fromIndex: action === "delete" ? Number(item.shelf_index_number) : null,
             toRow: action === "add" ? Number(item.shelf_row_number) : null,
@@ -278,9 +278,9 @@ exports.createShelfChangeLogs = async (branch_code, shelf_code, oldItems, newIte
             where: { item_code: { in: allCodes } },
             select: { item_code: true, item_name: true, brand_name: true },
         });
-        const productNameMap = new Map();
+        const item_nameMap = new Map();
         products.forEach((p) => {
-            productNameMap.set(p.item_code, p.item_name || p.brand_name || `รหัส ${p.item_code}`);
+            item_nameMap.set(p.item_code, p.item_name || p.brand_name || `รหัส ${p.item_code}`);
         });
 
         // หา DELETE: อยู่ใน old แต่ไม่อยู่ใน new
@@ -292,7 +292,7 @@ exports.createShelfChangeLogs = async (branch_code, shelf_code, oldItems, newIte
                     updateId,
                     action: "delete",
                     item_code: oldItem.item_code,
-                    productName: productNameMap.get(oldItem.item_code) || null,
+                    item_name: item_nameMap.get(oldItem.item_code) || null,
                     fromRow: oldItem.shelf_row_number,
                     fromIndex: oldItem.shelf_index_number,
                     toRow: null,
@@ -311,7 +311,7 @@ exports.createShelfChangeLogs = async (branch_code, shelf_code, oldItems, newIte
                     updateId,
                     action: "add",
                     item_code: newItem.item_code,
-                    productName: productNameMap.get(newItem.item_code) || null,
+                    item_name: item_nameMap.get(newItem.item_code) || null,
                     fromRow: null,
                     fromIndex: null,
                     toRow: newItem.shelf_row_number,
@@ -332,7 +332,7 @@ exports.createShelfChangeLogs = async (branch_code, shelf_code, oldItems, newIte
                         updateId,
                         action: "move",
                         item_code: oldItem.item_code,
-                        productName: productNameMap.get(oldItem.item_code) || null,
+                        item_name: item_nameMap.get(oldItem.item_code) || null,
                         fromRow: oldItem.shelf_row_number,
                         fromIndex: oldItem.shelf_index_number,
                         toRow: newItem.shelf_row_number,
