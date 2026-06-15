@@ -23,8 +23,8 @@ exports.uploadWithdrawXLSX = async (req, res) => {
             return res.status(200).send("No valid withdraw rows found.");
         }
 
-        // ฟิวเตอร์พื้นฐาน (docStatus === 'อนุมัติแล้ว' และ reason !== 'เบิกเพื่อขาย')
-        mapped = mapped.filter(r => r.docStatus === 'อนุมัติแล้ว' && r.reason === 'เบิกหมดอายุ');
+        // ฟิวเตอร์พื้นฐาน (document_status === 'อนุมัติแล้ว' และ reason !== 'เบิกเพื่อขาย')
+        mapped = mapped.filter(r => r.document_status === 'อนุมัติแล้ว' && r.reason === 'เบิกหมดอายุ');
 
         if (mapped.length === 0) {
             finishUploadJob(jobId, "completed");
@@ -39,11 +39,11 @@ exports.uploadWithdrawXLSX = async (req, res) => {
         const duplicates = [];
 
         mapped.forEach((r, index) => {
-            const key = `${r.docNumber}-${r.branch_code}-${r.item_code}`;
+            const key = `${r.document_reference}-${r.branch_code}-${r.item_code}`;
             if (uniqueMap.has(key)) {
                 duplicates.push({
                     index,
-                    docNumber: r.docNumber,
+                    document_reference: r.document_reference,
                     branch_code: r.branch_code,
                     item_code: r.item_code,
                     quantity_withdraw: r.quantity_withdraw,
@@ -59,7 +59,7 @@ exports.uploadWithdrawXLSX = async (req, res) => {
             // console.log(` Found ${duplicates.length} duplicate records in batch:`, duplicates.slice(0, 5));
             // เก็บเฉพาะข้อมูลที่ไม่ซ้ำ (เก็บตัวแรกที่เจอ)
             mapped = mapped.filter((r, index) => {
-                const key = `${r.docNumber}-${r.branch_code}-${r.item_code}`;
+                const key = `${r.document_reference}-${r.branch_code}-${r.item_code}`;
                 return uniqueMap.get(key) === index;
             });
             // console.log(`After deduplication: ${mapped.length} unique records`);
@@ -77,17 +77,17 @@ exports.uploadWithdrawXLSX = async (req, res) => {
 
             const values = chunk.map((r) => {
                 // Fallback for required string columns to prevent Prisma 23502 error
-                const docStatus = r.docStatus || "";
+                const document_status = r.document_status || "";
                 const reason = r.reason || "";
 
-                return Prisma.sql`(${r.item_code}, ${r.branch_code}, ${r.docNumber}, ${r.date}, ${docStatus}, ${reason}, ${r.quantity_withdraw}, ${r.value_withdraw})`;
+                return Prisma.sql`(${r.item_code}, ${r.branch_code}, ${r.document_reference}, ${r.date_withdraw}, ${document_status}, ${reason}, ${r.quantity_withdraw}, ${r.value_withdraw})`;
             });
 
             const sql = Prisma.sql`
                 INSERT INTO "withdraw"
-                ("item_code", "branch_code", "docNumber", "date", "docStatus", "reason", "quantity_withdraw", "value_withdraw")
+                ("item_code", "branch_code", "document_reference", "date_withdraw", "document_status", "reason", "quantity_withdraw", "value_withdraw")
                 VALUES ${Prisma.join(values)}
-                ON CONFLICT ("docNumber", "branch_code", "item_code") 
+                ON CONFLICT ("document_reference", "branch_code", "item_code") 
                 DO NOTHING
             `;
 

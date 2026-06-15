@@ -60,10 +60,10 @@ exports.stockBrandLookup = async (req, res) => {
           "item_code",
           COALESCE(SUM("quantity"), 0)::int AS "quantity_withdraw"
         FROM "withdraw"
-        WHERE "docStatus" = 'อนุมัติแล้ว'
+        WHERE "document_status" = 'อนุมัติแล้ว'
           AND "reason" = 'เบิกหมดอายุ'
-          AND to_date("date", 'DD/MM/YYYY') >= to_date(${startDate}, 'YYYY-MM-DD')
-          AND to_date("date", 'DD/MM/YYYY') <= to_date(${endDate}, 'YYYY-MM-DD')
+          AND to_date("date_withdraw", 'DD/MM/YYYY') >= to_date(${startDate}, 'YYYY-MM-DD')
+          AND to_date("date_withdraw", 'DD/MM/YYYY') <= to_date(${endDate}, 'YYYY-MM-DD')
         GROUP BY "item_code"
       `
     );

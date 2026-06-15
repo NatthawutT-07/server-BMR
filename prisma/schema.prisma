@@ -73,19 +73,19 @@ model BranchDataSync {
 }
 
 model withdraw {
-  id                Int    @id @default(autoincrement())
-  item_code         String
-  branch_code       String
-  docNumber         String
-  date              String
-  docStatus         String
-  reason            String
-  quantity_withdraw Int
-  value_withdraw             Float
+  id                 Int    @id @default(autoincrement())
+  item_code          String
+  branch_code        String
+  document_reference String
+  date_withdraw      String
+  document_status    String
+  reason             String
+  quantity_withdraw  Int
+  value_withdraw     Float
 
-  @@unique([docNumber, branch_code, item_code, quantity_withdraw, value_withdraw])
+  @@unique([document_reference, branch_code, item_code, quantity_withdraw, value_withdraw])
   @@index([branch_code, item_code])
-  @@index([branch_code, docStatus, item_code])
+  @@index([branch_code, document_status, item_code])
 }
 
 model ListOfItemHold {
@@ -132,7 +132,7 @@ model Sku {
   @@unique([branch_code, item_code])
   @@index([branch_code, shelfCode, rowNo, index])
   @@index([branch_code, shelfCode, index])
-  @@index([branch_code, item_code]) 
+  @@index([branch_code, item_code])
 }
 
 model Branch {
@@ -143,20 +143,20 @@ model Branch {
 }
 
 model Bill {
-  id                   Int      @id @default(autoincrement())
-  branchId             Int
-  date                 DateTime
-  bill_number          String   @unique
-  sales_channel        String?
-  doc_type             String
-  pos_type             String
-  reference_doc        String?
-  value_excl_tax       Float
-  vat                  Float
-  end_bill_discount    Float
+  id                                   Int      @id @default(autoincrement())
+  branchId                             Int
+  date                                 DateTime
+  bill_number                          String   @unique
+  sales_channel                        String?
+  doc_type                             String
+  pos_type                             String
+  reference_doc                        String?
+  value_excl_tax                       Float
+  vat                                  Float
+  end_bill_discount                    Float
   total_sales_end_discount_no_rounding Float
-  rounding             Float
-  total_sales_Finally          Float
+  rounding                             Float
+  total_sales_Finally                  Float
 
   branch    Branch     @relation(fields: [branchId], references: [id])
   billItems BillItem[]
@@ -170,16 +170,16 @@ model Bill {
 }
 
 model BillItem {
-  id                 Int     @id @default(autoincrement())
-  billId             Int
-  item_code          String
-  quantity_sale_bill Float
-  unit               String?
-  price_per_unit     Float
-  sales_amount       Float
-  discount           Float
-  total_sales_rounding_no_end_discount          Float
-  bill               Bill    @relation(fields: [billId], references: [id])
+  id                                   Int     @id @default(autoincrement())
+  billId                               Int
+  item_code                            String
+  quantity_sale_bill                   Float
+  unit                                 String?
+  price_per_unit                       Float
+  sales_amount                         Float
+  discount                             Float
+  total_sales_rounding_no_end_discount Float
+  bill                                 Bill    @relation(fields: [billId], references: [id])
 
   @@index([item_code])
   @@index([billId])
@@ -234,7 +234,7 @@ model Gourmet {
   branch_code           String
   item_code             String
   quantity_sale_gourmet Int
-  sales_amount_gourmet                 Float
+  sales_amount_gourmet  Float
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

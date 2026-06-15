@@ -267,8 +267,8 @@ exports.getSkuData = async (branch_code) => {
         LEFT JOIN (
             SELECT "branch_code", "item_code", SUM("quantity_withdraw")::int AS "quantity_withdraw", SUM("value_withdraw"::numeric)::float8 AS "value_withdraw"
             FROM "withdraw"
-            WHERE "branch_code" = ${branch_code} AND "docStatus" = 'อนุมัติแล้ว' AND "reason" != 'เบิกเพื่อขาย'
-              AND to_date("date", 'DD/MM/YYYY') >= to_date(${startDateStr}, 'YYYY-MM-DD') AND to_date("date", 'DD/MM/YYYY') <= to_date(${endDateStr}, 'YYYY-MM-DD')
+            WHERE "branch_code" = ${branch_code} AND "document_status" = 'อนุมัติแล้ว' AND "reason" != 'เบิกเพื่อขาย'
+              AND to_date("date_withdraw", 'DD/MM/YYYY') >= to_date(${startDateStr}, 'YYYY-MM-DD') AND to_date("date_withdraw", 'DD/MM/YYYY') <= to_date(${endDateStr}, 'YYYY-MM-DD')
             GROUP BY "branch_code", "item_code"
         ) wd ON s."branch_code" = wd."branch_code" AND s."item_code" = wd."item_code"
         LEFT JOIN (
@@ -303,10 +303,10 @@ exports.getDashboardSummary = async () => {
       WITH sku_rows AS (SELECT "branch_code", "shelfCode", "item_code" FROM "Sku"),
       stock_map AS (SELECT "branch_code", "item_code", SUM("quantity_stock")::float8 AS stock_qty FROM "Stock" GROUP BY "branch_code", "item_code"),
       withdraw_map AS (
-          SELECT "branch_code", "item_code", SUM("value")::float8 AS withdraw_value
+          SELECT "branch_code", "item_code", SUM("value_withdraw")::float8 AS withdraw_value
           FROM "withdraw"
-          WHERE "docStatus" = 'อนุมัติแล้ว' AND "reason" != 'เบิกเพื่อขาย'
-            AND to_date("date", 'DD/MM/YYYY') >= to_date(${startDateStr}, 'YYYY-MM-DD') AND to_date("date", 'DD/MM/YYYY') <= to_date(${endDateStr}, 'YYYY-MM-DD')
+          WHERE "document_status" = 'อนุมัติแล้ว' AND "reason" != 'เบิกเพื่อขาย'
+            AND to_date("date_withdraw", 'DD/MM/YYYY') >= to_date(${startDateStr}, 'YYYY-MM-DD') AND to_date("date_withdraw", 'DD/MM/YYYY') <= to_date(${endDateStr}, 'YYYY-MM-DD')
           GROUP BY "branch_code", "item_code"
       ),
       sales_map AS (
@@ -376,10 +376,10 @@ exports.getShelfSales = async (branch_code) => {
       shelf_names AS (SELECT "branch_code", "shelfCode", "fullName" FROM "Template" WHERE "branch_code" = ${branch_code}),
       stock_map AS (SELECT "branch_code", "item_code", SUM("quantity_stock")::float8 AS stock_qty FROM "Stock" WHERE "branch_code" = ${branch_code} GROUP BY "branch_code", "item_code"),
       withdraw_map AS (
-          SELECT "branch_code", "item_code", SUM("value")::float8 AS withdraw_value
+          SELECT "branch_code", "item_code", SUM("value_withdraw")::float8 AS withdraw_value
           FROM "withdraw"
-          WHERE "docStatus" = 'อนุมัติแล้ว' AND "reason" != 'เบิกเพื่อขาย' AND "branch_code" = ${branch_code}
-            AND to_date("date", 'DD/MM/YYYY') >= to_date(${startDateStr}, 'YYYY-MM-DD') AND to_date("date", 'DD/MM/YYYY') <= to_date(${endDateStr}, 'YYYY-MM-DD')
+          WHERE "document_status" = 'อนุมัติแล้ว' AND "reason" != 'เบิกเพื่อขาย' AND "branch_code" = ${branch_code}
+            AND to_date("date_withdraw", 'DD/MM/YYYY') >= to_date(${startDateStr}, 'YYYY-MM-DD') AND to_date("date_withdraw", 'DD/MM/YYYY') <= to_date(${endDateStr}, 'YYYY-MM-DD')
           GROUP BY "branch_code", "item_code"
       ),
       sales_map AS (
