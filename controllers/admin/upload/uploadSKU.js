@@ -18,17 +18,17 @@ exports.uploadSKU_XLSX = async (req, res) => {
         setUploadJob(jobId, 15, "validating data");
 
         // 1) Clean / Validate แถว (ต้องมีทุก field)
-        const missingRequired = rows.some(r => !r.branch_code || !r.shelfCode || r.rowNo == null || r.item_code == null || r.index == null);
+        const missingRequired = rows.some(r => !r.branch_code || !r.shelf_code || r.shelf_row_number == null || r.item_code == null || r.shelf_index_number == null);
         if (missingRequired) {
-            throw new Error("พบบางแถวขาดข้อมูลที่จำเป็น (branch_code, shelfCode, rowNo, item_code, index)");
+            throw new Error("พบบางแถวขาดข้อมูลที่จำเป็น (branch_code, shelf_code, shelf_row_number, item_code, index)");
         }
 
         const skuData = rows.map(row => ({
             branch_code: String(row.branch_code).trim(),
-            shelfCode: String(row.shelfCode).trim(),
-            rowNo: parseInt(row.rowNo, 10),
+            shelf_code: String(row.shelf_code).trim(),
+            shelf_row_number: parseInt(row.shelf_row_number, 10),
             item_code: String(row.item_code).trim().padStart(5, "0"),
-            index: parseInt(row.index, 10),
+            shelf_index_number: parseInt(row.shelf_index_number, 10),
         }));
 
         // 2) ตรวจสอบ Duplicate Keys ในไฟล์ (branch_code + item_code ซ้ำกันในไฟล์)
@@ -61,9 +61,9 @@ exports.uploadSKU_XLSX = async (req, res) => {
                             }
                         },
                         update: { 
-                            shelfCode: item.shelfCode,
-                            rowNo: item.rowNo,
-                            index: item.index 
+                            shelf_code: item.shelf_code,
+                            shelf_row_number: item.shelf_row_number,
+                            shelf_index_number: item.shelf_index_number 
                         },
                         create: item
                     })

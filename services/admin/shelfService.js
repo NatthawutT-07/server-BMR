@@ -74,18 +74,18 @@ exports.getMasterItem = async (qRaw) => {
 
 exports.createItems = async (items, userName) => {
   let key = null;
-  const { branch_code, shelfCode } = items[0];
+  const { branch_code, shelf_code } = items[0];
   
   try {
-    key = lockKey(branch_code, shelfCode);
+    key = lockKey(branch_code, shelf_code);
     await acquireLock(prisma, key);
 
     const itemsToInsert = items.map((item) => ({
       branch_code: item.branch_code,
       item_code: item.item_code,
-      shelfCode: item.shelfCode,
-      rowNo: Number(item.rowNo),
-      index: Number(item.index),
+      shelf_code: item.shelf_code,
+      shelf_row_number: Number(item.shelf_row_number),
+      shelf_index_number: Number(item.shelf_index_number),
     }));
 
     await prisma.sku.createMany({
@@ -93,7 +93,7 @@ exports.createItems = async (items, userName) => {
       skipDuplicates: true,
     });
 
-    await createSingleChangeLog(branch_code, shelfCode, "add", itemsToInsert, userName);
+    await createSingleChangeLog(branch_code, shelf_code, "add", itemsToInsert, userName);
     await markShelfUpdated(branch_code, userName);
 
     return true;
@@ -110,16 +110,16 @@ exports.createItems = async (items, userName) => {
 
 exports.deleteItem = async (deleteData, userName) => {
   let key = null;
-  const { id, branch_code, shelfCode, rowNo, item_code, index } = deleteData;
+  const { id, branch_code, shelf_code, shelf_row_number, item_code, shelf_index_number } = deleteData;
 
   let bc = branch_code;
-  let sc = shelfCode;
+  let sc = shelf_code;
 
   if ((bc == null || sc == null) && id != null) {
     const found = await prisma.sku.findUnique({ where: { id: Number(id) } });
     if (!found) throw new Error("Item not found");
     bc = found.branch_code;
-    sc = found.shelfCode;
+    sc = found.shelf_code;
   }
 
   try {
@@ -132,9 +132,9 @@ exports.deleteItem = async (deleteData, userName) => {
     } else {
       deletedItem = {
         branch_code: bc,
-        shelfCode: sc,
-        rowNo: Number(rowNo),
-        index: Number(index),
+        shelf_code: sc,
+        shelf_row_number: Number(shelf_row_number),
+        shelf_index_number: Number(index),
         item_code: item_code,
       };
     }
@@ -145,24 +145,24 @@ exports.deleteItem = async (deleteData, userName) => {
       await prisma.sku.deleteMany({
         where: {
           branch_code: bc,
-          shelfCode: sc,
-          rowNo: Number(rowNo),
+          shelf_code: sc,
+          shelf_row_number: Number(shelf_row_number),
           item_code: item_code,
-          index: Number(index),
+          shelf_index_number: Number(index),
         },
       });
     }
 
     const remainingItems = await prisma.sku.findMany({
-      where: { branch_code: bc, shelfCode: sc, rowNo: Number(rowNo) },
-      orderBy: { index: "asc" },
+      where: { branch_code: bc, shelf_code: sc, shelf_row_number: Number(shelf_row_number) },
+      orderBy: { shelf_index_number: "asc" },
     });
 
     if (remainingItems.length > 0) {
       const updateOps = remainingItems.map((item, i) =>
         prisma.sku.update({
           where: { id: item.id },
-          data: { index: i + 1 },
+          data: { shelf_index_number: i + 1 },
         })
       );
       await prisma.$transaction(updateOps);
@@ -189,36 +189,36 @@ exports.deleteItem = async (deleteData, userName) => {
 exports.updateItems = async (items, userName) => {
   let key = null;
   const branch_code = items[0].branch_code;
-  const shelfCode = items[0].shelfCode;
+  const shelf_code = items[0].shelf_code;
 
   try {
-    key = lockKey(branch_code, shelfCode);
+    key = lockKey(branch_code, shelf_code);
     await acquireLock(prisma, key);
 
     const oldItems = await prisma.sku.findMany({
-      where: { branch_code, shelfCode },
-      select: { item_code: true, rowNo: true, index: true },
+      where: { branch_code, shelf_code },
+      select: { item_code: true, shelf_row_number: true, shelf_index_number: true },
     });
 
     const itemsToInsert = items.map((item) => ({
       branch_code: item.branch_code,
-      shelfCode: item.shelfCode,
-      rowNo: Number(item.rowNo),
-      index: Number(item.index),
+      shelf_code: item.shelf_code,
+      shelf_row_number: Number(item.shelf_row_number),
+      shelf_index_number: Number(item.shelf_index_number),
       item_code: item.item_code,
     }));
 
     await prisma.$transaction([
-      prisma.sku.deleteMany({ where: { branch_code, shelfCode } }),
+      prisma.sku.deleteMany({ where: { branch_code, shelf_code } }),
       prisma.sku.createMany({ data: itemsToInsert }),
     ]);
 
     const newItems = itemsToInsert.map((i) => ({
       item_code: i.item_code,
-      rowNo: i.rowNo,
-      index: i.index,
+      shelf_row_number: i.shelf_row_number,
+      shelf_index_number: i.shelf_index_number,
     }));
-    await createShelfChangeLogs(branch_code, shelfCode, oldItems, newItems, userName);
+    await createShelfChangeLogs(branch_code, shelf_code, oldItems, newItems, userName);
 
     await markShelfUpdated(branch_code, userName);
 
@@ -245,7 +245,7 @@ exports.getSkuData = async (branch_code) => {
 
   const rawResult = await prisma.$queryRaw`
         SELECT 
-            s."branch_code", s."item_code", s."shelfCode", s."rowNo", s."index",
+            s."branch_code", s."item_code", s."shelf_code", s."shelf_row_number", s."shelf_index_number",
             p."item_name", p."brand_name", p."purchase_price", p."selling_price_vat", p."shelf_life_days", p."barcode",
             p."group_name",
             im."min_stock", im."max_stock", im."pack_order",
@@ -290,7 +290,7 @@ exports.getSkuData = async (branch_code) => {
         LEFT JOIN "ListOfItemHold" p ON s."item_code" = p."item_code"
         LEFT JOIN "ItemMinMax" im ON s."branch_code" = im."branch_code" AND s."item_code" = im."item_code"
         WHERE s."branch_code" = ${branch_code}
-        ORDER BY s."shelfCode", s."index", s."rowNo"
+        ORDER BY s."shelf_code", s."shelf_index_number", s."shelf_row_number"
     `;
 
   return { result: rawResult, startUtc, endUtc };
@@ -300,7 +300,7 @@ exports.getDashboardSummary = async () => {
   const { startUtc, endUtc, startDateStr, endDateStr } = get90DaysRangeUtc();
 
   const rows = await prisma.$queryRaw`
-      WITH sku_rows AS (SELECT "branch_code", "shelfCode", "item_code" FROM "Sku"),
+      WITH sku_rows AS (SELECT "branch_code", "shelf_code", "item_code" FROM "Sku"),
       stock_map AS (SELECT "branch_code", "item_code", SUM("quantity_stock")::float8 AS stock_qty FROM "Stock" GROUP BY "branch_code", "item_code"),
       withdraw_map AS (
           SELECT "branch_code", "item_code", SUM("value_withdraw")::float8 AS withdraw_value
@@ -318,7 +318,7 @@ exports.getDashboardSummary = async () => {
           GROUP BY br."branch_code", bi."item_code"
       ),
       branch_sums AS (
-          SELECT sr."branch_code" AS branch_code, COUNT(DISTINCT sr."shelfCode")::int AS shelf_count, COUNT(DISTINCT sr."item_code")::int AS product_count,
+          SELECT sr."branch_code" AS branch_code, COUNT(DISTINCT sr."shelf_code")::int AS shelf_count, COUNT(DISTINCT sr."item_code")::int AS product_count,
               SUM(CASE WHEN COALESCE(sm.stock_qty, 0) > 0 THEN COALESCE(sm.stock_qty, 0) * COALESCE(p."purchase_price", 0) ELSE 0 END)::float8 AS stock_cost,
               SUM(COALESCE(wm.withdraw_value, 0))::float8 AS withdraw_value, SUM(COALESCE(sa.sales_total, 0))::float8 AS sales_total
           FROM sku_rows sr
@@ -372,8 +372,8 @@ exports.getShelfSales = async (branch_code) => {
   const { startUtc, endUtc, startDateStr, endDateStr } = get90DaysRangeUtc();
 
   const rows = await prisma.$queryRaw`
-      WITH sku_rows AS (SELECT "branch_code", "shelfCode", "item_code" FROM "Sku" WHERE "branch_code" = ${branch_code}),
-      shelf_names AS (SELECT "branch_code", "shelfCode", "fullName" FROM "Template" WHERE "branch_code" = ${branch_code}),
+      WITH sku_rows AS (SELECT "branch_code", "shelf_code", "item_code" FROM "Sku" WHERE "branch_code" = ${branch_code}),
+      shelf_names AS (SELECT "branch_code", "shelf_code", "shelf_name" FROM "Template" WHERE "branch_code" = ${branch_code}),
       stock_map AS (SELECT "branch_code", "item_code", SUM("quantity_stock")::float8 AS stock_qty FROM "Stock" WHERE "branch_code" = ${branch_code} GROUP BY "branch_code", "item_code"),
       withdraw_map AS (
           SELECT "branch_code", "item_code", SUM("value_withdraw")::float8 AS withdraw_value
@@ -389,7 +389,7 @@ exports.getShelfSales = async (branch_code) => {
           GROUP BY br."branch_code", bi."item_code"
       ),
       shelf_sums AS (
-          SELECT sr."branch_code" AS branch_code, sr."shelfCode" AS shelf_code, COUNT(DISTINCT sr."item_code")::int AS sku_count,
+          SELECT sr."branch_code" AS branch_code, sr."shelf_code" AS shelf_code, COUNT(DISTINCT sr."item_code")::int AS sku_count,
               SUM(CASE WHEN COALESCE(sm.stock_qty, 0) > 0 THEN COALESCE(sm.stock_qty, 0) * COALESCE(p."purchase_price", 0) ELSE 0 END)::float8 AS stock_cost,
               SUM(COALESCE(wm.withdraw_value, 0))::float8 AS withdraw_value, SUM(COALESCE(sa.sales_total, 0))::float8 AS sales_total
           FROM sku_rows sr
@@ -397,12 +397,12 @@ exports.getShelfSales = async (branch_code) => {
           LEFT JOIN "ListOfItemHold" p ON p."item_code" = sr."item_code"
           LEFT JOIN withdraw_map wm ON wm."branch_code" = sr."branch_code" AND wm."item_code" = sr."item_code"
           LEFT JOIN sales_map sa ON sa."branch_code" = sr."branch_code" AND sa."item_code" = sr."item_code"
-          GROUP BY sr."branch_code", sr."shelfCode"
+          GROUP BY sr."branch_code", sr."shelf_code"
       )
-      SELECT ss.branch_code AS "branch_code", ss.shelf_code AS "shelfCode", sn."fullName" AS "shelfName",
+      SELECT ss.branch_code AS "branch_code", ss.shelf_code AS "shelf_code", sn."shelf_name" AS "shelfName",
           COALESCE(ss.sales_total, 0)::float8 AS "salesTotal", COALESCE(ss.withdraw_value, 0)::float8 AS "value_withdraw",
           COALESCE(ss.sku_count, 0)::int AS "skuCount", COALESCE(ss.stock_cost, 0)::float8 AS "stockCost"
-      FROM shelf_sums ss LEFT JOIN shelf_names sn ON sn."branch_code" = ss.branch_code AND sn."shelfCode" = ss.shelf_code
+      FROM shelf_sums ss LEFT JOIN shelf_names sn ON sn."branch_code" = ss.branch_code AND sn."shelf_code" = ss.shelf_code
       ORDER BY ss.shelf_code
   `;
 

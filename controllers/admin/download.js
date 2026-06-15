@@ -10,14 +10,14 @@ exports.downloadTemplate = async (req, res) => {
             where: whereClause,
             select: {
                 branch_code: true,
-                shelfCode: true,
-                fullName: true,
-                rowQty: true,
+                shelf_code: true,
+                shelf_name: true,
+                shelf_total_row: true,
                 type: true
             },
             orderBy: [
                 { branch_code: 'asc' },
-                { shelfCode: 'asc' }
+                { shelf_code: 'asc' }
             ],
         });
 
@@ -37,16 +37,16 @@ exports.downloadSKU = async (req, res) => {
             where: whereClause,
             select: {
                 branch_code: true,
-                shelfCode: true,
-                rowNo: true,
+                shelf_code: true,
+                shelf_row_number: true,
                 item_code: true,
-                index: true
+                shelf_index_number: true
             },
             orderBy: [
                 { branch_code: 'asc' },
-                { shelfCode: 'asc' },
-                { rowNo: 'asc' },
-                { index: 'asc' }
+                { shelf_code: 'asc' },
+                { shelf_row_number: 'asc' },
+                { shelf_index_number: 'asc' }
             ],
         });
 

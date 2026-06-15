@@ -51,9 +51,9 @@ exports.checkProductExists = async (req, res) => {
                 item_code: product.item_code
             },
             select: {
-                shelfCode: true,
-                rowNo: true,
-                index: true,
+                shelf_code: true,
+                shelf_row_number: true,
+                shelf_index_number: true,
             }
         });
 
@@ -70,11 +70,11 @@ exports.checkProductExists = async (req, res) => {
                     price: product.selling_price_vat,
                 },
                 location: {
-                    shelfCode: existingItem.shelfCode,
-                    rowNo: existingItem.rowNo,
-                    index: existingItem.index,
+                    shelf_code: existingItem.shelf_code,
+                    shelf_row_number: existingItem.shelf_row_number,
+                    shelf_index_number: existingItem.shelf_index_number,
                 },
-                msg: `สินค้านี้มีอยู่แล้วที่ ${existingItem.shelfCode} / ชั้น ${existingItem.rowNo}`
+                msg: `สินค้านี้มีอยู่แล้วที่ ${existingItem.shelf_code} / ชั้น ${existingItem.shelf_row_number}`
             });
         }
 
@@ -120,18 +120,18 @@ exports.getShelvesForRegister = async (req, res) => {
         // ดึง shelf templates ของสาขา
         const templates = await prisma.Template.findMany({
             where: { branch_code },
-            orderBy: { shelfCode: "asc" },
+            orderBy: { shelf_code: "asc" },
             select: {
-                shelfCode: true,
-                fullName: true,
-                rowQty: true,
+                shelf_code: true,
+                shelf_name: true,
+                shelf_total_row: true,
             }
         });
 
         const shelves = templates.map(t => ({
-            shelfCode: t.shelfCode,
-            fullName: t.fullName || t.shelfCode,
-            rowQty: t.rowQty || 1,
+            shelf_code: t.shelf_code,
+            shelf_name: t.shelf_name || t.shelf_code,
+            shelf_total_row: t.shelf_total_row || 1,
         }));
 
         return res.json({
@@ -152,12 +152,12 @@ exports.getShelvesForRegister = async (req, res) => {
 // Get Next Index (หา index ถัดไปของ row)
 // ======================================================
 exports.getNextIndex = async (req, res) => {
-    const { branch_code, shelfCode, rowNo } = req.query;
+    const { branch_code, shelf_code, shelf_row_number } = req.query;
 
-    if (!branch_code || !shelfCode || !rowNo) {
+    if (!branch_code || !shelf_code || !shelf_row_number) {
         return res.status(400).json({
             ok: false,
-            msg: "branch_code, shelfCode, rowNo จำเป็นต้องระบุ"
+            msg: "branch_code, shelf_code, shelf_row_number จำเป็นต้องระบุ"
         });
     }
 
@@ -165,18 +165,18 @@ exports.getNextIndex = async (req, res) => {
         const maxIndex = await prisma.sku.aggregate({
             where: {
                 branch_code,
-                shelfCode,
-                rowNo: Number(rowNo)
+                shelf_code,
+                shelf_row_number: Number(shelf_row_number)
             },
-            _max: { index: true }
+            _max: { shelf_index_number: true }
         });
 
-        const nextIndex = (maxIndex._max.index || 0) + 1;
+        const nextIndex = (maxIndex._max.shelf_index_number || 0) + 1;
 
         return res.json({
             ok: true,
             nextIndex,
-            currentCount: maxIndex._max.index || 0
+            currentCount: maxIndex._max.shelf_index_number || 0
         });
 
     } catch (error) {
@@ -192,12 +192,12 @@ exports.getNextIndex = async (req, res) => {
 // Register Product (บันทึกสินค้าลง DB โดยตรง)
 // ======================================================
 exports.registerProduct = async (req, res) => {
-    const { branch_code, barcode, shelfCode, rowNo } = req.body;
+    const { branch_code, barcode, shelf_code, shelf_row_number } = req.body;
 
-    if (!branch_code || !barcode || !shelfCode || !rowNo) {
+    if (!branch_code || !barcode || !shelf_code || !shelf_row_number) {
         return res.status(400).json({
             ok: false,
-            msg: "กรุณาระบุข้อมูลให้ครบ (branch_code, barcode, shelfCode, rowNo)"
+            msg: "กรุณาระบุข้อมูลให้ครบ (branch_code, barcode, shelf_code, shelf_row_number)"
         });
     }
 
@@ -229,11 +229,11 @@ exports.registerProduct = async (req, res) => {
         if (existingItem) {
             return res.status(400).json({
                 ok: false,
-                msg: `สินค้านี้มีอยู่แล้วที่ ${existingItem.shelfCode} / ชั้น ${existingItem.rowNo}`,
+                msg: `สินค้านี้มีอยู่แล้วที่ ${existingItem.shelf_code} / ชั้น ${existingItem.shelf_row_number}`,
                 location: {
-                    shelfCode: existingItem.shelfCode,
-                    rowNo: existingItem.rowNo,
-                    index: existingItem.index,
+                    shelf_code: existingItem.shelf_code,
+                    shelf_row_number: existingItem.shelf_row_number,
+                    shelf_index_number: existingItem.shelf_index_number,
                 }
             });
         }
@@ -242,26 +242,26 @@ exports.registerProduct = async (req, res) => {
         const maxIndex = await prisma.sku.aggregate({
             where: {
                 branch_code,
-                shelfCode,
-                rowNo: Number(rowNo)
+                shelf_code,
+                shelf_row_number: Number(shelf_row_number)
             },
-            _max: { index: true }
+            _max: { shelf_index_number: true }
         });
 
-        const nextIndex = (maxIndex._max.index || 0) + 1;
+        const nextIndex = (maxIndex._max.shelf_index_number || 0) + 1;
 
         // 4. บันทึกลง SKU table
         const newSku = await prisma.sku.create({
             data: {
                 branch_code,
-                shelfCode,
-                rowNo: Number(rowNo),
-                index: nextIndex,
+                shelf_code,
+                shelf_row_number: Number(shelf_row_number),
+                shelf_index_number: nextIndex,
                 item_code: product.item_code,
             }
         });
 
-        console.log(`Registered: ${product.item_name} → ${shelfCode}/${rowNo}/index:${nextIndex}`);
+        console.log(`Registered: ${product.item_name} → ${shelf_code}/${shelf_row_number}/shelf_index_number:${nextIndex}`);
 
         return res.json({
             ok: true,
@@ -270,9 +270,9 @@ exports.registerProduct = async (req, res) => {
                 id: newSku.id,
                 item_code: product.item_code,
                 item_name: product.item_name,
-                shelfCode,
-                rowNo: Number(rowNo),
-                index: nextIndex,
+                shelf_code,
+                shelf_row_number: Number(shelf_row_number),
+                shelf_index_number: nextIndex,
             }
         });
 

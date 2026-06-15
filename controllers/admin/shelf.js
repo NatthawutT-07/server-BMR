@@ -41,16 +41,16 @@ exports.itemCreate = async (req, res) => {
 
 exports.itemDelete = async (req, res) => {
   try {
-    const { id, branch_code, shelfCode, rowNo, item_code, index } = req.body;
+    const { id, branch_code, shelf_code, shelf_row_number, item_code, shelf_index_number } = req.body;
 
     if (
       (id == null || id === "") &&
-      (!branch_code || !shelfCode || rowNo == null || item_code == null || index == null)
+      (!branch_code || !shelf_code || shelf_row_number == null || item_code == null || index == null)
     ) {
       return response.error(res, "Missing delete identifiers", "BAD_REQUEST", 400);
     }
 
-    await shelfService.deleteItem({ id, branch_code, shelfCode, rowNo, item_code, index }, req.user?.name);
+    await shelfService.deleteItem({ id, branch_code, shelf_code, shelf_row_number, item_code, shelf_index_number }, req.user?.name);
 
     return response.success(res, null, null, "Deleted and rearranged successfully");
   } catch (error) {
@@ -108,9 +108,9 @@ exports.sku = async (req, res) => {
       return {
         branch_code: r.branch_code,
         item_code: r.item_code !== null && r.item_code !== undefined ? r.item_code : null,
-        shelfCode: r.shelfCode,
-        rowNo: r.rowNo,
-        index: r.index,
+        shelf_code: r.shelf_code,
+        shelf_row_number: r.shelf_row_number,
+        shelf_index_number: r.shelf_index_number,
         item_name: r.item_name ?? null,
         brand_name: r.brand_name ?? null,
         shelf_life_days: r.shelf_life_days ?? null,
@@ -169,7 +169,7 @@ exports.getShelfDashboardShelfSales = async (req, res) => {
     const shelfSalesRows = await shelfService.getShelfSales(branch_code);
 
     const shelves = shelfSalesRows.map((row) => ({
-      shelfCode: row.shelfCode,
+      shelf_code: row.shelf_code,
       shelfName: row.shelfName || null,
       salesTotal: Number(row.salesTotal || 0),
       value_withdraw: Number(row.value_withdraw || 0),

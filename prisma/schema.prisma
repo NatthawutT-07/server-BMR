@@ -89,47 +89,46 @@ model withdraw {
 }
 
 model ListOfItemHold {
-  id                  Int     @id @default(autoincrement())
-  item_code           String  @unique
-  item_name         String?
-  group_name           String?
-  item_status              String?
-  barcode             String?
-  brand_name           String?
-  is_consignment         String?
-  purchase_price Float
-  selling_price_vat    Int
+  id                    Int     @id @default(autoincrement())
+  item_code             String  @unique
+  item_name             String?
+  group_name            String?
+  item_status           String?
+  barcode               String?
+  brand_name            String?
+  is_consignment        String?
+  purchase_price        Float
+  selling_price_vat     Int
   preferred_vendor_code String?
   preferred_vendor_name String?
-  gross_profit_pct                  String?
-  shelf_life_days           String?
+  gross_profit_pct      String?
+  shelf_life_days       String?
 
   @@index([item_code])
 }
 
 model Template {
-  id          Int     @id @default(autoincrement())
-  branch_code String
-  shelfCode   String
-  fullName    String?
-  rowQty      Int
-  type        String?
+  id              Int     @id @default(autoincrement())
+  branch_code     String
+  shelf_code      String
+  shelf_name      String?
+  shelf_total_row Int
+  type            String?
 
-  @@unique([branch_code, shelfCode])
-  @@index([branch_code, shelfCode, fullName])
+  @@unique([branch_code, shelf_code])
+  @@index([branch_code, shelf_code, shelf_name])
 }
 
 model Sku {
-  id          Int    @id @default(autoincrement())
-  branch_code String
-  shelfCode   String
-  rowNo       Int
-  item_code   String
-  index       Int
+  id                 Int     @id @default(autoincrement())
+  branch_code        String
+  shelf_code         String
+  shelf_row_number   Int
+  item_code          String
+  shelf_index_number Int
 
-  @@unique([branch_code, item_code])
-  @@index([branch_code, shelfCode, rowNo, index])
-  @@index([branch_code, shelfCode, index])
+  @@index([branch_code, shelf_code, shelf_row_number, shelf_index_number])
+  @@index([branch_code, shelf_code, shelf_index_number])
   @@index([branch_code, item_code])
 }
 
@@ -243,12 +242,12 @@ model Gourmet {
   @@index([item_code])
 }
 
-// เก็บ log รายละเอียดการเปลี่ยนแปลง shelf (add/delete/move)
+// log การเปลี่ยนแปลง shelf (add/delete/move)
 model ShelfChangeLog {
   id          Int     @id @default(autoincrement())
   branch_code String
-  shelfCode   String
-  updateId    String // UUID group บันทึกพร้อมกัน
+  shelf_code  String
+  updateId    String 
   action      String // add | delete | move
   item_code   String
   productName String?
@@ -268,7 +267,7 @@ model ShelfChangeLog {
   acknowledged   Boolean   @default(false)
   acknowledgedAt DateTime?
 
-  @@index([branch_code, shelfCode])
+  @@index([branch_code, shelf_code])
   @@index([branch_code, createdAt])
   @@index([branch_code, acknowledged])
   @@index([updateId])

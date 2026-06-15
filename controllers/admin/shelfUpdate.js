@@ -86,10 +86,10 @@ exports.getShelfChangeLogs = async (req, res) => {
         // ดึง logs ที่ยังไม่รับทราบ (หรือทั้งหมดถ้า showAll)
         const logs = await prisma.shelfChangeLog.findMany({
             where: whereClause,
-            orderBy: [{ createdAt: "desc" }, { shelfCode: "asc" }],
+            orderBy: [{ createdAt: "desc" }, { shelf_code: "asc" }],
             select: {
                 id: true,
-                shelfCode: true,
+                shelf_code: true,
                 updateId: true,
                 action: true,
                 item_code: true,
@@ -211,7 +211,7 @@ exports.getAllBranchAckStatus = async (req, res) => {
 };
 
 // Helper: สร้าง single change log สำหรับ itemCreate/itemDelete
-exports.createSingleChangeLog = async (branch_code, shelfCode, action, items, createdBy = null) => {
+exports.createSingleChangeLog = async (branch_code, shelf_code, action, items, createdBy = null) => {
     try {
         const { v4: uuidv4 } = require("uuid");
         const updateId = uuidv4();
@@ -229,15 +229,15 @@ exports.createSingleChangeLog = async (branch_code, shelfCode, action, items, cr
 
         const logs = items.map((item) => ({
             branch_code,
-            shelfCode: item.shelfCode || shelfCode,
+            shelf_code: item.shelf_code || shelf_code,
             updateId,
             action,
             item_code: item.item_code,
             productName: productNameMap.get(item.item_code) || null,
-            fromRow: action === "delete" ? Number(item.rowNo) : null,
-            fromIndex: action === "delete" ? Number(item.index) : null,
-            toRow: action === "add" ? Number(item.rowNo) : null,
-            toIndex: action === "add" ? Number(item.index) : null,
+            fromRow: action === "delete" ? Number(item.shelf_row_number) : null,
+            fromIndex: action === "delete" ? Number(item.shelf_index_number) : null,
+            toRow: action === "add" ? Number(item.shelf_row_number) : null,
+            toIndex: action === "add" ? Number(item.shelf_index_number) : null,
             createdBy,
         }));
 
@@ -253,7 +253,7 @@ exports.createSingleChangeLog = async (branch_code, shelfCode, action, items, cr
 };
 
 // Helper: สร้าง change logs จากการเปรียบเทียบ old vs new items
-exports.createShelfChangeLogs = async (branch_code, shelfCode, oldItems, newItems, createdBy = null) => {
+exports.createShelfChangeLogs = async (branch_code, shelf_code, oldItems, newItems, createdBy = null) => {
     try {
         const { v4: uuidv4 } = require("uuid");
         const updateId = uuidv4();
@@ -288,13 +288,13 @@ exports.createShelfChangeLogs = async (branch_code, shelfCode, oldItems, newItem
             if (!newMap.has(key)) {
                 logs.push({
                     branch_code,
-                    shelfCode,
+                    shelf_code,
                     updateId,
                     action: "delete",
                     item_code: oldItem.item_code,
                     productName: productNameMap.get(oldItem.item_code) || null,
-                    fromRow: oldItem.rowNo,
-                    fromIndex: oldItem.index,
+                    fromRow: oldItem.shelf_row_number,
+                    fromIndex: oldItem.shelf_index_number,
                     toRow: null,
                     toIndex: null,
                     createdBy,
@@ -307,15 +307,15 @@ exports.createShelfChangeLogs = async (branch_code, shelfCode, oldItems, newItem
             if (!oldMap.has(key)) {
                 logs.push({
                     branch_code,
-                    shelfCode,
+                    shelf_code,
                     updateId,
                     action: "add",
                     item_code: newItem.item_code,
                     productName: productNameMap.get(newItem.item_code) || null,
                     fromRow: null,
                     fromIndex: null,
-                    toRow: newItem.rowNo,
-                    toIndex: newItem.index,
+                    toRow: newItem.shelf_row_number,
+                    toIndex: newItem.shelf_index_number,
                     createdBy,
                 });
             }
@@ -325,18 +325,18 @@ exports.createShelfChangeLogs = async (branch_code, shelfCode, oldItems, newItem
         for (const [key, oldItem] of oldMap) {
             const newItem = newMap.get(key);
             if (newItem) {
-                if (oldItem.rowNo !== newItem.rowNo || oldItem.index !== newItem.index) {
+                if (oldItem.shelf_row_number !== newItem.shelf_row_number || oldItem.shelf_index_number !== newItem.shelf_index_number) {
                     logs.push({
                         branch_code,
-                        shelfCode,
+                        shelf_code,
                         updateId,
                         action: "move",
                         item_code: oldItem.item_code,
                         productName: productNameMap.get(oldItem.item_code) || null,
-                        fromRow: oldItem.rowNo,
-                        fromIndex: oldItem.index,
-                        toRow: newItem.rowNo,
-                        toIndex: newItem.index,
+                        fromRow: oldItem.shelf_row_number,
+                        fromIndex: oldItem.shelf_index_number,
+                        toRow: newItem.shelf_row_number,
+                        toIndex: newItem.shelf_index_number,
                         createdBy,
                     });
                 }

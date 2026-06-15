@@ -2,23 +2,23 @@ const prisma = require("../../config/prisma");
 
 const getShelfBlocks = async (req, res) => {
   try {
-    const { branch_code, shelfCode } = req.query;
+    const { branch_code, shelf_code } = req.query;
 
-    if (!branch_code || !shelfCode) {
-      return res.status(400).json({ message: "branch_code, shelfCode required" });
+    if (!branch_code || !shelf_code) {
+      return res.status(400).json({ message: "branch_code, shelf_code required" });
     }
 
     const shelf = await prisma.Template.findUnique({
-      where: { branch_code_shelfCode: { branch_code, shelfCode } },
-      select: { shelfCode: true, fullName: true, rowQty: true, type: true },
+      where: { branch_code_shelf_code: { branch_code, shelf_code } },
+      select: { shelf_code: true, shelf_name: true, shelf_total_row: true, type: true },
     });
 
     if (!shelf) return res.status(404).json({ message: "SHELF_NOT_FOUND" });
 
     const skus = await prisma.sku.findMany({
-      where: { branch_code, shelfCode },
-      select: { rowNo: true, index: true, item_code: true },
-      orderBy: [{ rowNo: "asc" }, { index: "asc" }],
+      where: { branch_code, shelf_code },
+      select: { shelf_row_number: true, shelf_index_number: true, item_code: true },
+      orderBy: [{ shelf_row_number: "asc" }, { shelf_index_number: "asc" }],
     });
 
     if (!skus.length) {
@@ -42,12 +42,12 @@ const getShelfBlocks = async (req, res) => {
 
     const rows = {};
     for (const s of skus) {
-      if (!rows[s.rowNo]) rows[s.rowNo] = [];
+      if (!rows[s.shelf_row_number]) rows[s.shelf_row_number] = [];
       const it = itemMap.get(s.item_code);
 
-      rows[s.rowNo].push({
+      rows[s.shelf_row_number].push({
         item_code: s.item_code,
-        index: s.index,
+        shelf_index_number: s.shelf_index_number,
         barcode: it?.barcode ?? null,
         name: it?.item_name ?? null,
         brand: it?.brand_name ?? null,
@@ -60,7 +60,7 @@ const getShelfBlocks = async (req, res) => {
       rows: Object.keys(rows)
         .sort((a, b) => Number(a) - Number(b))
         .map((r) => ({
-          rowNo: Number(r),
+          shelf_row_number: Number(r),
           items: rows[r],
         })),
     });

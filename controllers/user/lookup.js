@@ -27,8 +27,8 @@ const lookupByBarcode = async (req, res) => {
 
     const loc = await prisma.sku.findMany({
       where: { branch_code, item_code: item.item_code },
-      select: { shelfCode: true, rowNo: true, index: true },
-      orderBy: [{ shelfCode: "asc" }, { rowNo: "asc" }, { index: "asc" }],
+      select: { shelf_code: true, shelf_row_number: true, shelf_index_number: true },
+      orderBy: [{ shelf_code: "asc" }, { shelf_row_number: "asc" }, { shelf_index_number: "asc" }],
       take: 10,
     });
 
@@ -46,14 +46,14 @@ const lookupByBarcode = async (req, res) => {
       });
     }
 
-    const shelfCodes = [...new Set(loc.map((x) => x.shelfCode))];
+    const shelf_codes = [...new Set(loc.map((x) => x.shelf_code))];
 
     const shelves = await prisma.Template.findMany({
-      where: { branch_code, shelfCode: { in: shelfCodes } },
-      select: { shelfCode: true, fullName: true, rowQty: true },
+      where: { branch_code, shelf_code: { in: shelf_codes } },
+      select: { shelf_code: true, shelf_name: true, shelf_total_row: true },
     });
 
-    const shelfMap = new Map(shelves.map((s) => [s.shelfCode, s]));
+    const shelfMap = new Map(shelves.map((s) => [s.shelf_code, s]));
 
     return res.json({
       found: true,
@@ -65,10 +65,10 @@ const lookupByBarcode = async (req, res) => {
         price: item.selling_price_vat,
       },
       locations: loc.map((x) => ({
-        shelfCode: x.shelfCode,
-        shelfName: shelfMap.get(x.shelfCode)?.fullName ?? x.shelfCode,
-        rowNo: x.rowNo,
-        index: x.index,
+        shelf_code: x.shelf_code,
+        shelfName: shelfMap.get(x.shelf_code)?.shelf_name ?? x.shelf_code,
+        shelf_row_number: x.shelf_row_number,
+        shelf_index_number: x.shelf_index_number,
       })),
     });
   } catch (err) {

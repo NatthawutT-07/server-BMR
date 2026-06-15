@@ -152,11 +152,11 @@ exports.getBranchShelves = async (req, res) => {
     // ดึง shelf templates
     const templates = await prisma.Template.findMany({
       where: { branch_code },
-      orderBy: { shelfCode: "asc" },
+      orderBy: { shelf_code: "asc" },
       select: {
-        shelfCode: true,
-        fullName: true,
-        rowQty: true,
+        shelf_code: true,
+        shelf_name: true,
+        shelf_total_row: true,
       },
     });
 
@@ -164,25 +164,25 @@ exports.getBranchShelves = async (req, res) => {
     const skus = await prisma.sku.findMany({
       where: { branch_code },
       select: {
-        shelfCode: true,
-        rowNo: true,
-        index: true,
+        shelf_code: true,
+        shelf_row_number: true,
+        shelf_index_number: true,
       },
     });
 
     // Group SKU items by shelf
     const skuByShelf = {};
     skus.forEach((sku) => {
-      if (!skuByShelf[sku.shelfCode]) skuByShelf[sku.shelfCode] = [];
-      skuByShelf[sku.shelfCode].push(sku);
+      if (!skuByShelf[sku.shelf_code]) skuByShelf[sku.shelf_code] = [];
+      skuByShelf[sku.shelf_code].push(sku);
     });
 
     // รวม templates กับ items
     const shelves = templates.map((t) => ({
-      shelfCode: t.shelfCode,
-      fullName: t.fullName || "",
-      rowQty: t.rowQty || 1,
-      items: skuByShelf[t.shelfCode] || [],
+      shelf_code: t.shelf_code,
+      shelf_name: t.shelf_name || "",
+      shelf_total_row: t.shelf_total_row || 1,
+      items: skuByShelf[t.shelf_code] || [],
     }));
 
     return res.json({
@@ -199,7 +199,7 @@ exports.getBranchShelves = async (req, res) => {
 // ======================================================
 // UserTemplateItem
 // - ส่ง branchName แค่ครั้งเดียว (meta)
-// - JOIN Template เพื่อเอา fullName (ชื่อ shelf)
+// - JOIN Template เพื่อเอา shelf_name (ชื่อ shelf)
 // ======================================================
 exports.UserTemplateItem = async (req, res) => {
   const { branch_code } = req.body;
@@ -226,12 +226,12 @@ exports.UserTemplateItem = async (req, res) => {
       SELECT 
           s."branch_code",
           s."item_code",
-          s."shelfCode",
-          s."rowNo",
-          s."index",
+          s."shelf_code",
+          s."shelf_row_number",
+          s."shelf_index_number",
 
           -- ชื่อ shelf จาก Template
-          t."fullName" AS "fullName",
+          t."shelf_name" AS "shelf_name",
 
           p."item_name",
           p."brand_name",
@@ -250,7 +250,7 @@ exports.UserTemplateItem = async (req, res) => {
       -- Template (ชื่อ shelf)
       LEFT JOIN "Template" t
         ON t."branch_code" = s."branch_code"
-       AND t."shelfCode"  = s."shelfCode"
+       AND t."shelf_code"  = s."shelf_code"
 
       -- Stock ปัจจุบัน (ตามตาราง Stock)
       LEFT JOIN (
@@ -273,17 +273,17 @@ exports.UserTemplateItem = async (req, res) => {
           AND s."item_code" = im."item_code"
 
       WHERE s."branch_code" = ${branch_code}
-      ORDER BY s."shelfCode", s."index", s."rowNo"
+      ORDER BY s."shelf_code", s."shelf_index_number", s."shelf_row_number"
     `;
 
     const items = rawResult.map((r) => ({
       branch_code: r.branch_code,
-      shelfCode: r.shelfCode,
-      rowNo: r.rowNo,
-      index: r.index,
+      shelf_code: r.shelf_code,
+      shelf_row_number: r.shelf_row_number,
+      shelf_index_number: r.shelf_index_number,
 
       // ชื่อ shelf จาก Template
-      fullName: r.fullName ?? null,
+      shelf_name: r.shelf_name ?? null,
 
       item_code:
         r.item_code !== null && r.item_code !== undefined ? r.item_code : null,
@@ -348,9 +348,9 @@ exports.UserTemplateItem = async (req, res) => {
 //       SELECT
 //           s."branch_code",
 //           s."item_code",
-//           s."shelfCode",
-//           s."rowNo",
-//           s."index",
+//           s."shelf_code",
+//           s."shelf_row_number",
+//           s."shelf_index_number",
 //           p."item_name",
 //           p."brand_name",
 //           p."shelf_life_days",
@@ -468,7 +468,7 @@ exports.UserTemplateItem = async (req, res) => {
 //           AND s."item_code" = im."item_code"
 
 //       WHERE s."branch_code" = ${branch_code}
-//       ORDER BY s."shelfCode", s."index", s."rowNo"
+//       ORDER BY s."shelf_code", s."shelf_index_number", s."shelf_row_number"
 //     `;
 
 //         const result = rawResult.map((r) => {
@@ -478,9 +478,9 @@ exports.UserTemplateItem = async (req, res) => {
 
 //             return {
 //                 branch_code: r.branch_code,
-//                 shelfCode: r.shelfCode,
-//                 rowNo: r.rowNo,
-//                 index: r.index,
+//                 shelf_code: r.shelf_code,
+//                 shelf_row_number: r.shelf_row_number,
+//                 shelf_index_number: r.shelf_index_number,
 
 //                 item_code:
 //                     r.item_code !== null && r.item_code !== undefined ? r.item_code : null,
