@@ -29,7 +29,7 @@ done
 
 DATABASE_URL="$(
   node -e \
-    "require('dotenv').config(); process.stdout.write(process.env.DATABASE_URL || '')"
+    "require('dotenv').config({ quiet: true }); process.stdout.write(process.env.DATABASE_URL || '')"
 )"
 
 if [[ -z "$DATABASE_URL" ]]; then
@@ -40,7 +40,7 @@ fi
 # Prisma's schema query parameter is not accepted by PostgreSQL CLI tools.
 PSQL_DATABASE_URL="$(
   DATABASE_URL="$DATABASE_URL" node -e \
-    "const url = new URL(process.env.DATABASE_URL); url.searchParams.delete('schema'); process.stdout.write(url.toString())"
+    "try { const url = new URL(process.env.DATABASE_URL); url.searchParams.delete('schema'); process.stdout.write(url.toString()); } catch { console.error('DATABASE_URL is not a valid PostgreSQL URL'); process.exit(1); }"
 )"
 
 mkdir -p "$BACKUP_DIR"
