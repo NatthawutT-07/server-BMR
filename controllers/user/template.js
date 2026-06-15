@@ -202,7 +202,7 @@ exports.getBranchShelves = async (req, res) => {
 // - JOIN ShelfTemplate เพื่อเอา shelf_name (ชื่อ shelf)
 // ======================================================
 exports.UserTemplateItem = async (req, res) => {
-  const { branch_code } = req.body;
+  const branch_code = req.query.branch_code || req.body.branch_code;
 
   if (!branch_code) {
     return res.status(400).json({ msg: "branch_code is required" });

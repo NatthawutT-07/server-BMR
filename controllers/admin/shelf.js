@@ -90,7 +90,7 @@ exports.ShelfTemplate = async (req, res) => {
 };
 
 exports.skuPosition = async (req, res) => {
-  const { branch_code } = req.body;
+  const branch_code = req.query.branch_code || req.body.branch_code;
 
   if (!branch_code) {
     return response.error(res, "branch_code is required", "BAD_REQUEST", 400);

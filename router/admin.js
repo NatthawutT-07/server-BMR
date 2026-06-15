@@ -42,33 +42,33 @@ router.post('/upload-minmax', authCheck, adminCheck, upload.single('file'), uplo
 router.post('/upload-masterItem', authCheck, adminCheck, upload.single('file'), uploadMasterItemXLSX)
 router.post('/upload-stock', authCheck, upload.single('file'), uploadStockXLSX)
 router.post('/upload-withdraw', authCheck, adminCheck, upload.single('file'), uploadWithdrawXLSX)
-router.post('/upload-template', authCheck, adminCheck, upload.single('file'), uploadTemplateXLSX)
-router.post('/upload-sku', authCheck, adminCheck, upload.single('file'), uploadSKU_XLSX)
-router.post('/upload-bill', authCheck, adminCheck, upload.single('file'), uploadBillXLSX)
-router.post('/upload-gourmets', authCheck, adminCheck, upload.single('file'), uploadGourmetXLSX)
-router.delete('/clear-stock', authCheck, adminCheck, clearStock)
-router.delete('/clear-sku', authCheck, adminCheck, clearSku)
-router.delete('/clear-template', authCheck, adminCheck, clearTemplate)
-router.delete('/clear-minmax', authCheck, adminCheck, clearMinMax)
+router.post("/uploads/shelf-templates", authCheck, adminCheck, upload.single('file'), uploadTemplateXLSX)
+router.post("/uploads/sku-positions", authCheck, adminCheck, upload.single('file'), uploadSKU_XLSX)
+router.post("/uploads/bills", authCheck, adminCheck, upload.single('file'), uploadBillXLSX)
+router.post("/uploads/gourmets", authCheck, adminCheck, upload.single('file'), uploadGourmetXLSX)
+router.delete("/system/clear/stock", authCheck, adminCheck, clearStock)
+router.delete("/system/clear/sku-positions", authCheck, adminCheck, clearSku)
+router.delete("/system/clear/shelf-templates", authCheck, adminCheck, clearTemplate)
+router.delete("/system/clear/minmax", authCheck, adminCheck, clearMinMax)
 router.get('/sync-dates', authCheck, adminCheck, getAllSyncDates)
 
 const { downloadTemplate, downloadSKU } = require('../controllers/admin/download');
 //download
-router.get("/download-template", authCheck, downloadTemplate); //user
-router.get("/download-sku", authCheck, downloadSKU); //user
+router.get("/downloads/shelf-templates", authCheck, downloadTemplate); //user
+router.get("/downloads/sku-positions", authCheck, downloadSKU); //user
 
 //Template
 const { validate } = require("../middlewares/validate");
 const { createShelfItemSchema, deleteShelfItemSchema, updateShelfItemSchema, getSkuSchema } = require("../schemas/shelfSchema");
 
-router.get("/shelf-template", authCheck, ShelfTemplate); //Template //user
-router.get("/shelf-getMasterItem", authCheck, getMasterItem);
-router.post("/shelf-sku", authCheck, validate(getSkuSchema), skuPosition); //Item Search //user // date , withdraw , sales
-router.delete("/shelf-delete", authCheck, validate(deleteShelfItemSchema), itemDelete);
-router.post("/shelf-add", authCheck, validate(createShelfItemSchema), itemCreate);
-router.put("/shelf-update", authCheck, validate(updateShelfItemSchema), itemUpdate)
-router.get("/shelf-dashboard-summary", authCheck, getShelfDashboardSummary);
-router.get("/shelf-dashboard-shelf-sales", authCheck, getShelfDashboardShelfSales);
+router.get("/shelf-templates", authCheck, ShelfTemplate); //Template //user
+router.get("/master-items", authCheck, getMasterItem);
+router.get("/sku-positions", authCheck, validate(getSkuSchema), skuPosition); //Item Search //user // date , withdraw , sales
+router.delete("/sku-positions", authCheck, validate(deleteShelfItemSchema), itemDelete);
+router.post("/sku-positions", authCheck, validate(createShelfItemSchema), itemCreate);
+router.put("/sku-positions/bulk", authCheck, validate(updateShelfItemSchema), itemUpdate)
+router.get("/dashboards/shelf-summary", authCheck, getShelfDashboardSummary);
+router.get("/dashboards/shelf-sales", authCheck, getShelfDashboardShelfSales);
 // router.get("/shelf-summary",  summary)
 
 // POG Request - Admin

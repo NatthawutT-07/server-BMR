@@ -13,7 +13,7 @@ const { uploadStockXLSX } = require('../controllers/admin/upload/uploadControlle
 const router = express.Router()
 
 
-router.post('/template-item', authCheck, UserTemplateItem);
+router.post("/shelf-templates/items", authCheck, UserTemplateItem);
 router.post('/upload-stock', authCheck, upload.single('file'), uploadStockXLSX);
 router.get("/stock-last-update", authCheck, getStockLastUpdate);
 router.get("/branch-shelves", authCheck, getBranchShelves); // ดึง shelf templates ของสาขา
@@ -24,7 +24,7 @@ router.get('/pog-request', authCheck, getMyPogRequests);
 router.patch('/pog-request/:id/cancel', authCheck, cancelMyPogRequest); // ยกเลิก (ไม่ลบ)
 
 // Register Product routes (ลงทะเบียนสินค้าโดยตรง)
-router.get('/register/check-product', authCheck, checkProductExists);
+router.get("/products/check", authCheck, checkProductExists);
 router.get('/register/shelves', authCheck, getShelvesForRegister);
 router.get('/register/next-index', authCheck, getNextIndex);
 router.post('/register/product', authCheck, registerProduct);
