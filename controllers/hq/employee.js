@@ -13,7 +13,9 @@ const getAllEmployees = async (req, res) => {
       employee_code,
       search,
       limit = 10,
-      offset = 0
+      offset = 0,
+      sortBy = "employee_code",
+      sortOrder = "asc"
     } = req.query;
 
     const cacheKey = `list_${JSON.stringify(req.query)}`;
@@ -38,6 +40,10 @@ const getAllEmployees = async (req, res) => {
       where.employee_code = { contains: employee_code, mode: 'insensitive' };
     }
 
+    const allowedSortFields = ["employee_code", "point_earned", "point_redeemed", "nickname"];
+    const activeSortBy = allowedSortFields.includes(sortBy) ? sortBy : "employee_code";
+    const activeSortOrder = ["asc", "desc"].includes(sortOrder.toLowerCase()) ? sortOrder.toLowerCase() : "asc";
+
     const [employees, total] = await Promise.all([
       prisma.employee_hq.findMany({
         where,
@@ -52,7 +58,7 @@ const getAllEmployees = async (req, res) => {
           role: true,
           status: true,
         },
-        orderBy: { employee_code: "asc" },
+        orderBy: { [activeSortBy]: activeSortOrder },
         take: parseInt(limit),
         skip: parseInt(offset),
       }),
