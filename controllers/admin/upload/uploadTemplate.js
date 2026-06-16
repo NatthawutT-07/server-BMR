@@ -47,6 +47,13 @@ exports.uploadTemplateXLSX = async (req, res) => {
         }
 
         const templateData = Array.from(tempMap.values());
+        const invalidTemplate = templateData.find(item =>
+            !Number.isInteger(item.shelf_total_row) || item.shelf_total_row < 0
+        );
+        if (invalidTemplate) {
+            throw new Error(`Invalid shelf_total_row for ${invalidTemplate.branch_code}/${invalidTemplate.shelf_code}`);
+        }
+
         setUploadJob(jobId, 25, "analyzing sync delta");
 
         // 2. เช็คตัวไม่มีในไฟล์ลบออก
@@ -68,7 +75,7 @@ exports.uploadTemplateXLSX = async (req, res) => {
             
             if (toDeleteIds.length > 0) {
                 for (let i = 0; i < toDeleteIds.length; i += CHUNK_SIZE) {
-                    await tx.ShelfTemplate.deleteMany({
+                    await tx.shelfTemplate.deleteMany({
                         where: { id: { in: toDeleteIds.slice(i, i + CHUNK_SIZE) } }
                     });
                 }
@@ -78,7 +85,7 @@ exports.uploadTemplateXLSX = async (req, res) => {
                 const chunk = templateData.slice(i, i + CHUNK_SIZE);
                 
                 const upsertPromises = chunk.map(item => 
-                    tx.ShelfTemplate.upsert({
+                    tx.shelfTemplate.upsert({
                         where: {
                             branch_code_shelf_code: {
                                 branch_code: item.branch_code,
@@ -107,7 +114,11 @@ exports.uploadTemplateXLSX = async (req, res) => {
 
         setUploadJob(jobId, 95, "finalizing");
         finishUploadJob(jobId, `completed - synced ${templateData.length} records, deleted ${toDeleteIds.length}`);
-        res.status(200).send(`ShelfTemplate XLSX synced! (Upserted: ${templateData.length}, Deleted: ${toDeleteIds.length})`);
+        res.status(200).json({
+            message: "ShelfTemplate XLSX synced successfully",
+            inserted: templateData.length,
+            deleted: toDeleteIds.length,
+        });
 
     } catch (err) {
         console.error("ShelfTemplate XLSX Error:", err);

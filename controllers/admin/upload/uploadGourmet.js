@@ -16,7 +16,7 @@ exports.uploadGourmetXLSX = async (req, res) => {
 
         const requiredFields = ["date", "branch_code", "item_code", "quantity_sale_gourmet", "sales_amount_gourmet"];
         const aliases = {
-            date: ["date", ""],
+            date: ["date"],
             branch_code: ["storecodesap"],
             item_code: ["itemno.bm"],
             quantity_sale_gourmet: ["saleqty"],
@@ -82,10 +82,11 @@ exports.uploadGourmetXLSX = async (req, res) => {
 
         raw.slice(headerRowIndex + 1).forEach((row) => {
             let branch_code = String(row[headerMap.branch_code] || "").trim();
-            if (branch_code.startsWith("ST0")) {
-                branch_code = branch_code.replace("ST0", "ST");
+            const branchMatch = branch_code.match(/^ST0*(\d+)$/i);
+            if (branchMatch) {
+                branch_code = `ST${branchMatch[1].padStart(3, "0")}`;
             }
-            const productCode = String(row[headerMap.item_code] || "").trim();
+            const productCode = String(row[headerMap.item_code] || "").trim().padStart(5, "0");
             const dateVal = excelDateToJS(row[headerMap.date]);
 
             if (!branch_code || !productCode || !dateVal) return;

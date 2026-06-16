@@ -21,7 +21,7 @@ exports.uploadStockXLSX = async (req, res) => {
 
         if (!mapped || mapped.length === 0) {
             failUploadJob(jobId, "No valid stock data");
-            return res.status(200).send("No valid stock rows found (all qty = 0 or invalid).");
+            return res.status(200).send("No valid stock rows found.");
         }
 
         setUploadJob(jobId, 85, "saving data");
@@ -56,26 +56,32 @@ exports.uploadStockXLSX = async (req, res) => {
             // 
         }
 
-        await prisma.stock.deleteMany({
-            where: {
-                branch_code: { in: uniqueBranches }
+        let inserted = 0;
+        await prisma.$transaction(async (tx) => {
+            if (user.role === 'admin') {
+                await tx.$executeRaw`TRUNCATE TABLE "Stock" RESTART IDENTITY`;
+            } else {
+                await tx.stock.deleteMany({
+                    where: { branch_code: user.name },
+                });
             }
-        });
 
-        // insert แบบ batch
-        for (let i = 0; i < mapped.length; i += BATCH_SIZE) {
-            const chunk = mapped.slice(i, i + BATCH_SIZE);
-            await prisma.stock.createMany({
-                data: chunk,
-                skipDuplicates: true,
-            });
-            const currentCount = Math.min(i + BATCH_SIZE, mapped.length);
-            const progress = 85 + Math.floor((currentCount / mapped.length) * 10);
-            setUploadJob(jobId, progress, `saving ${currentCount}/${mapped.length}`);
-        }
+            for (let i = 0; i < mapped.length; i += BATCH_SIZE) {
+                const chunk = mapped.slice(i, i + BATCH_SIZE);
+                const result = await tx.stock.createMany({
+                    data: chunk,
+                    skipDuplicates: true,
+                });
+                inserted += result.count;
+
+                const currentCount = Math.min(i + BATCH_SIZE, mapped.length);
+                const progress = 85 + Math.floor((currentCount / mapped.length) * 10);
+                setUploadJob(jobId, progress, `saving ${currentCount}/${mapped.length}`);
+            }
+        }, { timeout: 120000 });
 
         if (user.role === 'admin') {
-            await touchDataSync('stock', mapped.length);
+            await touchDataSync('stock', inserted);
         }
 
         for (const bc of uniqueBranches) {
@@ -86,13 +92,15 @@ exports.uploadStockXLSX = async (req, res) => {
         try {
             const templateCache = cacheManager.getCache("user-template");
             if (templateCache) {
-                const allKeys = templateCache.keys();
-                uniqueBranches.forEach(bc => {
-                    const keysToDelete = allKeys.filter(k => k.includes(`-${bc}-`));
+                if (user.role === 'admin') {
+                    templateCache.flushAll();
+                } else {
+                    const allKeys = templateCache.keys();
+                    const keysToDelete = allKeys.filter(k => k.includes(`-${user.name}-`));
                     if (keysToDelete.length > 0) {
                         templateCache.del(keysToDelete);
                     }
-                });
+                }
             }
         } catch (cacheErr) {
             console.error("Failed to clear cache:", cacheErr);
@@ -102,7 +110,7 @@ exports.uploadStockXLSX = async (req, res) => {
 
         return res.status(200).json({
             message: "Stock XLSX imported successfully (Worker Thread)",
-            inserted: mapped.length,
+            inserted,
         });
     } catch (err) {
         console.error("XLSX Worker Error:", err);

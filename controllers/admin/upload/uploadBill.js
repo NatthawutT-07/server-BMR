@@ -176,20 +176,24 @@ exports.uploadBillXLSX = async (req, res) => {
             const meta = group[0];
             const billDate = parseDateBangkok(meta.date);
             const salesChannelRaw = String(meta.sales_channel || "").trim() || null;
+            const branchId = meta.branch_code ? branchIdMapAll[meta.branch_code] : null;
+            if (!billDate || Number.isNaN(billDate.getTime()) || !branchId || !meta.doc_type || !meta.pos_type) {
+                throw new Error(`Invalid required bill data for bill ${billNo}`);
+            }
 
             newBills.push({
                 bill_number: billNo,
                 date: billDate,
-                branchId: meta.branch_code ? branchIdMapAll[meta.branch_code] || null : null,
+                branchId,
                 sales_channel: salesChannelRaw,
-                doc_type: meta.doc_type || null,
-                pos_type: meta.pos_type || null,
+                doc_type: meta.doc_type,
+                pos_type: meta.pos_type,
                 reference_doc: meta.reference_doc || null,
 
                 value_excl_tax: parseFloatWithComma(meta.value_excl_tax),
                 vat: parseFloatWithComma(meta.vat),
                 end_bill_discount: parseFloatWithComma(meta.end_bill_discount),
-                total_sales_end_discount_no_rounding: parseFloatWithComma(meta.total_sales_Finally_end_discount_no_rounding),
+                total_sales_end_discount_no_rounding: parseFloatWithComma(meta.total_sales_end_discount_no_rounding),
                 rounding: parseFloatWithComma(meta.rounding),
                 total_sales_Finally: parseFloatWithComma(meta.total_sales_Finally),
             });

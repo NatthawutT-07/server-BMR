@@ -12,7 +12,7 @@ exports.uploadWithdrawXLSX = async (req, res) => {
     try {
         let mapped = await runExcelWorker(
             req.file.buffer,
-            "Withdraw",
+            "withdraw",
             (progress, message) => setUploadJob(jobId, progress, message)
         );
 
@@ -21,7 +21,12 @@ exports.uploadWithdrawXLSX = async (req, res) => {
             return res.status(200).send("No valid withdraw rows found.");
         }
 
-        mapped = mapped.filter(r => r.document_status === 'อนุมัติแล้ว' && r.reason === 'เบิกหมดอายุ');
+        const parsedRows = mapped.length;
+        mapped = mapped.filter(r =>
+            r.document_status === "\u0e2d\u0e19\u0e38\u0e21\u0e31\u0e15\u0e34\u0e41\u0e25\u0e49\u0e27" &&
+            r.reason !== "\u0e40\u0e1a\u0e34\u0e01\u0e40\u0e1e\u0e37\u0e48\u0e2d\u0e02\u0e32\u0e22"
+        );
+        const filteredRows = parsedRows - mapped.length;
 
         if (mapped.length === 0) {
             finishUploadJob(jobId, "completed");
@@ -34,7 +39,7 @@ exports.uploadWithdrawXLSX = async (req, res) => {
         const duplicates = [];
 
         mapped.forEach((r, index) => {
-            const key = `${r.document_reference}-${r.branch_code}-${r.item_code}`;
+            const key = `${r.document_reference}-${r.branch_code}-${r.item_code}-${r.quantity_withdraw}-${r.value_withdraw}`;
             if (uniqueMap.has(key)) {
                 duplicates.push({
                     index,
@@ -52,13 +57,14 @@ exports.uploadWithdrawXLSX = async (req, res) => {
 
         if (duplicates.length > 0) {
             mapped = mapped.filter((r, index) => {
-                const key = `${r.document_reference}-${r.branch_code}-${r.item_code}`;
+                const key = `${r.document_reference}-${r.branch_code}-${r.item_code}-${r.quantity_withdraw}-${r.value_withdraw}`;
                 return uniqueMap.get(key) === index;
             });
         }
 
         const BATCH_SIZE = 3000;
         const totalBatches = Math.ceil(mapped.length / BATCH_SIZE);
+        let inserted = 0;
 
         for (let i = 0; i < mapped.length; i += BATCH_SIZE) {
             const chunk = mapped.slice(i, i + BATCH_SIZE);
@@ -75,22 +81,24 @@ exports.uploadWithdrawXLSX = async (req, res) => {
                 INSERT INTO "Withdraw"
                 ("item_code", "branch_code", "document_reference", "date_withdraw", "document_status", "reason", "quantity_withdraw", "value_withdraw")
                 VALUES ${Prisma.join(values)}
-                ON CONFLICT ("document_reference", "branch_code", "item_code") 
-                DO NOTHING
+                ON CONFLICT DO NOTHING
             `;
 
-            await prisma.$executeRaw(sql);
+            inserted += await prisma.$executeRaw(sql);
 
             const progress = 85 + Math.floor((currentBatch / totalBatches) * 10);
             setUploadJob(jobId, progress, `saving batch ${currentBatch}/${totalBatches}`);
         }
 
-        await touchDataSync('withdraw', mapped.length);
+        await touchDataSync('withdraw', inserted);
 
         finishUploadJob(jobId, "completed");
         return res.status(200).json({
             message: "withdraw XLSX imported (Worker Thread)",
-            inserted: mapped.length
+            parsed_rows: parsedRows,
+            inserted,
+            skipped: filteredRows + duplicates.length,
+            duplicate_rows: duplicates.length,
         });
 
     } catch (err) {

@@ -30,6 +30,13 @@ exports.uploadSKU_XLSX = async (req, res) => {
             item_code: String(row.item_code).trim().padStart(5, "0"),
             shelf_index_number: parseInt(row.shelf_index_number, 10),
         }));
+        const invalidSku = skuData.find(item =>
+            !Number.isInteger(item.shelf_row_number) ||
+            !Number.isInteger(item.shelf_index_number)
+        );
+        if (invalidSku) {
+            throw new Error(`Invalid shelf position for ${invalidSku.branch_code}/${invalidSku.item_code}`);
+        }
 
         // 2) Check Duplicate 
         const skuMap = new Map();
@@ -82,7 +89,10 @@ exports.uploadSKU_XLSX = async (req, res) => {
 
         setUploadJob(jobId, 95, "finalizing");
         finishUploadJob(jobId, `completed - ${uniqueSkuData.length} SKU records synced`);
-        res.status(200).send(`SKU XLSX uploaded & synced successfully! (${uniqueSkuData.length} records)`);
+        res.status(200).json({
+            message: "SKU XLSX uploaded and synced successfully",
+            inserted: uniqueSkuData.length,
+        });
 
     } catch (err) {
         console.error("SKU XLSX Error:", err);

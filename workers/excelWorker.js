@@ -2,43 +2,45 @@ const { parentPort, workerData } = require("worker_threads");
 const XLSX = require("xlsx");
 
 const parseItemMinMax = (raw) => {
-    const headerRowIndex = raw.findIndex(row =>
-        row.includes("branch_code") &&
-        row.includes("ItemCode") &&
-        row.includes("MinStock") &&
-        row.includes("MaxStock")
-    );
+    const normalizeHeader = (value) =>
+        String(value || "").trim().toLowerCase().replace(/[\s_]/g, "");
+    const requiredHeaders = ["branchcode", "itemcode", "minstock", "maxstock", "packorder"];
+
+    const headerRowIndex = raw.findIndex(row => {
+        const headers = new Set(row.map(normalizeHeader));
+        return requiredHeaders.every(header => headers.has(header));
+    });
 
     if (headerRowIndex === -1) {
-        return { error: "Header Format Incorrect (ItemMinMax)" };
+        return {
+            error: "Header Format Incorrect: required BranchCode, ItemCode, MinStock, MaxStock, PackOrder"
+        };
     }
 
-    const header = raw[headerRowIndex];
+    const header = raw[headerRowIndex].map(normalizeHeader);
     const dataRows = raw.slice(headerRowIndex + 1);
 
     const mapped = dataRows.map(r => {
-        let obj = {};
+        const obj = {};
         header.forEach((h, i) => obj[h] = r[i]);
 
-        const rawCode = obj.branch_code?.trim();
-        const item = obj.ItemCode;
+        const rawCode = String(obj.branchcode || "").trim().toUpperCase();
+        const item = obj.itemcode;
 
         if (!rawCode || !item) return null;
 
-        const prefix = rawCode.slice(0, 2);
-        const num = parseInt(rawCode.slice(2), 10);
-        if (isNaN(num)) return null;
+        const branchMatch = rawCode.match(/^([A-Z]+)0*(\d+)$/);
+        if (!branchMatch) return null;
 
-        const branch_code = prefix + num.toString().padStart(3, "0");
+        const branch_code = `${branchMatch[1]}${branchMatch[2].padStart(3, "0")}`;
         const item_code = String(item).trim().padStart(5, "0");
         if (!item_code || item_code === "00000" || item_code.includes("NaN")) return null;
 
-        let min = parseInt(obj.MinStock, 10);
-        let max = parseInt(obj.MaxStock, 10);
-        if (isNaN(min)) min = null;
-        if (isNaN(max)) max = null;
-        
-        let pack_order = parseInt(obj.pack_order, 10);
+        const min = parseInt(obj.minstock, 10);
+        const max = parseInt(obj.maxstock, 10);
+        if (isNaN(min) || isNaN(max)) return null;
+
+        let pack_order = parseInt(obj.packorder, 10);
         if (isNaN(pack_order)) pack_order = null;
 
         return { branch_code, item_code, min_stock: min, max_stock: max, pack_order };
@@ -78,24 +80,22 @@ const parseMasterItem = (raw) => {
         const itemNo = String(row["Item No."]).trim().padStart(5, "0");
         return {
             item_code: itemNo,
-            nameProduct: row["Item Description"] || null,
-            groupName: row["Group Name"] || null,
-            status: row["Status"] || null,
+            item_name: row["Item Description"] || null,
+            group_name: row["Group Name"] || null,
+            item_status: row["Status"] || null,
             barcode: row["Bar Code"] || null,
-            nameBrand: row["Name"] || null,
-            consingItem: row["Consign Item"] || null,
-            purchasePriceExcVAT: row["Purchase Price (Exc. VAT)"]
+            brand_name: row["Name"] || null,
+            is_consignment: row["Consign Item"] || null,
+            purchase_price: row["Purchase Price (Exc. VAT)"]
                 ? parseFloat(row["Purchase Price (Exc. VAT)"])
                 : 0,
-            salesPriceIncVAT: row["Sales Price (Inc. VAT)"]
+            selling_price_vat: row["Sales Price (Inc. VAT)"]
                 ? parseFloat(row["Sales Price (Inc. VAT)"])
                 : 0,
-            preferredVandorCode: row["Preferred Vendor"] || null,
-            preferredVandorName: row["Preferred Vendor Name"] || null,
-            GP: row["GP %"] != null && row["GP %"] !== "" ? String(row["GP %"]) : null,
-            shelfLife: row["Shelf Life (Days)"] != null && row["Shelf Life (Days)"] !== "" ? String(row["Shelf Life (Days)"]) : null,
-            productionDate: row["Production Date"] || null,
-            vatGroupPu: row["VatGroupPu"] || null
+            preferred_vendor_code: row["Preferred Vendor"] || null,
+            preferred_vendor_name: row["Preferred Vendor Name"] || null,
+            gross_profit_pct: row["GP %"] != null && row["GP %"] !== "" ? String(row["GP %"]) : null,
+            shelf_life_days: row["Shelf Life (Days)"] != null && row["Shelf Life (Days)"] !== "" ? String(row["Shelf Life (Days)"]) : null
         };
     });
 
@@ -103,43 +103,49 @@ const parseMasterItem = (raw) => {
 };
 
 const parseStock = (raw) => {
-    const headerRowIndex = raw.findIndex(row =>
-        row.includes("รหัสสินค้า") &&
-        row.includes("รหัสสาขา") &&
-        row.includes("จำนวนคงเหลือ")
-    );
+    const headers = {
+        itemCode: "\u0e23\u0e2b\u0e31\u0e2a\u0e2a\u0e34\u0e19\u0e04\u0e49\u0e32",
+        branchCode: "\u0e23\u0e2b\u0e31\u0e2a\u0e2a\u0e32\u0e02\u0e32",
+        quantity: "\u0e08\u0e33\u0e19\u0e27\u0e19\u0e04\u0e07\u0e40\u0e2b\u0e25\u0e37\u0e2d",
+    };
+    const requiredHeaders = Object.values(headers);
+    const normalizeHeader = value => String(value || "").trim();
+
+    const headerRowIndex = raw.findIndex(row => {
+        const rowHeaders = new Set(row.map(normalizeHeader));
+        return requiredHeaders.every(header => rowHeaders.has(header));
+    });
 
     if (headerRowIndex === -1) {
-        return { error: "ไม่พบ header ของ Stock XLSX" };
+        return { error: "Stock header format is incorrect" };
     }
 
-    const header = raw[headerRowIndex];
+    const header = raw[headerRowIndex].map(normalizeHeader);
     const dataRows = raw.slice(headerRowIndex + 1);
-
-    const rows = dataRows.map(r => {
-        let obj = {};
-        header.forEach((h, i) => obj[h] = r[i]);
-        return obj;
-    });
 
     const INT32_MAX = 2147483647;
     const INT32_MIN = -2147483648;
+    const parseNumber = value => {
+        const parsed = Number(String(value ?? "").replace(/,/g, "").trim());
+        return Number.isFinite(parsed) ? parsed : 0;
+    };
 
-    const mapped = rows
-        .filter(row => {
-            const code = row["รหัสสินค้า"];
-            const branch = row["รหัสสาขา"];
-            return code && !isNaN(code) && branch;
-        })
+    const mapped = dataRows
         .map(row => {
-            const rawCode = (row["รหัสสินค้า"] || "").toString().trim();
+            const obj = {};
+            header.forEach((key, index) => {
+                obj[key] = row[index];
+            });
+
+            const rawCode = String(obj[headers.itemCode] || "").trim();
             const item_code = rawCode.padStart(5, "0");
-            const branch_code = (row["รหัสสาขา"] || "").toString().trim();
-            let qty = parseFloat(row["จำนวนคงเหลือ"]);
-            if (isNaN(qty) || qty > INT32_MAX || qty < INT32_MIN) qty = 0;
-            qty = Math.floor(qty);
-            if (qty === 0) return null;
-            return { item_code, branch_code, quantity_stock: qty };
+            const branch_code = String(obj[headers.branchCode] || "").trim().toUpperCase();
+            if (!item_code || item_code === "00000" || item_code.includes("NaN") || !branch_code) return null;
+
+            let quantity_stock = Math.trunc(parseNumber(obj[headers.quantity]));
+            if (quantity_stock > INT32_MAX || quantity_stock < INT32_MIN) quantity_stock = 0;
+
+            return { item_code, branch_code, quantity_stock };
         })
         .filter(Boolean);
 
@@ -147,61 +153,66 @@ const parseStock = (raw) => {
 };
 
 const parseWithdraw = (raw) => {
-    const headerRowIndex = raw.findIndex(row =>
-        row.includes("รหัสสินค้า") &&
-        row.includes("เลขที่เอกสาร") &&
-        row.includes("จำนวน") &&
-        row.includes("สาขา")
-    );
+    const headers = {
+        itemCode: "\u0e23\u0e2b\u0e31\u0e2a\u0e2a\u0e34\u0e19\u0e04\u0e49\u0e32",
+        branch: "\u0e2a\u0e32\u0e02\u0e32",
+        documentReference: "\u0e40\u0e25\u0e02\u0e17\u0e35\u0e48\u0e40\u0e2d\u0e01\u0e2a\u0e32\u0e23",
+        date: "\u0e27\u0e31\u0e19\u0e17\u0e35\u0e48",
+        documentStatus: "\u0e2a\u0e16\u0e32\u0e19\u0e30\u0e40\u0e2d\u0e01\u0e2a\u0e32\u0e23",
+        reason: "\u0e40\u0e2b\u0e15\u0e38\u0e1c\u0e25",
+        quantity: "\u0e08\u0e33\u0e19\u0e27\u0e19",
+        value: "\u0e21\u0e39\u0e25\u0e04\u0e48\u0e32\u0e40\u0e1a\u0e34\u0e01\u0e2d\u0e2d\u0e01",
+    };
+    const requiredHeaders = Object.values(headers);
+    const normalizeHeader = value => String(value || "").trim();
 
-    if (headerRowIndex === -1) {
-        return { error: "ไม่พบหัวตาราง withdraw" };
-    }
-
-    const header = raw[headerRowIndex];
-    const dataRows = raw.slice(headerRowIndex + 1);
-
-    const rows = dataRows.map(r => {
-        let obj = {};
-        header.forEach((h, i) => obj[h] = r[i]);
-        return obj;
+    const headerRowIndex = raw.findIndex(row => {
+        const rowHeaders = new Set(row.map(normalizeHeader));
+        return requiredHeaders.every(header => rowHeaders.has(header));
     });
 
-    const mapped = rows
-        .filter(row =>
-            row["รหัสสินค้า"] &&
-            !isNaN(row["รหัสสินค้า"]) &&
-            row["สาขา"]
-        )
+    if (headerRowIndex === -1) {
+        return { error: "Withdraw header format is incorrect" };
+    }
+
+    const header = raw[headerRowIndex].map(normalizeHeader);
+    const dataRows = raw.slice(headerRowIndex + 1);
+
+    const parseNumber = value => {
+        const parsed = Number(String(value ?? "").replace(/,/g, "").trim());
+        return Number.isFinite(parsed) ? parsed : 0;
+    };
+
+    const mapped = dataRows
         .map(row => {
-            const rawCode = (row["รหัสสินค้า"] || "").toString().trim();
+            const obj = {};
+            header.forEach((key, index) => {
+                obj[key] = row[index];
+            });
+
+            const rawCode = String(obj[headers.itemCode] || "").trim();
             const item_code = rawCode.padStart(5, "0");
             if (!item_code || item_code === "00000" || item_code.includes("NaN")) return null;
 
-            const branch_code = row["สาขา"]
-                ?.split(")")[0]
-                ?.replace("(", "")
-                ?.trim();
-            if (!branch_code) return null;
-
-            let qty = parseFloat(row["จำนวน"]);
-            if (isNaN(qty)) qty = 0;
-
-            let val = parseFloat(row["มูลค่าเบิกออก"]);
-            if (isNaN(val)) val = 0;
+            const branchValue = String(obj[headers.branch] || "").trim();
+            const branchMatch = branchValue.match(/^\(([^)]+)\)/);
+            const branch_code = branchMatch?.[1]?.trim() || null;
+            const document_reference = String(obj[headers.documentReference] || "").trim();
+            const date_withdraw = String(obj[headers.date] || "").trim();
+            if (!branch_code || !document_reference || !date_withdraw) return null;
 
             return {
                 item_code,
                 branch_code,
-                docNumber: (row["เลขที่เอกสาร"] || "").toString().trim() || null,
-                date: (row["วันที่"] || "").toString().trim() || null,
-                docStatus: (row["สถานะเอกสาร"] || "").toString().trim() || null,
-                reason: (row["เหตุผล"] || "").toString().trim() || null,
-                quantity_stock: qty,
-                value: val,
+                document_reference,
+                date_withdraw,
+                document_status: String(obj[headers.documentStatus] || "").trim(),
+                reason: String(obj[headers.reason] || "").trim(),
+                quantity_withdraw: Math.trunc(parseNumber(obj[headers.quantity])),
+                value_withdraw: parseNumber(obj[headers.value]),
             };
         })
-        .filter(v => v !== null);
+        .filter(Boolean);
 
     return { data: mapped };
 };
