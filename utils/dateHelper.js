@@ -80,6 +80,24 @@ const getBangkokUtcRange = (startStr, endStr) => {
   return { startUtc: start, endUtc: end };
 };
 
+const getBangkokCurrentAndPreviousMonthRange = () => {
+  const now = new Date();
+  const formatter = new Intl.DateTimeFormat("en-GB", {
+    timeZone: BANGKOK_TIME_ZONE,
+    year: "numeric",
+    month: "numeric",
+  });
+  const parts = formatter.formatToParts(now);
+  const getPart = (type) => parts.find((part) => part.type === type).value;
+  const year = Number(getPart("year"));
+  const month = Number(getPart("month"));
+
+  // Date.UTC normalizes January back to December of the previous year.
+  const startUtc = new Date(Date.UTC(year, month - 2, 1) - 7 * 60 * 60 * 1000);
+
+  return { startUtc, endUtc: now };
+};
+
 const getBangkok90DaysRange = () => {
   const now = new Date();
   
@@ -123,5 +141,6 @@ module.exports = {
   getBangkokDayStart,
   diffDays,
   getBangkokUtcRange,
+  getBangkokCurrentAndPreviousMonthRange,
   getBangkok90DaysRange
 };

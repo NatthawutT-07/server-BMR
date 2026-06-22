@@ -159,6 +159,7 @@ exports.acknowledgeAllChangeLogs = async (req, res) => {
 
 exports.getAllBranchAckStatus = async (req, res) => {
     try {
+        const { startUtc, endUtc } = dateHelper.getBangkokCurrentAndPreviousMonthRange();
         const branchStats = await prisma.$queryRaw`
             SELECT 
                 "branch_code",
@@ -168,6 +169,8 @@ exports.getAllBranchAckStatus = async (req, res) => {
                 MAX("createdAt") as "lastChange",
                 MAX(CASE WHEN "acknowledged" = false THEN "createdAt" ELSE NULL END) as "oldestPending"
             FROM "ShelfChangeLog"
+            WHERE "createdAt" >= ${startUtc}
+              AND "createdAt" <= ${endUtc}
             GROUP BY "branch_code"
             ORDER BY "pending" DESC, "branch_code" ASC
         `;
